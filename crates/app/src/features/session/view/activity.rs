@@ -277,12 +277,8 @@ impl SessionView {
     //    panel lives in small chips over the composer, each opening a card) ──
 
     /// Whether the jobs chip has anything to show (structured or legacy).
-    fn jobs_visible(&self) -> bool {
-        if self.desktop.jobs_ready() {
-            !self.desktop.jobs().is_empty()
-        } else {
-            !self.activity.jobs.is_empty()
-        }
+    pub(in crate::features::session) fn jobs_visible(&self) -> bool {
+        !self.job_rows().is_empty()
     }
 
     /// Whether the helpers chip has anything to show (structured or legacy).

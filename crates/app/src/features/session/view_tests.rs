@@ -113,6 +113,18 @@ fn open<'a>(
     methods: &[&str],
     cx: &'a mut TestAppContext,
 ) -> (Entity<SessionView>, &'a mut VisualTestContext) {
+    open_with_jobs(
+        methods,
+        json!([{"id": "job-1", "label": "npm test", "status": "running", "startedAt": 1}]),
+        cx,
+    )
+}
+
+fn open_with_jobs<'a>(
+    methods: &[&str],
+    jobs: Value,
+    cx: &'a mut TestAppContext,
+) -> (Entity<SessionView>, &'a mut VisualTestContext) {
     let (view, cx) = tab(cx);
     let mut all = vec![
         "capabilities",
@@ -147,10 +159,10 @@ fn open<'a>(
                 "usage": {"total": 100, "cost": 0.01},
             }]}),
         ));
-        let jobs = desktop.supervision_seed().sends.remove(0);
+        let request = desktop.supervision_seed().sends.remove(0);
         desktop.supervision_apply(&response(
-            jobs.request.request_id(),
-            json!({"jobs": [{"id": "job-1", "label": "npm test", "status": "running", "startedAt": 1}]}),
+            request.request.request_id(),
+            json!({"jobs": jobs}),
         ));
         assert!(desktop.jobs_ready() && desktop.subagents_ready());
     });
@@ -3974,6 +3986,109 @@ fn idle_background_updates_emit_chrome_changed(cx: &mut TestAppContext) {
     let mut seen = seen.borrow().clone();
     seen.dedup();
     assert_eq!(seen, [(0, 1), (1, 1), (0, 1), (0, 0)]);
+}
+
+fn report_sleep_job(view: &Entity<SessionView>, cx: &mut VisualTestContext) {
+    view.update_in(cx, |view, window, cx| {
+        view.handle_batch(
+            vec![pi_rpc::Incoming::Event(json!({
+                "type": "tool_execution_end",
+                "toolName": "bash_background",
+                "toolCallId": "sleep-call",
+                "result": {"details": {"gentleJobs": {
+                    "jobId": "job-1", "kind": "command", "label": "sleep 90",
+                    "status": "running", "exitCode": null,
+                }}},
+            }))],
+            window,
+            cx,
+        );
+    });
+}
+
+#[gpui::test]
+fn a_seeded_empty_job_list_keeps_the_tool_reported_job_visible(cx: &mut TestAppContext) {
+    let (view, cx) = open_with_jobs(&[], json!([]), cx);
+    view.read_with(cx, |view, _| {
+        assert!(!view.is_running());
+        assert!(!view.jobs_visible());
+        assert_eq!(view.background().jobs, 0);
+    });
+
+    report_sleep_job(&view, cx);
+    view.read_with(cx, |view, _| {
+        assert!(!view.is_running());
+        let jobs = view.job_rows();
+        let rows: Vec<_> = jobs.iter().map(|job| (job.id(), job.is_running())).collect();
+        assert_eq!(
+            (rows, view.jobs_visible(), view.background().jobs, view.chrome.as_ref().unwrap().background.jobs),
+            (vec![("job-1", true)], true, 1, 1),
+            "the tool result should show a running row, the Jobs chip, and a running job in background and chrome",
+        );
+    });
+
+    view.update_in(cx, |view, window, cx| {
+        view.handle_batch(
+            vec![pi_rpc::Incoming::Event(json!({
+                "type": "message_end",
+                "message": {
+                    "role": "custom", "customType": "gentle-jobs.notice",
+                    "details": {"gentleJobs": {"jobId": "job-1", "status": "exited", "exitCode": 0}},
+                },
+            }))],
+            window,
+            cx,
+        );
+        let jobs = view.job_rows();
+        let rows: Vec<_> = jobs.iter().map(|job| (job.id(), job.is_running())).collect();
+        assert_eq!(rows, [("job-1", false)]);
+        assert!(!view.is_running());
+        assert_eq!(view.background().jobs, 0);
+        assert_eq!(view.chrome.as_ref().unwrap().background.jobs, 0);
+    });
+}
+
+#[gpui::test]
+fn an_idle_jobs_update_supersedes_the_tool_report_for_the_same_id(cx: &mut TestAppContext) {
+    let (view, cx) = open_with_jobs(
+        &[],
+        json!([{"id": "job-2", "label": "npm test", "status": "running", "startedAt": 1}]),
+        cx,
+    );
+    report_sleep_job(&view, cx);
+    view.read_with(cx, |view, _| {
+        let jobs = view.job_rows();
+        let rows: Vec<_> = jobs
+            .iter()
+            .map(|job| (job.id(), job.is_running()))
+            .collect();
+        assert_eq!(rows, [("job-2", true), ("job-1", true)]);
+        assert_eq!(view.background().jobs, 2);
+        assert_eq!(view.chrome.as_ref().unwrap().background.jobs, 2);
+    });
+
+    view.update_in(cx, |view, window, cx| {
+        view.handle_batch(
+            vec![pi_rpc::Incoming::Ui(widget(json!({
+                "schema": SCHEMA, "kind": "event", "seq": 2, "event": "jobs_update",
+                "data": {"jobs": [{
+                    "id": "job-1", "label": "sleep 90", "status": "exited",
+                    "startedAt": 1, "endedAt": 2, "exitCode": 0,
+                }]},
+            })))],
+            window,
+            cx,
+        );
+        let jobs = view.job_rows();
+        let rows: Vec<_> = jobs
+            .iter()
+            .map(|job| (job.id(), job.is_running()))
+            .collect();
+        assert_eq!(rows, [("job-1", false)]);
+        assert!(!view.is_running());
+        assert_eq!(view.background().jobs, 0);
+        assert_eq!(view.chrome.as_ref().unwrap().background.jobs, 0);
+    });
 }
 
 // A job last seen running must not keep the light on once the backend exits.

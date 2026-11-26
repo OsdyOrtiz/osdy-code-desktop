@@ -1,6 +1,7 @@
 //! The Agents panel: Gentle Agents subagents for this session, Tern-style.
 
 use std::cell::Cell;
+use std::collections::HashSet;
 use std::rc::Rc;
 use std::time::{Duration, Instant};
 
@@ -255,9 +256,8 @@ pub(super) enum JobTail {
     },
 }
 
-/// One background job as the Jobs chip's card and the Jobs tab list it, from
-/// the structured channel (`list_jobs` / `jobs_update`) or, on a Shell
-/// without it, the legacy `details.gentleJobs` records.
+/// One background job as the Jobs chip's card and the Jobs tab list it,
+/// from the structured channel or a legacy `details.gentleJobs` record.
 pub(super) struct JobRow {
     id: String,
     label: String,
@@ -339,18 +339,29 @@ impl SessionView {
         )
     }
 
-    /// Every background job, newest data source first: the structured list
-    /// once the channel seeded it, the legacy records otherwise.
+    /// Prefer the seeded structured list by id, then append any jobs only
+    /// reported by tool results or notices.
     pub(super) fn job_rows(&self) -> Vec<JobRow> {
-        if self.desktop.jobs_ready() {
-            self.desktop
-                .jobs()
-                .iter()
-                .map(JobRow::from_desktop)
-                .collect()
-        } else {
-            self.activity.jobs.iter().map(JobRow::from_legacy).collect()
+        if !self.desktop.jobs_ready() {
+            return self.activity.jobs.iter().map(JobRow::from_legacy).collect();
         }
+
+        let mut seen = HashSet::new();
+        let mut rows: Vec<_> = self
+            .desktop
+            .jobs()
+            .iter()
+            .filter(|job| seen.insert(job.id.as_str()))
+            .map(JobRow::from_desktop)
+            .collect();
+        rows.extend(
+            self.activity
+                .jobs
+                .iter()
+                .filter(|job| seen.insert(job.id.as_str()))
+                .map(JobRow::from_legacy),
+        );
+        rows
     }
 
     /// What job `id`'s row shows of its output.
