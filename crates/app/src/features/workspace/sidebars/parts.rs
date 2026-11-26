@@ -255,9 +255,7 @@ impl Workspace {
                             .text_color(ui::fg())
                             .child(title),
                     )
-                    .when(light.is_some(), |d| {
-                        d.child(div().size(px(6.)).rounded_full().bg(color))
-                    })
+                    .children(light.map(|light| ui::light_dot(light, 6.)))
                     .on_click(cx.listener(move |this, _, window, cx| {
                         if let Some(pane) = pane {
                             this.reveal_pane(pane, window, cx);
@@ -380,15 +378,7 @@ impl Workspace {
                             )
                         }
                     })
-                    .when_some(space.dot(), |d, (color, _)| {
-                        d.child(
-                            div()
-                                .size(rems(6. / 16.))
-                                .flex_none()
-                                .rounded_full()
-                                .bg(color),
-                        )
-                    })
+                    .children(space.dot())
                     .children(ui::background_marks(space.activity.background))
                     .child(
                         div()

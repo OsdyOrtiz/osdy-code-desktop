@@ -87,10 +87,8 @@ impl SpaceEntry {
     /// The workspace's dot: amber when an agent needs you, the accent while
     /// one works, purple for subagents and champagne for jobs running in
     /// background.
-    pub fn dot(&self) -> Option<(Hsla, &'static str)> {
-        self.activity
-            .light()
-            .map(|light| (ui::light_color(light), light.what()))
+    pub fn dot(&self) -> Option<Div> {
+        self.activity.light().map(|light| ui::light_dot(light, 6.))
     }
 
     /// Name, tab count, activity and what runs in background, for a tooltip.

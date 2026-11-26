@@ -247,7 +247,7 @@ fn activity_badge(activity: Activity) -> Option<Div> {
             .gap_1()
             .text_xs()
             .text_color(color)
-            .child(div().size(rems(6. / 16.)).rounded_full().bg(color))
+            .child(ui::light_dot(light, 6.))
             .when(foreground, |d| d.child(light.badge(activity.count(light))))
             .children(ui::background_marks(activity.background)),
     )

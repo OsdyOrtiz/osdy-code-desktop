@@ -69,14 +69,19 @@ impl Workspace {
         // Agents in the other workspaces: a dot here, details in the switcher.
         let elsewhere = self.elsewhere_activity();
         let light = elsewhere.light();
-        let tip = match light {
+        let what = match light {
             Some(Light::NeedsYou) => "Switch workspace · an agent in another one needs you",
             Some(Light::Working) => "Switch workspace · agents are working in another one",
             Some(Light::Subagents) => "Switch workspace · subagents are running in another one",
             Some(Light::Jobs) => "Switch workspace · jobs are running in another one",
             None => "Switch workspace",
         };
-        let dot = light.map(ui::light_color);
+        let tip: SharedString = match elsewhere.background.describe() {
+            Some(background) if matches!(light, Some(Light::NeedsYou | Light::Working)) => {
+                format!("{what} · {background}").into()
+            }
+            _ => what.into(),
+        };
         h_flex()
             .id("workspace-chip")
             .h(rems(TITLE_ITEM / 16.))
@@ -96,7 +101,7 @@ impl Workspace {
             .cursor_pointer()
             .hover(|s| s.bg(ui::popover_bg().opacity(0.8)))
             .when(!self.popups_open(), |chip| {
-                chip.tooltip(move |window, cx| Tooltip::new(tip).build(window, cx))
+                chip.tooltip(move |window, cx| Tooltip::new(tip.clone()).build(window, cx))
             })
             // Keep clicks on the chip from turning into window drags: `occlude`
             // hides the title bar's drag area from Windows' hit test, and
@@ -140,15 +145,7 @@ impl Workspace {
                     )
                 }
             })
-            .when_some(dot, |d, color| {
-                d.child(
-                    div()
-                        .size(rems(6. / 16.))
-                        .flex_none()
-                        .rounded_full()
-                        .bg(color),
-                )
-            })
+            .when_some(light, |d, light| d.child(ui::light_dot(light, 6.)))
             .child(
                 Icon::new(IconName::ChevronDown)
                     .xsmall()
@@ -165,7 +162,12 @@ impl Workspace {
             .min_w_0()
             .children(space.tabs.iter().enumerate().map(|(i, tab)| {
                 let active = i == space.active;
-                let light = Light::of(false, self.tab_running(tab), self.tab_background(tab));
+                let background = self.tab_background(tab);
+                let needs_you = tab
+                    .leaves()
+                    .iter()
+                    .any(|id| self.panes.get(id).is_some_and(|p| p.needs_you));
+                let light = Light::of(needs_you, self.tab_running(tab), background);
                 let focused = tab.focused();
                 let saved = tab.state.saved_focused();
                 let kind = match (&focused, &saved) {
@@ -304,9 +306,14 @@ impl Workspace {
                                     .whitespace_nowrap()
                                     .when(active, |d| d.font_weight(FontWeight::MEDIUM))
                                     .when(!self.popups_open(), |d| {
-                                        let title = title.clone();
+                                        let tip: SharedString = match background.describe() {
+                                            Some(background) => {
+                                                format!("{title} · {background}").into()
+                                            }
+                                            None => title.clone(),
+                                        };
                                         d.tooltip(move |window, cx| {
-                                            Tooltip::new(title.clone()).build(window, cx)
+                                            Tooltip::new(tip.clone()).build(window, cx)
                                         })
                                     })
                                     .child(title)

@@ -3905,3 +3905,92 @@ fn a_running_tools_card_shows_its_growing_output(cx: &mut TestAppContext) {
     assert!(drawn(cx, "fold:22 earlier lines"));
     assert!(!drawn(cx, "fold:2 earlier lines"));
 }
+
+// Idle structured updates change the chrome only when the running counts do,
+// so the workspace's background light follows them without a turn.
+#[gpui::test]
+fn idle_background_updates_emit_chrome_changed(cx: &mut TestAppContext) {
+    use std::{cell::RefCell, rc::Rc};
+
+    let (view, cx) = open(&[], cx);
+    cx.run_until_parked();
+    view.update(cx, |view, cx| view.sync_chrome(cx));
+    let seen = Rc::new(RefCell::new(Vec::new()));
+    let observed = seen.clone();
+    let _subscription = cx.update(|_, cx| {
+        cx.subscribe(&view, move |view, event: &super::SessionEvent, cx| {
+            if matches!(event, super::SessionEvent::ChromeChanged) {
+                let view = view.read(cx);
+                assert!(!view.is_running());
+                let background = view.background();
+                observed
+                    .borrow_mut()
+                    .push((background.subagents, background.jobs));
+            }
+        })
+    });
+
+    for (seq, event, data) in [
+        (
+            2,
+            "agents_update",
+            json!({"agents": [{
+                "id": "agent-1", "agent": "worker", "status": "queued",
+                "lastStep": "writing", "usage": {"total": 100, "cost": 0.01}
+            }]}),
+        ),
+        (
+            3,
+            "agents_update",
+            json!({"agents": [{
+                "id": "agent-1", "agent": "worker", "status": "running",
+                "lastStep": "writing", "usage": {"total": 100, "cost": 0.01}
+            }]}),
+        ),
+        (
+            4,
+            "agents_update",
+            json!({"agents": [{
+                "id": "agent-1", "agent": "worker", "status": "waiting",
+                "lastStep": "writing", "usage": {"total": 100, "cost": 0.01}
+            }]}),
+        ),
+        (5, "jobs_update", json!({"jobs": []})),
+    ] {
+        view.update_in(cx, |view, window, cx| {
+            view.handle_batch(
+                vec![pi_rpc::Incoming::Ui(widget(json!({
+                    "schema": SCHEMA, "kind": "event", "seq": seq,
+                    "event": event, "data": data,
+                })))],
+                window,
+                cx,
+            );
+        });
+        cx.run_until_parked();
+    }
+    // The harness seeds one running job; a queued or waiting subagent
+    // doesn't count, a running one does, and the emptied job list clears it.
+    let mut seen = seen.borrow().clone();
+    seen.dedup();
+    assert_eq!(seen, [(0, 1), (1, 1), (0, 1), (0, 0)]);
+}
+
+// A job last seen running must not keep the light on once the backend exits.
+#[gpui::test]
+fn backend_exit_clears_the_background_light(cx: &mut TestAppContext) {
+    let (view, cx) = tab(cx);
+    view.update_in(cx, |view, window, cx| {
+        view.handle_batch(
+            vec![pi_rpc::Incoming::Event(json!({
+                "type": "tool_execution_end", "toolName": "bash_background",
+                "result": {"details": {"gentleJobs": {"jobId": 7, "status": "running"}}},
+            }))],
+            window,
+            cx,
+        );
+        assert_eq!(view.chrome.as_ref().unwrap().background.jobs, 1);
+        view.handle_batch(vec![pi_rpc::Incoming::Exited(None)], window, cx);
+        assert!(view.chrome.as_ref().unwrap().background.is_idle());
+    });
+}

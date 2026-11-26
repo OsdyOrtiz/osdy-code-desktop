@@ -57,17 +57,11 @@ impl Workspace {
                     }),
                 )
                 .child(space.mark.glyph(13., 2, color))
-                .when_some(space.dot(), |d, (color, _)| {
-                    d.child(
-                        div()
-                            .absolute()
-                            .top(px(2.))
-                            .right(px(2.))
-                            .size(px(6.))
-                            .rounded_full()
-                            .bg(color),
-                    )
-                });
+                .children(
+                    space
+                        .dot()
+                        .map(|dot| div().absolute().top(px(2.)).right(px(2.)).child(dot)),
+                );
             list = list.child(row);
             // The compact rail deliberately ignores the expanded sidebar's
             // folding state. Every workspace exposes every session.
@@ -86,6 +80,7 @@ impl Workspace {
                                     pane.title.clone(),
                                     pane.item.kind,
                                     Light::of(pane.needs_you, pane.running, pane.background),
+                                    pane.background,
                                 ))
                             })
                             .collect(),
@@ -93,11 +88,21 @@ impl Workspace {
                             .layout
                             .leaves()
                             .iter()
-                            .map(|pane| (None, saved_title(pane), pane.kind, None))
+                            .map(|pane| {
+                                (
+                                    None,
+                                    saved_title(pane),
+                                    pane.kind,
+                                    None,
+                                    Background::default(),
+                                )
+                            })
                             .collect(),
                     };
                     let tab_id = tab.id;
-                    for (leaf, (pane, title, kind, light)) in entries.into_iter().enumerate() {
+                    for (leaf, (pane, title, kind, light, background)) in
+                        entries.into_iter().enumerate()
+                    {
                         number += 1;
                         let selected = tab.shown && pane.is_some() && pane == tab.pane;
                         let color = match light {
@@ -105,8 +110,11 @@ impl Workspace {
                             None if selected => ui::fg(),
                             None => ui::muted(),
                         };
-                        let tip: SharedString =
-                            format!("{} · {} · {}", space.name, number, title).into();
+                        let mut tip = format!("{} · {} · {}", space.name, number, title);
+                        if let Some(background) = background.describe() {
+                            tip.push_str(&format!(" · {background}"));
+                        }
+                        let tip: SharedString = tip.into();
                         list = list.child(
                             h_flex()
                                 .id(SharedString::from(format!("compact-pane-{tab_id}-{leaf}")))
@@ -132,17 +140,13 @@ impl Workspace {
                                         .text_color(color)
                                         .child(number.to_string()),
                                 )
-                                .when(light.is_some(), |d| {
-                                    d.child(
-                                        div()
-                                            .absolute()
-                                            .top(px(2.))
-                                            .right(px(2.))
-                                            .size(px(5.))
-                                            .rounded_full()
-                                            .bg(color),
-                                    )
-                                })
+                                .children(light.map(|light| {
+                                    div()
+                                        .absolute()
+                                        .top(px(2.))
+                                        .right(px(2.))
+                                        .child(ui::light_dot(light, 5.))
+                                }))
                                 .on_click(cx.listener(move |this, _, window, cx| {
                                     if let Some(pane) = pane {
                                         this.reveal_pane(pane, window, cx);

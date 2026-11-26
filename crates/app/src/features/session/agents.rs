@@ -328,6 +328,10 @@ impl SessionView {
 
     /// The subagents and jobs running now, for the window's lights.
     pub fn background(&self) -> Background {
+        // A dead backend runs nothing, whatever it last reported.
+        if matches!(self.backend.status, super::state::BackendStatus::Exited(_)) {
+            return Background::default();
+        }
         let jobs = self.job_rows();
         Background::count(
             self.helpers().iter().map(|helper| helper.status()),
