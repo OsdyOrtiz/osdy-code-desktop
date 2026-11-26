@@ -339,26 +339,25 @@ impl SessionView {
         )
     }
 
-    /// Prefer the seeded structured list by id, then append any jobs only
-    /// reported by tool results or notices.
+    /// Prefer the seeded structured list and append only tool- or notice-
+    /// reported jobs the channel has never reported in this session.
     pub(super) fn job_rows(&self) -> Vec<JobRow> {
-        if !self.desktop.jobs_ready() {
-            return self.activity.jobs.iter().map(JobRow::from_legacy).collect();
-        }
-
-        let mut seen = HashSet::new();
-        let mut rows: Vec<_> = self
-            .desktop
-            .jobs()
-            .iter()
-            .filter(|job| seen.insert(job.id.as_str()))
-            .map(JobRow::from_desktop)
-            .collect();
+        let mut rows: Vec<_> = if self.desktop.jobs_ready() {
+            let mut seen = HashSet::new();
+            self.desktop
+                .jobs()
+                .iter()
+                .filter(|job| seen.insert(job.id.as_str()))
+                .map(JobRow::from_desktop)
+                .collect()
+        } else {
+            Vec::new()
+        };
         rows.extend(
             self.activity
                 .jobs
                 .iter()
-                .filter(|job| seen.insert(job.id.as_str()))
+                .filter(|job| !self.desktop.job_was_reported(&job.id))
                 .map(JobRow::from_legacy),
         );
         rows

@@ -683,6 +683,11 @@ pub(in crate::features::session) mod desktop {
             self.supervision.jobs()
         }
 
+        /// Whether this channel has ever reported the job in this session.
+        pub(in crate::features::session) fn job_was_reported(&self, id: &str) -> bool {
+            self.supervision.job_was_reported(id)
+        }
+
         /// Whether the structured subagent list is the preferred source.
         pub(in crate::features::session) fn subagents_ready(&self) -> bool {
             self.supervision.subagents_ready()
@@ -1911,6 +1916,8 @@ pub(in crate::features::session) mod desktop {
     /// lists are the primary source once seeded; the legacy `gentle-agents`
     /// widget and `details.gentleJobs` stay as the fallback for older Shells.
     pub(in crate::features::session) mod supervision {
+        use std::collections::HashSet;
+
         use pi_rpc::desktop_rpc::{
             Capabilities, DesktopAgent, DesktopEvent, DesktopJob, DesktopMethod, DesktopRecord,
             DesktopResponse, DesktopRpcError, DesktopSession,
@@ -2004,6 +2011,8 @@ pub(in crate::features::session) mod desktop {
             capabilities: Option<Capabilities>,
             subagents: Vec<DesktopAgent>,
             jobs: Vec<DesktopJob>,
+            /// IDs only, retained when a projection drops rows or re-seeds.
+            reported_jobs: HashSet<String>,
             /// A valid `list_subagents`/`agents_update` arrived for this backend.
             subagents_fetched: bool,
             /// A valid `list_jobs`/`jobs_update` arrived for this backend.
@@ -2030,6 +2039,7 @@ pub(in crate::features::session) mod desktop {
                     capabilities: None,
                     subagents: Vec::new(),
                     jobs: Vec::new(),
+                    reported_jobs: HashSet::new(),
                     subagents_fetched: false,
                     jobs_fetched: false,
                     subagents_unavailable: false,
@@ -2061,6 +2071,20 @@ pub(in crate::features::session) mod desktop {
             /// The structured jobs, once seeded; empty until then.
             pub(in crate::features::session) fn jobs(&self) -> &[DesktopJob] {
                 &self.jobs
+            }
+
+            pub(super) fn job_was_reported(&self, id: &str) -> bool {
+                self.reported_jobs.contains(id)
+            }
+
+            pub(super) fn remember_job(&mut self, id: String) {
+                self.reported_jobs.insert(id);
+            }
+
+            fn replace_jobs(&mut self, jobs: Vec<DesktopJob>) {
+                self.reported_jobs
+                    .extend(jobs.iter().map(|job| job.id.clone()));
+                self.jobs = jobs;
             }
 
             /// Whether the structured subagent list is the preferred source
@@ -2188,7 +2212,8 @@ pub(in crate::features::session) mod desktop {
                     },
                     Ok(Some(DesktopRecord::Event(event))) => self.apply_event(event),
                     // Events were lost: forget the fetched markers so the lists
-                    // re-seed once the channel resyncs. The record was already
+                    // re-seed once the channel resyncs. Keep reported job IDs:
+                    // this is still the same session. The record was already
                     // accepted, so it must not be accepted again.
                     Err(DesktopRpcError::OutOfOrderSequence { .. }) => {
                         self.subagents_fetched = false;
@@ -2235,6 +2260,7 @@ pub(in crate::features::session) mod desktop {
                 self.capabilities = None;
                 self.subagents.clear();
                 self.jobs.clear();
+                self.reported_jobs.clear();
                 self.subagents_fetched = false;
                 self.jobs_fetched = false;
                 self.subagents_unavailable = false;
@@ -2345,7 +2371,7 @@ pub(in crate::features::session) mod desktop {
             fn apply_list_jobs(&mut self, response: DesktopResponse) -> Applied {
                 match response.list_jobs() {
                     Ok(list) => {
-                        self.jobs = list.jobs;
+                        self.replace_jobs(list.jobs);
                         self.jobs_fetched = true;
                         self.jobs_unavailable = false;
                         Applied::default()
@@ -2394,6 +2420,7 @@ pub(in crate::features::session) mod desktop {
                 match response.cancel_job() {
                     Ok(result) => {
                         self.pending_cancel = None;
+                        self.remember_job(result.job.id.clone());
                         reconcile_job(&mut self.jobs, result.job);
                         Applied::default()
                     }
@@ -2450,7 +2477,7 @@ pub(in crate::features::session) mod desktop {
                         }
                         match event.jobs_update() {
                             Ok(list) => {
-                                self.jobs = list.jobs;
+                                self.replace_jobs(list.jobs);
                                 Applied::default()
                             }
                             Err(error) => Applied {

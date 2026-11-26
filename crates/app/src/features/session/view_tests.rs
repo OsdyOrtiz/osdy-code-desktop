@@ -4091,6 +4091,131 @@ fn an_idle_jobs_update_supersedes_the_tool_report_for_the_same_id(cx: &mut TestA
     });
 }
 
+#[gpui::test]
+fn verifier_jobs_dropped_cancelled_job_does_not_come_back(cx: &mut TestAppContext) {
+    let (view, cx) = open(&["cancel_job"], cx);
+    view.update(cx, |view, cx| view.open_agents_panel(AgentsTab::Jobs, cx));
+    assert!(drawn(cx, "job-row-job-1"));
+
+    view.update_in(cx, |view, window, cx| {
+        view.handle_batch(
+            vec![pi_rpc::Incoming::Event(json!({
+                "type": "tool_execution_end",
+                "toolName": "bash_background",
+                "toolCallId": "start-job",
+                "result": {"details": {"gentleJobs": {
+                    "jobId": "job-1", "status": "running", "label": "sleep 90"
+                }}}
+            }))],
+            window,
+            cx,
+        );
+        assert_eq!((view.job_rows().len(), view.background().jobs), (1, 1));
+
+        let send = view.desktop.cancel_job("job-1".into()).sends.remove(0);
+        view.handle_batch(
+            vec![pi_rpc::Incoming::Ui(response(
+                send.request.request_id(),
+                json!({"changed": true, "job": {
+                    "id": "job-1", "label": "sleep 90", "status": "stopped",
+                    "startedAt": 1, "endedAt": 2
+                }}),
+            ))],
+            window,
+            cx,
+        );
+        assert_eq!((view.job_rows().len(), view.background().jobs), (1, 0));
+
+        view.handle_batch(
+            vec![pi_rpc::Incoming::Ui(widget(json!({
+                "schema": SCHEMA, "kind": "event", "seq": 2,
+                "event": "jobs_update", "data": {"jobs": []}
+            })))],
+            window,
+            cx,
+        );
+        assert!(view.desktop.jobs_ready());
+        let resources = view.resources();
+        assert_eq!(
+            (
+                view.background().jobs,
+                view.chrome.as_ref().unwrap().background.jobs,
+                resources.jobs,
+                resources.jobs_running,
+            ),
+            (0, 0, 0, 0),
+        );
+    });
+    assert!(!drawn(cx, "job-row-job-1"));
+}
+
+#[gpui::test]
+fn a_dropped_structured_job_does_not_show_its_finished_legacy_row(cx: &mut TestAppContext) {
+    let (view, cx) = open_with_jobs(&[], json!([]), cx);
+    report_sleep_job(&view, cx);
+    view.update_in(cx, |view, window, cx| {
+        let jobs = json!([{
+            "id": "job-1", "label": "sleep 90", "status": "exited",
+            "startedAt": 1, "endedAt": 2, "exitCode": 0,
+        }]);
+        view.handle_batch(
+            vec![
+                pi_rpc::Incoming::Event(json!({
+                    "type": "message_end",
+                    "message": {
+                        "role": "custom", "customType": "gentle-jobs.notice",
+                        "details": {"gentleJobs": {"jobId": "job-1", "status": "exited", "exitCode": 0}},
+                    },
+                })),
+                pi_rpc::Incoming::Ui(widget(json!({
+                    "schema": SCHEMA, "kind": "event", "seq": 2,
+                    "event": "jobs_update", "data": {"jobs": jobs},
+                }))),
+            ],
+            window,
+            cx,
+        );
+        assert_eq!((view.resources().jobs, view.background().jobs), (1, 0));
+
+        view.handle_batch(
+            vec![pi_rpc::Incoming::Ui(widget(json!({
+                "schema": SCHEMA, "kind": "event", "seq": 3,
+                "event": "jobs_update", "data": {"jobs": []},
+            })))],
+            window,
+            cx,
+        );
+        assert_eq!((view.resources().jobs, view.background().jobs), (0, 0));
+        assert!(!view.jobs_visible());
+    });
+}
+
+// Reading a tool-reported job's output must not hide it while it runs.
+#[gpui::test]
+fn reading_a_tool_reported_jobs_output_keeps_it_visible(cx: &mut TestAppContext) {
+    let (view, cx) = open_with_jobs(&["get_job_output"], json!([]), cx);
+    report_sleep_job(&view, cx);
+    view.update_in(cx, |view, window, cx| {
+        assert_eq!(view.background().jobs, 1);
+        view.desktop.output_mut().watch_job("job-1");
+        let read = view.desktop.output_pump().sends.remove(0);
+        view.handle_batch(
+            vec![pi_rpc::Incoming::Ui(response(
+                read.request.request_id(),
+                json!({
+                    "job": {"id": "job-1", "label": "sleep 90", "status": "running",
+                            "startedAt": 1},
+                    "output": "", "truncated": false,
+                }),
+            ))],
+            window,
+            cx,
+        );
+        assert_eq!((view.job_rows().len(), view.background().jobs), (1, 1));
+        assert!(view.jobs_visible());
+    });
+}
+
 // A job last seen running must not keep the light on once the backend exits.
 #[gpui::test]
 fn backend_exit_clears_the_background_light(cx: &mut TestAppContext) {
