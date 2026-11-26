@@ -85,8 +85,7 @@ impl Workspace {
                                     Some(id),
                                     pane.title.clone(),
                                     pane.item.kind,
-                                    pane.running,
-                                    pane.needs_you,
+                                    Light::of(pane.needs_you, pane.running, pane.background),
                                 ))
                             })
                             .collect(),
@@ -94,23 +93,17 @@ impl Workspace {
                             .layout
                             .leaves()
                             .iter()
-                            .map(|pane| (None, saved_title(pane), pane.kind, false, false))
+                            .map(|pane| (None, saved_title(pane), pane.kind, None))
                             .collect(),
                     };
                     let tab_id = tab.id;
-                    for (leaf, (pane, title, kind, running, needs_you)) in
-                        entries.into_iter().enumerate()
-                    {
+                    for (leaf, (pane, title, kind, light)) in entries.into_iter().enumerate() {
                         number += 1;
                         let selected = tab.shown && pane.is_some() && pane == tab.pane;
-                        let color = if needs_you {
-                            ui::warning()
-                        } else if running {
-                            ui::accent()
-                        } else if selected {
-                            ui::fg()
-                        } else {
-                            ui::muted()
+                        let color = match light {
+                            Some(light) => ui::light_color(light),
+                            None if selected => ui::fg(),
+                            None => ui::muted(),
                         };
                         let tip: SharedString =
                             format!("{} · {} · {}", space.name, number, title).into();
@@ -139,7 +132,7 @@ impl Workspace {
                                         .text_color(color)
                                         .child(number.to_string()),
                                 )
-                                .when(running || needs_you, |d| {
+                                .when(light.is_some(), |d| {
                                     d.child(
                                         div()
                                             .absolute()

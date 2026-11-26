@@ -156,6 +156,7 @@ impl Workspace {
             title: SharedString::default(),
             running: false,
             needs_you: false,
+            background: Background::default(),
             _subscriptions: subscriptions,
         };
         pane.sync_chrome(cx);
@@ -365,6 +366,7 @@ impl Workspace {
             title: SharedString::default(),
             running: false,
             needs_you: false,
+            background: Background::default(),
             _subscriptions: subscriptions,
         };
         pane.sync_chrome(cx);
@@ -419,6 +421,7 @@ impl Workspace {
             title: SharedString::default(),
             running: false,
             needs_you: false,
+            background: Background::default(),
             _subscriptions: Vec::new(),
         };
         pane.sync_chrome(cx);

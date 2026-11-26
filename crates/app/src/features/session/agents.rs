@@ -19,6 +19,7 @@ use crate::shared::ui;
 use gentle_core::activity::{
     AgentTask, Progress, ProjectedProgress, Thread, ThreadItem, helper_progress,
 };
+use gentle_core::background::Background;
 use gentle_core::gentle_state::{Job, JobOutcome};
 use gentle_core::transcript::format_tokens;
 
@@ -323,6 +324,15 @@ impl SessionView {
             jobs_running: jobs.iter().filter(|j| j.is_running()).count(),
             items: self.transcript.items.len(),
         }
+    }
+
+    /// The subagents and jobs running now, for the window's lights.
+    pub fn background(&self) -> Background {
+        let jobs = self.job_rows();
+        Background::count(
+            self.helpers().iter().map(|helper| helper.status()),
+            jobs.iter().map(|job| job.is_running()),
+        )
     }
 
     /// Every background job, newest data source first: the structured list

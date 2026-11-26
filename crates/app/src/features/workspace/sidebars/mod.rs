@@ -29,6 +29,8 @@ pub(super) struct TabEntry {
     pub pinned: bool,
     pub running: bool,
     pub needs_you: bool,
+    /// Subagents and jobs its agents run in background.
+    pub background: Background,
     /// Panes tiled in the tab.
     pub panes: usize,
 }
@@ -48,28 +50,26 @@ impl TabEntry {
         }
     }
 
-    /// A dot for a tab that works or waits on you.
+    /// The tab's light: its most urgent activity.
+    pub fn light(&self) -> Option<Light> {
+        Light::of(self.needs_you, self.running, self.background)
+    }
+
+    /// A dot for a tab that works, waits on you or runs something in
+    /// background, in that activity's color.
     pub fn status_dot(&self) -> Option<Div> {
-        (self.running || self.needs_you).then(|| {
-            let dot = div()
-                .size(rems(6. / 16.))
-                .flex_none()
-                .rounded_full()
-                .bg(self.tone());
-            if self.running && !self.needs_you {
-                ui::pulse(dot)
-            } else {
-                dot
-            }
-        })
+        self.light().map(|light| ui::light_dot(light, 6.))
     }
 
     pub fn tooltip(&self) -> SharedString {
+        let mut tip = self.title.to_string();
         if self.panes > 1 {
-            format!("{} · {} panes", self.title, self.panes).into()
-        } else {
-            self.title.clone()
+            tip.push_str(&format!(" · {} panes", self.panes));
         }
+        if let Some(background) = self.background.describe() {
+            tip.push_str(&format!(" · {background}"));
+        }
+        tip.into()
     }
 }
 
@@ -84,29 +84,29 @@ pub(super) struct SpaceEntry {
 }
 
 impl SpaceEntry {
-    /// The workspace switcher's dot: amber when an agent needs you, the
-    /// accent while one works.
+    /// The workspace's dot: amber when an agent needs you, the accent while
+    /// one works, purple for subagents and champagne for jobs running in
+    /// background.
     pub fn dot(&self) -> Option<(Hsla, &'static str)> {
-        if self.activity.needs_you > 0 {
-            Some((ui::warning(), "An agent here needs you"))
-        } else if self.activity.working > 0 {
-            Some((ui::accent(), "Agents are working here"))
-        } else {
-            None
-        }
+        self.activity
+            .light()
+            .map(|light| (ui::light_color(light), light.what()))
     }
 
-    /// Name, tab count and activity, for a tooltip.
+    /// Name, tab count, activity and what runs in background, for a tooltip.
     pub fn tooltip(&self) -> SharedString {
         let tabs = match self.tabs {
             1 => "1 tab".to_string(),
             n => format!("{n} tabs"),
         };
-        match self.dot() {
-            Some((_, what)) => format!("{} · {tabs} · {what}", self.name),
-            None => format!("{} · {tabs}", self.name),
+        let mut tip = format!("{} · {tabs}", self.name);
+        if let Some(light @ (Light::NeedsYou | Light::Working)) = self.activity.light() {
+            tip.push_str(&format!(" · {}", light.what()));
         }
-        .into()
+        if let Some(background) = self.activity.background.describe() {
+            tip.push_str(&format!(" · {background}"));
+        }
+        tip.into()
     }
 }
 
@@ -183,6 +183,7 @@ impl Workspace {
                             pinned: tab.pinned,
                             running: false,
                             needs_you: false,
+                            background: Background::default(),
                             panes: saved.layout.len(),
                         }
                     }
@@ -204,6 +205,7 @@ impl Workspace {
                             needs_you: leaves
                                 .iter()
                                 .any(|pane| self.panes.get(pane).is_some_and(|p| p.needs_you)),
+                            background: self.tab_background(tab),
                             panes: leaves.len(),
                         }
                     }

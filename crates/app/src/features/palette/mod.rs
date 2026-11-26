@@ -9,6 +9,7 @@ use gpui_kit::assets::IconName;
 use gpui_kit::component::input::{InputEvent, InputState};
 use gpui_kit::*;
 
+use gentle_core::background::{Background, Light};
 use gentle_core::commands::Screen;
 use gentle_core::fuzzy::{FileEntry, Needle};
 
@@ -153,11 +154,36 @@ pub struct WorkspaceRow {
 }
 
 /// What a workspace's agents are doing: how many work and how many wait on
-/// you (an agent that waits isn't counted as working).
+/// you (an agent that waits isn't counted as working), and the subagents
+/// and jobs they keep running in background.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Activity {
     pub working: usize,
     pub needs_you: usize,
+    pub background: Background,
+}
+
+impl Activity {
+    /// The workspace's light: its most urgent activity.
+    pub fn light(&self) -> Option<Light> {
+        Light::of(self.needs_you > 0, self.working > 0, self.background)
+    }
+
+    /// How many agents, subagents or jobs `light` stands for.
+    pub fn count(&self, light: Light) -> usize {
+        match light {
+            Light::NeedsYou => self.needs_you,
+            Light::Working => self.working,
+            Light::Subagents => self.background.subagents,
+            Light::Jobs => self.background.jobs,
+        }
+    }
+
+    pub fn add(&mut self, other: Activity) {
+        self.working += other.working;
+        self.needs_you += other.needs_you;
+        self.background += other.background;
+    }
 }
 
 pub struct PaletteInput {

@@ -17,16 +17,31 @@ impl Workspace {
             .any(|id| self.panes.get(id).is_some_and(|p| p.running))
     }
 
+    /// What the subagents and jobs of `tab`'s agents run in background.
+    pub(super) fn tab_background(&self, tab: &Tab) -> Background {
+        let mut total = Background::default();
+        for id in tab.leaves() {
+            if let Some(pane) = self.panes.get(&id) {
+                total += pane.background;
+            }
+        }
+        total
+    }
+
     /// What the agents of `space` do. A tab not built yet has no
     /// panes, so it counts as idle.
     pub(super) fn space_activity(&self, space: &Space) -> Activity {
         let mut activity = Activity::default();
         for id in space.tabs.iter().flat_map(|tab| tab.leaves()) {
-            match self.panes.get(&id) {
-                Some(pane) if pane.needs_you => activity.needs_you += 1,
-                Some(pane) if pane.running => activity.working += 1,
-                _ => {}
+            let Some(pane) = self.panes.get(&id) else {
+                continue;
+            };
+            if pane.needs_you {
+                activity.needs_you += 1;
+            } else if pane.running {
+                activity.working += 1;
             }
+            activity.background += pane.background;
         }
         activity
     }
@@ -36,9 +51,7 @@ impl Workspace {
         let mut total = Activity::default();
         for (index, space) in self.spaces.iter().enumerate() {
             if index != self.current {
-                let activity = self.space_activity(space);
-                total.working += activity.working;
-                total.needs_you += activity.needs_you;
+                total.add(self.space_activity(space));
             }
         }
         total
@@ -55,19 +68,15 @@ impl Workspace {
         let name = self.space().name.clone();
         // Agents in the other workspaces: a dot here, details in the switcher.
         let elsewhere = self.elsewhere_activity();
-        let (tip, dot) = if elsewhere.needs_you > 0 {
-            (
-                "Switch workspace · an agent in another one needs you",
-                Some(ui::warning()),
-            )
-        } else if elsewhere.working > 0 {
-            (
-                "Switch workspace · agents are working in another one",
-                Some(ui::accent()),
-            )
-        } else {
-            ("Switch workspace", None)
+        let light = elsewhere.light();
+        let tip = match light {
+            Some(Light::NeedsYou) => "Switch workspace · an agent in another one needs you",
+            Some(Light::Working) => "Switch workspace · agents are working in another one",
+            Some(Light::Subagents) => "Switch workspace · subagents are running in another one",
+            Some(Light::Jobs) => "Switch workspace · jobs are running in another one",
+            None => "Switch workspace",
         };
+        let dot = light.map(ui::light_color);
         h_flex()
             .id("workspace-chip")
             .h(rems(TITLE_ITEM / 16.))
@@ -156,7 +165,7 @@ impl Workspace {
             .min_w_0()
             .children(space.tabs.iter().enumerate().map(|(i, tab)| {
                 let active = i == space.active;
-                let running = self.tab_running(tab);
+                let light = Light::of(false, self.tab_running(tab), self.tab_background(tab));
                 let focused = tab.focused();
                 let saved = tab.state.saved_focused();
                 let kind = match (&focused, &saved) {
@@ -253,11 +262,8 @@ impl Workspace {
                             .flex()
                             .items_center()
                             .justify_center()
-                            .child(if running {
-                                ui::pulse(
-                                    div().size(rems(7. / 16.)).rounded_full().bg(ui::accent()),
-                                )
-                                .into_any_element()
+                            .child(if let Some(light) = light {
+                                ui::light_dot(light, 7.).into_any_element()
                             } else if kind == PaneKind::Agent {
                                 div()
                                     .text_size(rems(13. / 16.))

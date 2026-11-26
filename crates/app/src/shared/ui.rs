@@ -9,6 +9,7 @@ use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{OnceLock, RwLock};
 use std::time::Duration;
 
+use gentle_core::background::{Background, Light};
 use gpui_kit::assets::IconName;
 use gpui_kit::component::input::{Input, InputState};
 use gpui_kit::component::tooltip::Tooltip;
@@ -1165,6 +1166,67 @@ pub(crate) fn each_second() -> impl IntoElement {
 pub fn pulse(element: Div) -> Div {
     let breath = gpui_kit::pulsating_between(0.35, 1.0)(live_phase(1.4));
     element.opacity(breath).child(frames_every(SLOW_FRAME))
+}
+
+/// The color of an activity light: `warning` when an agent needs you, the
+/// `accent` while one works, `purple` for subagents (the helpers' tone) and
+/// `champagne` for background jobs (the commands' tone).
+pub fn light_color(light: Light) -> Hsla {
+    match light {
+        Light::NeedsYou => warning(),
+        Light::Working => accent(),
+        Light::Subagents => purple(),
+        Light::Jobs => champagne(),
+    }
+}
+
+/// The icon of what runs in background, for rows with room for it.
+pub fn light_icon(light: Light) -> Option<IconName> {
+    match light {
+        Light::Subagents => Some(IconName::Bot),
+        Light::Jobs => Some(IconName::SquareTerminal),
+        Light::NeedsYou | Light::Working => None,
+    }
+}
+
+/// A round activity light `size` px wide (scaled with the interface); it breathes while work runs.
+pub fn light_dot(light: Light, size: f32) -> Div {
+    let dot = div()
+        .size(rems(size / 16.))
+        .flex_none()
+        .rounded_full()
+        .bg(light_color(light));
+    if light.pulses() { pulse(dot) } else { dot }
+}
+
+/// What runs in background, as small icons with their counts (`Bot 2`,
+/// `SquareTerminal 1`); nothing when it is idle.
+pub fn background_marks(background: Background) -> Option<Div> {
+    if background.is_idle() {
+        return None;
+    }
+    let mark = |light: Light, count: usize| {
+        (count > 0).then(|| {
+            h_flex()
+                .flex_none()
+                .gap(px(2.))
+                .text_color(light_color(light))
+                .children(light_icon(light).map(|icon| Icon::new(icon).xsmall()))
+                .child(
+                    div()
+                        .font_family(mono())
+                        .text_size(code_rems(10.5))
+                        .child(count.to_string()),
+                )
+        })
+    };
+    Some(
+        h_flex()
+            .flex_none()
+            .gap_1()
+            .children(mark(Light::Subagents, background.subagents))
+            .children(mark(Light::Jobs, background.jobs)),
+    )
 }
 
 /// A loading spinner (the Loader icon turning), for rows that stay on screen

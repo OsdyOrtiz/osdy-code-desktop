@@ -39,6 +39,7 @@ flowchart TD
 | `core` | Stays in `app` |
 | --- | --- |
 | `transcript`, `activity`, `tools`, `commands` | `session/agents.rs`: `now_ms` (system clock). |
+| `background`: what an agent runs in background (running subagents and jobs) and the one light an agent, tab or workspace shows | `session/agents.rs`: counting from the helpers and jobs; `workspace/`: adding it up per tab and workspace and drawing the lights. |
 | `devices`: the device hub's list (plus AVDs it hasn't seen), launch-intent and device-command detection in agents' shell commands | `devices/`: the hub process and API, the panel (tabs, docked or floating, web viewer per device), `gentle-device`, the agents' instructions, SDK and simctl discovery. |
 | `scroll`: row weights from content, the scroll estimate for rows not laid out yet, the steady thumb rule | `session/view/rail.rs` and `transcript_list.rs`: recording on-screen row heights, drawing the rail. |
 | `music`: gentle-stream's `ctl --json` envelope (the player's state and its structured errors) and the cache folder `setup-samples` uses | `music/`: running `gentle-stream ctl` per request, polling, the ♪ popover; `setup/music.rs`: finding and installing the player. |

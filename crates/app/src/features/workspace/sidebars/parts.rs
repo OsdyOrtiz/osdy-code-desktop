@@ -82,10 +82,16 @@ impl Workspace {
     pub(super) fn global_activity_row(&self) -> Div {
         let mut total = Activity::default();
         for space in &self.spaces {
-            let activity = self.space_activity(space);
-            total.working += activity.working;
-            total.needs_you += activity.needs_you;
+            total.add(self.space_activity(space));
         }
+        let background = |light: Light| {
+            let count = total.count(light);
+            (count > 0).then(|| {
+                div()
+                    .text_color(ui::light_color(light))
+                    .child(light.badge(count))
+            })
+        };
         h_flex()
             .px_3()
             .py_1()
@@ -101,6 +107,8 @@ impl Workspace {
                     .text_color(ui::warning())
                     .child(format!("{} waiting", total.needs_you)),
             )
+            .children(background(Light::Subagents))
+            .children(background(Light::Jobs))
     }
 
     /// The row a search with no match leaves, at `indent`.
@@ -175,6 +183,7 @@ impl Workspace {
                 d.child(Icon::new(IconName::Pin).xsmall().text_color(ui::faint()))
             })
             .children(tab.status_dot())
+            .children(ui::background_marks(tab.background))
             .when(tab.panes > 1, |d| {
                 d.child(
                     div()
@@ -207,8 +216,7 @@ impl Workspace {
                         Some(id),
                         pane.title.clone(),
                         pane.item.kind,
-                        pane.running,
-                        pane.needs_you,
+                        Light::of(pane.needs_you, pane.running, pane.background),
                     ))
                 })
                 .collect(),
@@ -216,21 +224,15 @@ impl Workspace {
                 .layout
                 .leaves()
                 .iter()
-                .map(|pane| (None, saved_title(pane), pane.kind, false, false))
+                .map(|pane| (None, saved_title(pane), pane.kind, None))
                 .collect(),
         };
         items
             .into_iter()
             .enumerate()
-            .map(|(index, (pane, title, kind, running, needs_you))| {
+            .map(|(index, (pane, title, kind, light))| {
                 let selected = entry.shown && pane.is_some() && pane == entry.pane;
-                let color = if needs_you {
-                    ui::warning()
-                } else if running {
-                    ui::accent()
-                } else {
-                    ui::muted()
-                };
+                let color = light.map_or(ui::muted(), ui::light_color);
                 h_flex()
                     .id(SharedString::from(format!(
                         "sidebar-split-{tab_id}-{index}"
@@ -253,7 +255,7 @@ impl Workspace {
                             .text_color(ui::fg())
                             .child(title),
                     )
-                    .when(running || needs_you, |d| {
+                    .when(light.is_some(), |d| {
                         d.child(div().size(px(6.)).rounded_full().bg(color))
                     })
                     .on_click(cx.listener(move |this, _, window, cx| {
@@ -387,6 +389,7 @@ impl Workspace {
                                 .bg(color),
                         )
                     })
+                    .children(ui::background_marks(space.activity.background))
                     .child(
                         div()
                             .flex_none()

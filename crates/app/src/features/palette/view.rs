@@ -9,6 +9,7 @@ use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
 
 use crate::shared::ui;
+use gentle_core::background::Light;
 
 use super::{Activity, CATEGORIES, Category, Line, PaletteAction, PaletteEvent, PaletteView, Row};
 
@@ -232,21 +233,14 @@ impl PaletteView {
     }
 }
 
-/// "needs you" or "working", with a dot in the tab bar's colors; nothing
-/// while every agent of the workspace is idle.
+/// "needs you", "working", "2 subagents" or "1 job", with a dot in the
+/// tab bar's colors, then what else runs in background as small icons;
+/// nothing while the workspace is idle.
 fn activity_badge(activity: Activity) -> Option<Div> {
-    let (count, one, many, color) = if activity.needs_you > 0 {
-        (activity.needs_you, "needs you", "need you", ui::warning())
-    } else if activity.working > 0 {
-        (activity.working, "working", "working", ui::accent())
-    } else {
-        return None;
-    };
-    let label = if count == 1 {
-        one.to_string()
-    } else {
-        format!("{count} {many}")
-    };
+    let light = activity.light()?;
+    let color = ui::light_color(light);
+    // The background marks already count subagents and jobs.
+    let foreground = matches!(light, Light::NeedsYou | Light::Working);
     Some(
         h_flex()
             .flex_none()
@@ -254,7 +248,8 @@ fn activity_badge(activity: Activity) -> Option<Div> {
             .text_xs()
             .text_color(color)
             .child(div().size(rems(6. / 16.)).rounded_full().bg(color))
-            .child(label),
+            .when(foreground, |d| d.child(light.badge(activity.count(light))))
+            .children(ui::background_marks(activity.background)),
     )
 }
 

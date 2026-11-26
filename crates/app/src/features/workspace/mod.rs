@@ -44,6 +44,7 @@ use crate::shared::pane::{
     PaneKind, PaneTree, ShowInPane, SplitAxis,
 };
 use crate::shared::ui;
+use gentle_core::background::{Background, Light};
 use gentle_core::commands::Screen;
 
 mod actions;
@@ -148,6 +149,8 @@ struct Pane {
     running: bool,
     /// An agent waits on a dialog only you can answer.
     needs_you: bool,
+    /// Subagents and jobs an agent keeps running after its turn.
+    background: Background,
     _subscriptions: Vec<Subscription>,
 }
 
@@ -155,14 +158,21 @@ impl Pane {
     /// Re-read the title and activity; whether any changed.
     fn sync_chrome(&mut self, cx: &App) -> bool {
         let title = (self.item.title)(cx);
-        let (running, needs_you) = self.session.as_ref().map_or((false, false), |s| {
-            let s = s.read(cx);
-            (s.is_running(), s.needs_you())
-        });
-        let changed = title != self.title || running != self.running || needs_you != self.needs_you;
+        let (running, needs_you, background) =
+            self.session
+                .as_ref()
+                .map_or((false, false, Background::default()), |s| {
+                    let s = s.read(cx);
+                    (s.is_running(), s.needs_you(), s.background())
+                });
+        let changed = title != self.title
+            || running != self.running
+            || needs_you != self.needs_you
+            || background != self.background;
         self.title = title;
         self.running = running;
         self.needs_you = needs_you;
+        self.background = background;
         changed
     }
 }
