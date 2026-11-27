@@ -1,7 +1,17 @@
-//! Spanish text of the interface, by its English text. A duplicated key is
-//! an unreachable pattern, which the build's lints reject.
+//! Spanish text of the interface, by its English text, one table per area.
+//! A duplicated key within a table is an unreachable pattern, which the
+//! build's lints reject; the first table that knows a text wins.
+
+mod settings_a;
+mod settings_b;
 
 pub(super) fn lookup(en: &str) -> Option<&'static str> {
+    common(en)
+        .or_else(|| settings_a::lookup(en))
+        .or_else(|| settings_b::lookup(en))
+}
+
+fn common(en: &str) -> Option<&'static str> {
     Some(match en {
         // Language section.
         "Language" => "Idioma",
