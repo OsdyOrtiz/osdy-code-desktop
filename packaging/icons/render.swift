@@ -1,5 +1,5 @@
-// Rasterizes an SVG to a square PNG with AppKit's native SVG support.
-// Usage: swift render.swift <in.svg> <out.png> <size> [<size> <out.png>]...
+// Rasterizes the SVG wrapper for assets/mascot/osdy-code.png with AppKit.
+// Usage: swift render.swift <in.svg> <out.png> <size> [<out.png> <size>]...
 import AppKit
 
 let args = Array(CommandLine.arguments.dropFirst())

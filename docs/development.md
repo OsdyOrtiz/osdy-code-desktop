@@ -350,13 +350,13 @@ Therefore: renaming an asset, changing the `SHA256SUMS` format or the binary nam
 
 ### Icons
 
-Source: the `ROSE` art in `crates/app/src/shared/banner.rs`. After editing it, on macOS:
+Source: [`assets/mascot/osdy-code.png`](../assets/mascot/osdy-code.png), the square raccoon artwork. After updating it, on macOS:
 
 ```bash
 packaging/icons/generate.sh
 ```
 
-It runs `generate.py` (SVG), `render.swift` (PNG in several sizes), `iconutil` (`AppIcon.icns`) and `ico.py` (`icon.ico`), and writes `icon-1024.png`, `icon-512.png`. CI never runs it: commit the results. `icon-512.png` is embedded in the binary with `include_bytes!`, so an icon change requires a rebuild.
+It runs `generate.py` to embed the raccoon in a squircle with a drop shadow and top sheen (`icon.svg`), then `render.swift` to rasterize the icon at several sizes. `iconutil` and `ico.py` package the macOS (`AppIcon.icns`) and Windows (`icon.ico`) variants. The script also writes `icon-1024.png` and `icon-512.png`. CI never runs it: commit the results. `icon-512.png` is embedded in the binary with `include_bytes!`, so an icon change requires a rebuild.
 
 ## Troubleshooting
 
