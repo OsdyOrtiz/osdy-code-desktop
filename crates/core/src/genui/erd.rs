@@ -1482,10 +1482,25 @@ fn relation_ends(erd: &Erd, tables: &[Rect], r: &Relation) -> Option<(Point, Poi
 
 /// The header's counts.
 pub fn counts(erd: &Erd) -> String {
+    counts_in(erd, crate::i18n::Language::English)
+}
+
+pub fn counts_in(erd: &Erd, language: crate::i18n::Language) -> String {
+    use super::edits::count_in;
     format!(
         "{} · {}",
-        plural(erd.tables.len(), "table"),
-        plural(erd.relations.len(), "relation")
+        count_in(
+            language,
+            erd.tables.len(),
+            "{count} table",
+            "{count} tables"
+        ),
+        count_in(
+            language,
+            erd.relations.len(),
+            "{count} relation",
+            "{count} relations"
+        ),
     )
 }
 

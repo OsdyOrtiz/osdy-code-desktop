@@ -4,6 +4,8 @@
 
 use std::ops::AddAssign;
 
+use crate::i18n::{Language, tr};
+
 /// What runs in the background of an agent, a tab or a workspace.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Background {
@@ -33,15 +35,22 @@ impl Background {
 
     /// "1 subagent and 2 jobs in background"; `None` when nothing runs.
     pub fn describe(self) -> Option<String> {
+        self.describe_in(Language::English)
+    }
+
+    pub fn describe_in(self, language: Language) -> Option<String> {
         let parts: Vec<String> = [
-            (self.subagents, "subagent", "subagents"),
-            (self.jobs, "job", "jobs"),
+            (self.subagents, "{count} subagent", "{count} subagents"),
+            (self.jobs, "{count} job", "{count} jobs"),
         ]
         .into_iter()
         .filter(|(count, _, _)| *count > 0)
-        .map(|(count, one, many)| plural(count, one, many))
+        .map(|(count, one, many)| plural(language, count, one, many))
         .collect();
-        (!parts.is_empty()).then(|| format!("{} in background", parts.join(" and ")))
+        (!parts.is_empty()).then(|| {
+            tr(language, "{activity} in background")
+                .replace("{activity}", &parts.join(tr(language, " and ")))
+        })
     }
 }
 
@@ -85,6 +94,10 @@ impl Light {
 
     /// What the light says about a single agent or tab.
     pub fn what(self) -> &'static str {
+        self.what_in(Language::English)
+    }
+
+    fn what_key(self) -> &'static str {
         match self {
             Self::NeedsYou => "An agent here needs you",
             Self::Working => "Agents are working here",
@@ -93,25 +106,34 @@ impl Light {
         }
     }
 
+    pub fn what_in(self, language: Language) -> &'static str {
+        tr(language, self.what_key())
+    }
+
     /// The switcher's badge for `count` agents, subagents or jobs.
     pub fn badge(self, count: usize) -> String {
+        self.badge_in(Language::English, count)
+    }
+
+    pub fn badge_in(self, language: Language, count: usize) -> String {
         match (self, count) {
-            (Self::NeedsYou, 1) => "needs you".to_string(),
-            (Self::NeedsYou, n) => format!("{n} need you"),
-            (Self::Working, 1) => "working".to_string(),
-            (Self::Working, n) => format!("{n} working"),
-            (Self::Subagents, n) => plural(n, "subagent", "subagents"),
-            (Self::Jobs, n) => plural(n, "job", "jobs"),
+            (Self::NeedsYou, 1) => tr(language, "needs you").to_string(),
+            (Self::NeedsYou, n) => {
+                tr(language, "{count} need you").replace("{count}", &n.to_string())
+            }
+            (Self::Working, 1) => tr(language, "working").to_string(),
+            (Self::Working, n) => {
+                tr(language, "{count} working").replace("{count}", &n.to_string())
+            }
+            (Self::Subagents, n) => plural(language, n, "{count} subagent", "{count} subagents"),
+            (Self::Jobs, n) => plural(language, n, "{count} job", "{count} jobs"),
         }
     }
 }
 
-fn plural(count: usize, one: &str, many: &str) -> String {
-    if count == 1 {
-        format!("1 {one}")
-    } else {
-        format!("{count} {many}")
-    }
+fn plural(language: Language, count: usize, one: &'static str, many: &'static str) -> String {
+    let template = if count == 1 { one } else { many };
+    tr(language, template).replace("{count}", &count.to_string())
 }
 
 #[cfg(test)]

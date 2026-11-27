@@ -11,6 +11,8 @@
 
 use serde_json::{Value, json};
 
+use crate::i18n::{Language, tr};
+
 /// The app's `settings.json` key.
 pub const KEY: &str = "backend";
 
@@ -180,8 +182,13 @@ impl Backend {
     /// A short name for the backend: "This computer", "WSL · Ubuntu",
     /// "orb -m dev --".
     pub fn label(&self) -> String {
+        self.label_in(Language::English)
+    }
+
+    /// The display name in the requested interface language.
+    pub fn label_in(&self, language: Language) -> String {
         match self {
-            Self::Local => "This computer".to_string(),
+            Self::Local => tr(language, "This computer").to_string(),
             Self::Wsl { distro } => format!("WSL · {distro}"),
             Self::Command { prefix } => prefix.join(" "),
         }

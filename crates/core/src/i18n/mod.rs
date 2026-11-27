@@ -100,16 +100,75 @@ impl Choice {
 }
 
 /// `en` in `language`: its translation, or `en` itself when there is none.
-pub fn tr(language: Language, en: &'static str) -> &'static str {
+pub fn tr(language: Language, en: &str) -> &str {
     match language {
         Language::English => en,
         Language::Spanish => es::lookup(en).unwrap_or(en),
     }
 }
 
+/// Fill `{name}` placeholders in the translated template with literal values.
+/// Unknown placeholders stay as written, and inserted text is never scanned.
+pub fn fill(template: &str, values: &[(&str, &str)]) -> String {
+    let mut rendered = String::with_capacity(template.len());
+    let mut remaining = template;
+    while let Some(index) = remaining.find('{') {
+        rendered.push_str(&remaining[..index]);
+        remaining = &remaining[index + 1..];
+        if let Some((value, rest)) = values.iter().find_map(|(key, value)| {
+            let rest = remaining.strip_prefix(key)?.strip_prefix('}')?;
+            Some((value, rest))
+        }) {
+            rendered.push_str(value);
+            remaining = rest;
+        } else {
+            rendered.push('{');
+        }
+    }
+    rendered.push_str(remaining);
+    rendered
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn t14_fill_replaces_only_original_placeholders() {
+        assert_eq!(
+            fill(
+                "{second} — {first}/{first} {unknown} {",
+                &[("first", "{second}"), ("second", "{first}")]
+            ),
+            "{first} — {second}/{second} {unknown} {"
+        );
+        assert_eq!(
+            fill("<>{path}/{pathology}", &[("path", "")]),
+            "<>/{pathology}"
+        );
+        assert_eq!(fill("plain {text}", &[]), "plain {text}");
+    }
+
+    #[test]
+    fn t14_spanish_setup_preserves_silent_and_pinned_meaning() {
+        let actual = [
+            tr(
+                Language::Spanish,
+                "Not set up yet — the first chat would do it silently",
+            ),
+            tr(
+                Language::Spanish,
+                "Set up with Gentle AI {recorded}; gentle-pi now pins {pinned}",
+            ),
+        ];
+        assert_eq!(
+            actual,
+            [
+                "Aún sin configurar: el primer chat lo configuraría sin avisar",
+                "Configurado con Gentle AI {recorded}; gentle-pi ahora fija la versión en {pinned}",
+            ]
+        );
+    }
 
     #[test]
     fn spanish_locales_resolve_to_spanish_and_the_rest_to_english() {

@@ -71,37 +71,53 @@ pub enum Rejection {
     },
 }
 
+use crate::i18n::{Language, fill, tr};
+
 impl fmt::Display for Rejection {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.message(Language::English))
+    }
+}
+
+impl Rejection {
+    pub fn message(&self, language: Language) -> String {
         match self {
-            Self::Folder { name } => write!(f, "{name} is a folder; attach files instead."),
-            Self::Unsupported { name } => {
-                write!(
-                    f,
-                    "{name} is not a PNG, JPEG, GIF, WebP, BMP or TIFF image."
-                )
+            Self::Folder { name } => {
+                tr(language, "{name} is a folder; attach files instead.").replace("{name}", name)
             }
-            Self::TooLarge { name, bytes } => write!(
-                f,
-                "{name} is {:.1} MB; images must be 20 MB or smaller.",
-                *bytes as f64 / (1024.0 * 1024.0)
+            Self::Unsupported { name } => tr(
+                language,
+                "{name} is not a PNG, JPEG, GIF, WebP, BMP or TIFF image.",
+            )
+            .replace("{name}", name),
+            Self::TooLarge { name, bytes } => tr(
+                language,
+                "{name} is {size} MB; images must be 20 MB or smaller.",
+            )
+            .replace(
+                "{size}",
+                &format!("{:.1}", *bytes as f64 / (1024.0 * 1024.0)),
+            )
+            .replace("{name}", name),
+            Self::Unreadable { name, error } => fill(
+                tr(language, "Could not read {name}: {error}"),
+                &[("name", name), ("error", error)],
             ),
-            Self::Unreadable { name, error } => write!(f, "Could not read {name}: {error}"),
-            Self::LineBreak { name } => {
-                write!(
-                    f,
-                    "{name} has a line break in its path; rename it to attach it."
-                )
-            }
-            Self::ControlCharacter { name } => {
-                write!(
-                    f,
-                    "{name} has a control character in its path; rename it to attach it."
-                )
-            }
-            Self::NotUtf8 { name } => {
-                write!(f, "{name} is not valid UTF-8; rename it to attach it.")
-            }
+            Self::LineBreak { name } => tr(
+                language,
+                "{name} has a line break in its path; rename it to attach it.",
+            )
+            .replace("{name}", name),
+            Self::ControlCharacter { name } => tr(
+                language,
+                "{name} has a control character in its path; rename it to attach it.",
+            )
+            .replace("{name}", name),
+            Self::NotUtf8 { name } => tr(
+                language,
+                "{name} is not valid UTF-8; rename it to attach it.",
+            )
+            .replace("{name}", name),
         }
     }
 }
@@ -375,14 +391,23 @@ pub fn summary(message: &str) -> String {
 /// on its own line: nothing is sent until they are removed from the
 /// composer. `None` when they are all there.
 pub fn missing_files(files: &[AttachedFile], exists: impl Fn(&Path) -> bool) -> Option<String> {
+    missing_files_in(Language::English, files, exists)
+}
+
+pub fn missing_files_in(
+    language: Language,
+    files: &[AttachedFile],
+    exists: impl Fn(&Path) -> bool,
+) -> Option<String> {
     let gone = files
         .iter()
         .filter(|file| !exists(&file.path))
         .map(|file| {
-            format!(
-                "{} is no longer there; remove it from the attachments to send.",
-                file.name
+            tr(
+                language,
+                "{name} is no longer there; remove it from the attachments to send.",
             )
+            .replace("{name}", &file.name)
         })
         .collect::<Vec<_>>();
     (!gone.is_empty()).then(|| gone.join("\n"))
@@ -392,12 +417,16 @@ pub fn missing_files(files: &[AttachedFile], exists: impl Fn(&Path) -> bool) -> 
 /// line: a single refusal keeps the text it always had. `None` when nothing
 /// was refused.
 pub fn rejection_warning(rejections: &[Rejection]) -> Option<String> {
+    rejection_warning_in(Language::English, rejections)
+}
+
+pub fn rejection_warning_in(language: Language, rejections: &[Rejection]) -> Option<String> {
     match rejections {
         [] => None,
-        [one] => Some(one.to_string()),
+        [one] => Some(one.message(language)),
         many => Some(
             many.iter()
-                .map(ToString::to_string)
+                .map(|rejection| rejection.message(language))
                 .collect::<Vec<_>>()
                 .join("\n"),
         ),
@@ -643,6 +672,22 @@ pub fn expand(text: &str, pasted: &[PastedText]) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn t14_unreadable_attachment_preserves_placeholder_like_filename() {
+        let rejection = Rejection::Unreadable {
+            name: "{error}".into(),
+            error: "denied".into(),
+        };
+        let actual = [rejection.to_string(), rejection.message(Language::Spanish)];
+        assert_eq!(
+            actual,
+            [
+                "Could not read {error}: denied",
+                "No se pudo leer {error}: denied"
+            ]
+        );
+    }
 
     /// A file as a prompt names it; only its path matters to the block.
     fn file(path: &str) -> AttachedFile {

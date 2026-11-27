@@ -38,8 +38,30 @@ fn resolve(choice: Choice) {
     CURRENT.store(index as u8, Ordering::Relaxed);
 }
 
+#[cfg(test)]
+thread_local! {
+    static TEST_LANGUAGE: std::cell::Cell<Option<Language>> = const { std::cell::Cell::new(None) };
+}
+
+/// Exercise a live redraw or reply without saving settings or changing other tests' language.
+#[cfg(test)]
+pub(crate) fn with_test_language<R>(language: Language, test: impl FnOnce() -> R) -> R {
+    struct Reset(Option<Language>);
+    impl Drop for Reset {
+        fn drop(&mut self) {
+            TEST_LANGUAGE.set(self.0);
+        }
+    }
+    let _reset = Reset(TEST_LANGUAGE.replace(Some(language)));
+    test()
+}
+
 /// The language the interface is shown in.
 pub fn language() -> Language {
+    #[cfg(test)]
+    if let Some(language) = TEST_LANGUAGE.get() {
+        return language;
+    }
     Language::ALL
         .get(CURRENT.load(Ordering::Relaxed) as usize)
         .copied()
@@ -55,8 +77,12 @@ pub fn choice(cx: &App) -> Choice {
 /// Choose and save the language; every window redraws in it. Written at
 /// once (a click, a small file), like the other single-key settings.
 pub fn set_choice(choice: Choice, cx: &mut App) {
+    let previous = language();
     cx.set_global(UiLanguage(choice));
     resolve(choice);
+    if previous != language() {
+        crate::app::set_menus(cx);
+    }
     cx.refresh_windows();
     let Some(path) = themes::store_path() else {
         return;
@@ -70,6 +96,63 @@ pub fn set_choice(choice: Choice, cx: &mut App) {
 /// `en` in the interface language (itself when it has no translation).
 pub fn t(en: &'static str) -> &'static str {
     i18n::tr(language(), en)
+}
+
+/// A retained message: translate its template when displayed, not when stored.
+/// Details from another process or the OS stay verbatim.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Message {
+    template: &'static str,
+    details: Vec<(&'static str, String)>,
+}
+
+impl Message {
+    pub fn new(template: &'static str) -> Self {
+        Self {
+            template,
+            details: Vec::new(),
+        }
+    }
+
+    pub fn with(
+        template: &'static str,
+        details: impl IntoIterator<Item = (&'static str, String)>,
+    ) -> Self {
+        Self {
+            template,
+            details: details.into_iter().collect(),
+        }
+    }
+
+    pub fn with_error(template: &'static str, error: impl std::fmt::Display) -> Self {
+        Self::with(template, [("{error}", error.to_string())])
+    }
+
+    pub fn raw(detail: impl Into<String>) -> Self {
+        Self::with("{detail}", [("{detail}", detail.into())])
+    }
+
+    pub fn render(&self) -> String {
+        self.render_in(language())
+    }
+
+    pub fn render_in(&self, language: Language) -> String {
+        let mut remaining = i18n::tr(language, self.template);
+        let mut rendered = String::new();
+        // Search only the template, never the inserted details.
+        while let Some((index, key, value)) = self
+            .details
+            .iter()
+            .filter_map(|(key, value)| remaining.find(*key).map(|index| (index, key, value)))
+            .min_by_key(|(index, _, _)| *index)
+        {
+            rendered.push_str(&remaining[..index]);
+            rendered.push_str(value);
+            remaining = &remaining[index + key.len()..];
+        }
+        rendered.push_str(remaining);
+        rendered
+    }
 }
 
 /// Text kept outside render (an input's placeholder) follows the language:

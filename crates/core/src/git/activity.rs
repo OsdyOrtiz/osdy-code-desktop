@@ -4,6 +4,7 @@
 //! commits, or the user's GitHub contribution calendar (every repository,
 //! pull requests, issues and reviews), read from their public profile page.
 
+use crate::i18n::{Language, tr};
 use crate::usage::time::{DAY, civil_from_days, days_from_civil};
 
 /// Weeks the grid spans: a year, plus the week in progress.
@@ -50,13 +51,16 @@ pub enum Unit {
 }
 
 impl Unit {
-    fn word(self, n: u32) -> &'static str {
-        match (self, n) {
-            (Unit::Commits, 1) => "commit",
-            (Unit::Commits, _) => "commits",
-            (Unit::Contributions, 1) => "contribution",
-            (Unit::Contributions, _) => "contributions",
-        }
+    fn word(self, language: Language, n: u32) -> &'static str {
+        tr(
+            language,
+            match (self, n) {
+                (Unit::Commits, 1) => "commit",
+                (Unit::Commits, _) => "commits",
+                (Unit::Contributions, 1) => "contribution",
+                (Unit::Contributions, _) => "contributions",
+            },
+        )
     }
 }
 
@@ -155,13 +159,13 @@ pub fn weekday(day: i64) -> usize {
 
 /// Month names over the columns of `weeks`: `(column, "Jan")` where a
 /// month's first Sunday falls, without one crowding the next.
-pub fn month_labels(weeks: &[[Day; 7]]) -> Vec<(usize, &'static str)> {
+pub fn month_labels(language: Language, weeks: &[[Day; 7]]) -> Vec<(usize, &'static str)> {
     let month = |day: i64| civil_from_days(day).1;
     let mut labels: Vec<(usize, &'static str)> = Vec::new();
     for (column, week) in weeks.iter().enumerate() {
         let first = week[0].day;
         if column == 0 || month(first) != month(weeks[column - 1][0].day) {
-            labels.push((column, MONTHS[month(first) as usize - 1]));
+            labels.push((column, tr(language, MONTHS[month(first) as usize - 1])));
         }
     }
     // A label squeezed at the very start by the next one goes.
@@ -185,33 +189,40 @@ pub fn thousands(n: u32) -> String {
 }
 
 /// "Thu, Nov 20, 2026", for a cell's tooltip.
-pub fn day_label(day: i64) -> String {
+fn day_label(language: Language, day: i64) -> String {
     let (year, month, date) = civil_from_days(day);
-    format!(
-        "{}, {} {date}, {year}",
-        WEEKDAYS[weekday(day)],
-        MONTHS[month as usize - 1]
-    )
+    tr(language, "{weekday}, {month} {day}, {year}")
+        .replace("{weekday}", tr(language, WEEKDAYS[weekday(day)]))
+        .replace("{month}", tr(language, MONTHS[month as usize - 1]))
+        .replace("{day}", &date.to_string())
+        .replace("{year}", &year.to_string())
 }
 
 /// "3 commits on Thu, Nov 20, 2026".
-pub fn day_summary(day: &Day, unit: Unit) -> String {
-    let count = match day.count {
-        0 => format!("No {}", unit.word(0)),
-        n => format!("{} {}", thousands(n), unit.word(n)),
+pub fn day_summary(language: Language, day: &Day, unit: Unit) -> String {
+    let key = if day.count == 0 {
+        "No {unit} on {date}"
+    } else {
+        "{count} {unit} on {date}"
     };
-    format!("{count} on {}", day_label(day.day))
+    tr(language, key)
+        .replace("{count}", &thousands(day.count))
+        .replace("{unit}", unit.word(language, day.count))
+        .replace("{date}", &day_label(language, day.day))
 }
 
 /// "1,748 contributions in the last year", or "in 20 weeks" when a narrow
 /// pane shows fewer.
-pub fn heading(count: u32, weeks: usize, unit: Unit) -> String {
-    let what = format!("{} {}", thousands(count), unit.word(count));
-    if weeks >= WEEKS {
-        format!("{what} in the last year")
+pub fn heading(language: Language, count: u32, weeks: usize, unit: Unit) -> String {
+    let key = if weeks >= WEEKS {
+        "{count} {unit} in the last year"
     } else {
-        format!("{what} in {weeks} weeks")
-    }
+        "{count} {unit} in {weeks} weeks"
+    };
+    tr(language, key)
+        .replace("{count}", &thousands(count))
+        .replace("{unit}", unit.word(language, count))
+        .replace("{weeks}", &weeks.to_string())
 }
 
 // ── GitHub ──────────────────────────────────────────────────────────────────
@@ -345,7 +356,7 @@ mod tests {
     #[test]
     fn months_are_named_where_they_begin() {
         let grid = activity(&[], days_from_civil(2026, 11, 20));
-        let labels = month_labels(&grid.weeks);
+        let labels = month_labels(Language::English, &grid.weeks);
         let names: Vec<&str> = labels.iter().map(|(_, m)| *m).collect();
         // A year back from late November, as GitHub draws it: Nov … Nov.
         assert_eq!(names.first(), Some(&"Nov"), "{names:?}");
@@ -359,10 +370,13 @@ mod tests {
         assert_eq!(thousands(12), "12");
         assert_eq!(thousands(1_000_000), "1,000,000");
         assert_eq!(
-            heading(1748, WEEKS, Unit::Contributions),
+            heading(Language::English, 1748, WEEKS, Unit::Contributions),
             "1,748 contributions in the last year"
         );
-        assert_eq!(heading(1, 20, Unit::Commits), "1 commit in 20 weeks");
+        assert_eq!(
+            heading(Language::English, 1, 20, Unit::Commits),
+            "1 commit in 20 weeks"
+        );
         let day = Day {
             day: days_from_civil(2026, 11, 20),
             count: 0,
@@ -370,7 +384,7 @@ mod tests {
             future: false,
         };
         assert_eq!(
-            day_summary(&day, Unit::Commits),
+            day_summary(Language::English, &day, Unit::Commits),
             "No commits on Fri, Nov 20, 2026"
         );
         assert_eq!(

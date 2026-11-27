@@ -92,8 +92,13 @@ impl Job {
 
     /// The command that was started, or `job <id>` when it came without one.
     pub fn display_label(&self) -> String {
+        self.localized_label(crate::i18n::Language::English)
+    }
+
+    /// Translate the fallback label, not the command or label the agent sent.
+    pub fn localized_label(&self, language: crate::i18n::Language) -> String {
         if self.label.is_empty() {
-            format!("job {}", self.id)
+            crate::i18n::tr(language, "job {id}").replace("{id}", &self.id)
         } else {
             self.label.clone()
         }
@@ -101,8 +106,15 @@ impl Job {
 
     /// `exit <code>` once it has ended, otherwise the reported status.
     pub fn state_text(&self) -> String {
+        self.localized_state(crate::i18n::Language::English)
+    }
+
+    /// Translate the exit-code label, not a status reported by the agent.
+    pub fn localized_state(&self, language: crate::i18n::Language) -> String {
         match self.exit_code {
-            Some(code) => format!("exit {code}"),
+            Some(code) => {
+                crate::i18n::tr(language, "exit {code}").replace("{code}", &code.to_string())
+            }
             None => self.status.clone(),
         }
     }

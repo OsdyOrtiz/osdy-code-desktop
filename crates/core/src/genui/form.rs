@@ -5,7 +5,7 @@
 use serde_json::{Map, Value, json};
 
 use super::diagram::{Errors, MAX_LABEL, MAX_TEXT, array, id_of, text, truncate};
-use super::edits::{Editable, format_number, number, plural};
+use super::edits::{Editable, format_number, number};
 
 pub const MAX_FIELDS: usize = 50;
 pub const MAX_OPTIONS: usize = 50;
@@ -122,6 +122,29 @@ pub fn is_date(s: &str) -> bool {
     (1..=days).contains(&d)
 }
 
+/// An answer validation diagnostic, rendered in the current UI language.
+#[derive(Clone, Debug)]
+pub struct AnswerError {
+    template: &'static str,
+    label: String,
+    value: String,
+}
+
+impl AnswerError {
+    pub fn render(&self, language: crate::i18n::Language) -> String {
+        let template = crate::i18n::tr(language, self.template);
+        let (before, after) = template
+            .split_once("{label}")
+            .expect("answer errors name their field");
+        format!(
+            "{}{}{}",
+            before.replace("{value}", &self.value),
+            self.label,
+            after.replace("{value}", &self.value)
+        )
+    }
+}
+
 impl Field {
     pub fn option_label<'a>(&'a self, value: &'a str) -> &'a str {
         self.options
@@ -155,7 +178,20 @@ impl Field {
     /// `value` in this field's shape, or why it doesn't fit (ignoring
     /// `required`). Numbers may come as text.
     pub fn coerce(&self, value: &Value) -> Result<Value, String> {
-        let label = &self.label;
+        self.coerce_answer(value)
+            .map_err(|error| error.render(crate::i18n::Language::English))
+    }
+
+    fn answer_error(&self, template: &'static str, value: String) -> AnswerError {
+        AnswerError {
+            template,
+            label: self.label.clone(),
+            value,
+        }
+    }
+
+    fn coerce_answer(&self, value: &Value) -> Result<Value, AnswerError> {
+        let plain = |template| self.answer_error(template, String::new());
         if value.is_null() || value.as_str().is_some_and(|s| s.trim().is_empty()) {
             return Ok(match self.kind {
                 FieldType::Checkbox => json!(false),
@@ -168,50 +204,61 @@ impl Field {
                 let s = match value {
                     Value::String(s) => s.trim().to_string(),
                     Value::Number(_) | Value::Bool(_) => value.to_string(),
-                    _ => return Err(format!("{label} must be text")),
+                    _ => return Err(plain("{label} must be text")),
                 };
                 let chars = s.chars().count() as f64;
                 if let Some(min) = self.min.filter(|min| chars < *min) {
-                    return Err(format!("{label} needs at least {min} characters"));
+                    return Err(self.answer_error(
+                        "{label} needs at least {value} characters",
+                        min.to_string(),
+                    ));
                 }
                 if let Some(max) = self.max.filter(|max| chars > *max) {
-                    return Err(format!("{label} takes at most {max} characters"));
+                    return Err(self.answer_error(
+                        "{label} takes at most {value} characters",
+                        max.to_string(),
+                    ));
                 }
                 Ok(json!(truncate(&s, self.max_len())))
             }
             FieldType::Number | FieldType::Slider => {
-                let n = number(value).ok_or_else(|| format!("{label} must be a number"))?;
+                let n = number(value).ok_or_else(|| plain("{label} must be a number"))?;
                 if let Some(min) = self.min.filter(|min| n < *min) {
-                    return Err(format!("{label} must be at least {}", format_number(min)));
+                    return Err(
+                        self.answer_error("{label} must be at least {value}", format_number(min))
+                    );
                 }
                 if let Some(max) = self.max.filter(|max| n > *max) {
-                    return Err(format!("{label} must be at most {}", format_number(max)));
+                    return Err(
+                        self.answer_error("{label} must be at most {value}", format_number(max))
+                    );
                 }
                 Ok(json!(n))
             }
             FieldType::Checkbox => match value {
                 Value::Bool(_) => Ok(value.clone()),
-                _ => Err(format!("{label} must be true or false")),
+                _ => Err(plain("{label} must be true or false")),
             },
             FieldType::Select | FieldType::Radio => {
                 let s = value
                     .as_str()
-                    .ok_or_else(|| format!("{label} must be one of its options"))?;
+                    .ok_or_else(|| plain("{label} must be one of its options"))?;
                 if self.options.iter().any(|o| o.value == s) {
                     Ok(json!(s))
                 } else {
-                    Err(format!("“{s}” is not an option of {label}"))
+                    Err(self.answer_error("“{value}” is not an option of {label}", s.to_owned()))
                 }
             }
             FieldType::Multiselect => {
                 let items = value
                     .as_array()
-                    .ok_or_else(|| format!("{label} must be a list of options"))?;
+                    .ok_or_else(|| plain("{label} must be a list of options"))?;
                 let mut chosen = Vec::new();
                 for item in items {
                     let s = item.as_str().unwrap_or_default();
                     if !self.options.iter().any(|o| o.value == s) {
-                        return Err(format!("“{s}” is not an option of {label}"));
+                        return Err(self
+                            .answer_error("“{value}” is not an option of {label}", s.to_owned()));
                     }
                     if !chosen.contains(&s) {
                         chosen.push(s);
@@ -226,23 +273,31 @@ impl Field {
                     .collect();
                 let count = chosen.len() as f64;
                 if let Some(min) = self.min.filter(|min| count < *min) {
-                    return Err(format!("{label}: choose at least {min}"));
+                    return Err(
+                        self.answer_error("{label}: choose at least {value}", min.to_string())
+                    );
                 }
                 if let Some(max) = self.max.filter(|max| count > *max) {
-                    return Err(format!("{label}: choose at most {max}"));
+                    return Err(
+                        self.answer_error("{label}: choose at most {value}", max.to_string())
+                    );
                 }
                 Ok(json!(chosen))
             }
             FieldType::Date => {
                 let s = value.as_str().map(str::trim).unwrap_or_default();
                 if !is_date(s) {
-                    return Err(format!("{label} must be a date (YYYY-MM-DD)"));
+                    return Err(plain("{label} must be a date (YYYY-MM-DD)"));
                 }
                 if let Some(min) = self.min_date.as_deref().filter(|min| s < *min) {
-                    return Err(format!("{label} must be on or after {min}"));
+                    return Err(
+                        self.answer_error("{label} must be on or after {value}", min.to_owned())
+                    );
                 }
                 if let Some(max) = self.max_date.as_deref().filter(|max| s > *max) {
-                    return Err(format!("{label} must be on or before {max}"));
+                    return Err(
+                        self.answer_error("{label} must be on or before {value}", max.to_owned())
+                    );
                 }
                 Ok(json!(s))
             }
@@ -389,11 +444,16 @@ impl Form {
         }
         Ok(Form {
             description: text(spec.get("description"), MAX_TEXT),
-            submit_label: text(spec.get("submitLabel"), 40).unwrap_or_else(|| "Submit".into()),
+            submit_label: Self::custom_submit_label(spec.get("submitLabel"))
+                .unwrap_or_else(|| "Submit".into()),
             fields,
             values,
             submitted: spec.get("submitted").and_then(Value::as_bool) == Some(true),
         })
+    }
+
+    pub fn custom_submit_label(label: Option<&Value>) -> Option<String> {
+        text(label, 40)
     }
 
     pub fn field(&self, id: &str) -> Option<&Field> {
@@ -415,18 +475,33 @@ impl Form {
         &self,
         values: &Map<String, Value>,
     ) -> Result<Map<String, Value>, Vec<(String, String)>> {
+        self.validate_answers(values).map_err(|errors| {
+            errors
+                .into_iter()
+                .map(|(id, error)| (id, error.render(crate::i18n::Language::English)))
+                .collect()
+        })
+    }
+
+    pub fn validate_answers(
+        &self,
+        values: &Map<String, Value>,
+    ) -> Result<Map<String, Value>, Vec<(String, AnswerError)>> {
         let mut clean = Map::new();
         let mut errors = Vec::new();
         for field in &self.fields {
             let raw = values.get(&field.id).cloned().unwrap_or(Value::Null);
-            match field.coerce(&raw) {
+            match field.coerce_answer(&raw) {
                 Ok(value) if field.required && Field::is_empty(&value) => {
-                    let message = if field.kind == FieldType::Checkbox {
-                        format!("{} must be checked", field.label)
+                    let template = if field.kind == FieldType::Checkbox {
+                        "{label} must be checked"
                     } else {
-                        format!("{} is required", field.label)
+                        "{label} is required"
                     };
-                    errors.push((field.id.clone(), message));
+                    errors.push((
+                        field.id.clone(),
+                        field.answer_error(template, String::new()),
+                    ));
                 }
                 Ok(value) => {
                     clean.insert(field.id.clone(), value);
@@ -550,14 +625,22 @@ impl Editable for Form {
 
 /// "3 fields" / "3 fields, 1 required".
 pub fn field_count(form: &Form) -> String {
+    field_count_in(form, crate::i18n::Language::English)
+}
+
+pub fn field_count_in(form: &Form, language: crate::i18n::Language) -> String {
     let required = form.fields.iter().filter(|f| f.required).count();
+    let fields = super::edits::count_in(
+        language,
+        form.fields.len(),
+        "{count} field",
+        "{count} fields",
+    );
     if required == 0 {
-        plural(form.fields.len(), "field")
+        fields
     } else {
-        format!(
-            "{}, {required} required",
-            plural(form.fields.len(), "field")
-        )
+        let required = super::edits::count_in(language, required, "1 required", "{count} required");
+        format!("{fields}, {required}")
     }
 }
 

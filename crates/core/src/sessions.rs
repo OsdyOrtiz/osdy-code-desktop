@@ -4,6 +4,8 @@
 
 use std::path::{Path, PathBuf};
 
+use crate::i18n::{Language, tr};
+
 /// What the browser shows for one session file.
 #[derive(Clone, Debug, PartialEq)]
 pub struct SessionSummary {
@@ -31,10 +33,15 @@ impl SessionSummary {
     /// the `Attached files:` block it carried (a prompt of files only is
     /// titled by their names).
     pub fn title(&self) -> String {
+        self.title_in(Language::English)
+    }
+
+    /// The same title with app-generated fallback text in `language`.
+    pub fn title_in(&self, language: Language) -> String {
         let text = match (self.name.as_deref(), self.first_message.as_deref()) {
             (Some(name), _) => name.to_string(),
             (None, Some(first)) => crate::attachments::summary(first),
-            (None, None) => "(no messages)".to_string(),
+            (None, None) => tr(language, "(no messages)").to_string(),
         };
         crate::text::first_line(text.trim(), 120)
     }
@@ -149,16 +156,23 @@ pub fn parse_iso_ms(s: &str) -> Option<i64> {
 }
 
 pub fn relative_time(now_ms: i64, then_ms: i64) -> String {
+    relative_time_in(Language::English, now_ms, then_ms)
+}
+
+pub fn relative_time_in(language: Language, now_ms: i64, then_ms: i64) -> String {
     let secs = (now_ms - then_ms).max(0) / 1000;
-    match secs {
-        0..60 => "just now".to_string(),
-        60..3600 => format!("{}m ago", secs / 60),
-        3600..86_400 => format!("{}h ago", secs / 3600),
-        86_400..604_800 => format!("{}d ago", secs / 86_400),
-        604_800..2_592_000 => format!("{}w ago", secs / 604_800),
-        2_592_000..31_536_000 => format!("{}mo ago", secs / 2_592_000),
-        _ => format!("{}y ago", secs / 31_536_000),
-    }
+    let (key, unit) = match secs {
+        0..60 => return tr(language, "just now").to_string(),
+        60..3600 => ("{count}m ago", 60),
+        3600..86_400 => ("{count}h ago", 3600),
+        86_400..604_800 => ("{count}d ago", 86_400),
+        604_800..2_592_000 => ("{count}w ago", 604_800),
+        2_592_000..5_184_000 => return tr(language, "1mo ago").to_string(),
+        5_184_000..31_536_000 => ("{count}mo ago", 2_592_000),
+        31_536_000..63_072_000 => return tr(language, "1y ago").to_string(),
+        _ => ("{count}y ago", 31_536_000),
+    };
+    tr(language, key).replace("{count}", &(secs / unit).to_string())
 }
 
 /// The title of a session from Pi's own listing (Gentle Shell's

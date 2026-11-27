@@ -4,7 +4,7 @@
 use serde_json::{Map, Value, json};
 
 use super::diagram::{Errors, MAX_LABEL, MAX_TEXT, array, id_of, text, truncate};
-use super::edits::{Editable, fresh_id, list_names, plural};
+use super::edits::{Editable, fresh_id, list_names};
 use super::refs::CodeRef;
 
 pub const MAX_COLUMNS: usize = 12;
@@ -608,11 +608,25 @@ impl Editable for Board {
 
 /// "5 cards in 3 columns".
 pub fn card_count(board: &Board) -> String {
-    format!(
-        "{} in {}",
-        plural(board.cards.len(), "card"),
-        plural(board.columns.len(), "column")
-    )
+    card_count_in(board, crate::i18n::Language::English)
+}
+
+pub fn card_count_in(board: &Board, language: crate::i18n::Language) -> String {
+    use super::edits::count_in;
+    crate::i18n::tr(language, "{cards} in {columns}")
+        .replace(
+            "{cards}",
+            &count_in(language, board.cards.len(), "{count} card", "{count} cards"),
+        )
+        .replace(
+            "{columns}",
+            &count_in(
+                language,
+                board.columns.len(),
+                "{count} column",
+                "{count} columns",
+            ),
+        )
 }
 
 /// `{op: "dispatch", card, column, agent?}` and its sentence: the change
