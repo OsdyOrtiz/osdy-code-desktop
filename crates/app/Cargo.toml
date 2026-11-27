@@ -100,7 +100,7 @@ windows = { version = "0.62", features = [
 # The Dock icon when the binary runs outside its `.app` (`cargo run`).
 [target.'cfg(target_os = "macos")'.dependencies]
 core-foundation = "0.10"
-core-text = "21"
+core-text = "22"
 objc2 = "0.6"
 # NSProcessInfo: Low Power Mode, so animated themes can rest (platform::power).
 objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSData", "NSError", "NSProcessInfo"] }
