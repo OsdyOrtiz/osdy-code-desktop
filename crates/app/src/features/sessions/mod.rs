@@ -25,7 +25,8 @@ use gpui_kit::component::input::InputState;
 use gpui_kit::*;
 use pi_rpc::desktop_rpc::{SessionEntry, SessionsScope};
 
-use crate::features::session::{ReadTicket, SessionView};
+use crate::features::session::{ReadFailure, ReadTicket, SessionView};
+use crate::shared::i18n::t;
 
 mod discovery;
 mod render;
@@ -92,6 +93,32 @@ enum Pending {
     },
 }
 
+const FILTER_PLACEHOLDER: &str = "Search by name, first message or path";
+
+enum OpenError {
+    Cancelled,
+    MissingFile,
+    Request(ReadFailure),
+}
+
+impl OpenError {
+    fn text(&self) -> String {
+        match self {
+            Self::Cancelled => t("An extension cancelled the switch; this tab keeps its session.").into(),
+            Self::MissingFile => t("That session belongs to another project, and its file was not found to open it in a new tab.").into(),
+            Self::Request(failure) => match failure {
+                ReadFailure::NotOffered | ReadFailure::Unsupported => {
+                    t("This Gentle Shell does not offer that over Desktop.").into()
+                }
+                ReadFailure::Timeout => t("Gentle Shell did not answer in time.").into(),
+                ReadFailure::Dropped => t("Gentle Shell restarted before it answered.").into(),
+                ReadFailure::Failure(error) => t("The request failed ({error}).").replace("{error}", error),
+                ReadFailure::Refused { message, .. } => message.clone(),
+            },
+        }
+    }
+}
+
 pub struct SessionsView {
     cwd: PathBuf,
     current: Option<PathBuf>,
@@ -111,9 +138,10 @@ pub struct SessionsView {
     next_cursor: Option<String>,
     pending: Option<Pending>,
     /// Why the last open did not happen.
-    error: Option<String>,
+    error: Option<OpenError>,
     loading: bool,
     filter: Entity<InputState>,
+    filter_language: gentle_core::i18n::Language,
     _load: Task<()>,
     _subscriptions: Vec<Subscription>,
 }

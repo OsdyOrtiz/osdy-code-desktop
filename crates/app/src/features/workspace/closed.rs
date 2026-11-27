@@ -84,7 +84,10 @@ impl Workspace {
         }
         let title = match closing {
             [one] => self.pane_title(*one),
-            _ => SharedString::from(format!("{} panes", closing.len())),
+            _ => SharedString::from(
+                crate::shared::i18n::t("{count} panes")
+                    .replace("{count}", &closing.len().to_string()),
+            ),
         };
         let closed = Closed {
             space,
@@ -106,11 +109,11 @@ impl Workspace {
             return;
         };
         let weak = cx.entity().downgrade();
-        let note = Notification::info(format!(
-            "Closed \u{201c}{}\u{201d}. Click to reopen ({}).",
-            closed.title.trim_end_matches(" •"),
-            REOPEN_KEY
-        ))
+        let note = Notification::info(
+            crate::shared::i18n::t("Closed “{title}”. Click to reopen ({shortcut}).")
+                .replace("{shortcut}", REOPEN_KEY)
+                .replace("{title}", closed.title.trim_end_matches(" •")),
+        )
         .id::<Closed>()
         .on_click(move |_, window, cx| {
             // The click runs inside the notice's own update; reopening
@@ -347,6 +350,7 @@ mod tests {
                     workspace_rename: None,
                     tab_selection: None,
                     tab_search: cx.new(|cx| InputState::new(window, cx)),
+                    tab_search_language: crate::shared::i18n::language(),
                     save_task: Some(Task::ready(())),
                     _title_poll: Task::ready(()),
                     _lifecycle: Vec::new(),

@@ -79,7 +79,10 @@ impl Workspace {
             }
         }))
         .tooltip(|window, cx| {
-            Tooltip::new("Drag to resize · double-click to reset").build(window, cx)
+            Tooltip::new(crate::shared::i18n::t(
+                "Drag to resize · double-click to reset",
+            ))
+            .build(window, cx)
         })
     }
 
@@ -153,6 +156,24 @@ impl Workspace {
 impl Render for Workspace {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         crate::shared::diagnostics::render("Workspace");
+        if self.tab_search_language != crate::shared::i18n::language() {
+            for pane in self.panes.values_mut() {
+                pane.sync_chrome(cx);
+            }
+            self.refresh_stage_summaries(cx);
+            if let Some((Overlay::Palette(view), _)) = &self.overlay {
+                view.update(cx, |palette, cx| {
+                    palette.refresh_card_title(|id| self.stage_title(id), cx);
+                });
+            }
+        }
+        crate::shared::i18n::sync_placeholder(
+            &self.tab_search,
+            "Search tabs",
+            &mut self.tab_search_language,
+            window,
+            cx,
+        );
         // Follow keyboard focus into panes (a terminal focused by its own click).
         if let Some(tab) = self.tab()
             && let Some(inside) = tab.leaves().into_iter().find(|id| {
@@ -390,11 +411,13 @@ impl Render for Workspace {
                                                 } else {
                                                     IconName::PanelLeftOpen
                                                 }))
-                                                .tooltip(if !self.tabs_sidebar_hidden {
-                                                    "Hide workspace sidebar"
-                                                } else {
-                                                    "Show workspace sidebar"
-                                                })
+                                                .tooltip(crate::shared::i18n::t(
+                                                    if !self.tabs_sidebar_hidden {
+                                                        "Hide workspace sidebar"
+                                                    } else {
+                                                        "Show workspace sidebar"
+                                                    },
+                                                ))
                                                 .on_click(cx.listener(|this, _, _, cx| {
                                                     this.toggle_tabs_sidebar(cx)
                                                 })),
@@ -405,7 +428,10 @@ impl Render for Workspace {
                                             .ghost()
                                             .xsmall()
                                             .icon(Icon::new(IconName::Command))
-                                            .tooltip(format!("Commands ({})", ui::shortcut("K")))
+                                            .tooltip(
+                                                crate::shared::i18n::t("Commands ({shortcut})")
+                                                    .replace("{shortcut}", &ui::shortcut("K")),
+                                            )
                                             .on_click(cx.listener(|this, _, window, cx| {
                                                 this.on_open_palette(&OpenPalette, window, cx)
                                             })),
@@ -423,15 +449,16 @@ impl Render for Workspace {
                                                 } else {
                                                     IconName::PanelRightOpen
                                                 }))
-                                                .tooltip(format!(
-                                                    "{} Files sidebar ({})",
-                                                    if self.sidebar_visible {
-                                                        "Hide"
-                                                    } else {
-                                                        "Show"
-                                                    },
-                                                    ui::shortcut("B")
-                                                ))
+                                                .tooltip(
+                                                    crate::shared::i18n::t(
+                                                        if self.sidebar_visible {
+                                                            "Hide Files sidebar ({shortcut})"
+                                                        } else {
+                                                            "Show Files sidebar ({shortcut})"
+                                                        },
+                                                    )
+                                                    .replace("{shortcut}", &ui::shortcut("B")),
+                                                )
                                                 .on_click(cx.listener(|this, _, _, cx| {
                                                     this.toggle_sidebar(cx)
                                                 })),
@@ -572,7 +599,7 @@ impl Workspace {
                         .xsmall()
                         .icon(Icon::new(IconName::Smartphone))
                         .when(open, |b| b.text_color(ui::petal()))
-                        .tooltip("Devices: simulators and emulators")
+                        .tooltip(crate::shared::i18n::t("Devices: simulators and emulators"))
                         .on_click(cx.listener(|this, _, _, cx| {
                             this.devices.update(cx, |panel, cx| panel.toggle(cx))
                         })),

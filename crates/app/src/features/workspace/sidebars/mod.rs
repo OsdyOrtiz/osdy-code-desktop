@@ -6,6 +6,7 @@ use super::badge::Mark;
 use super::tab_panel::TabMenu;
 use super::view::new_tab_menu;
 use super::*;
+use crate::shared::i18n::t;
 
 mod accordion;
 mod compact;
@@ -64,9 +65,10 @@ impl TabEntry {
     pub fn tooltip(&self) -> SharedString {
         let mut tip = self.title.to_string();
         if self.panes > 1 {
-            tip.push_str(&format!(" · {} panes", self.panes));
+            tip.push_str(" · ");
+            tip.push_str(&t("{count} panes").replace("{count}", &self.panes.to_string()));
         }
-        if let Some(background) = self.background.describe() {
+        if let Some(background) = self.background.describe_in(crate::shared::i18n::language()) {
             tip.push_str(&format!(" · {background}"));
         }
         tip.into()
@@ -93,15 +95,13 @@ impl SpaceEntry {
 
     /// Name, tab count, activity and what runs in background, for a tooltip.
     pub fn tooltip(&self) -> SharedString {
-        let tabs = match self.tabs {
-            1 => "1 tab".to_string(),
-            n => format!("{n} tabs"),
-        };
+        let tabs = super::super::palette::tab_count(self.tabs);
         let mut tip = format!("{} · {tabs}", self.name);
+        let language = crate::shared::i18n::language();
         if let Some(light @ (Light::NeedsYou | Light::Working)) = self.activity.light() {
-            tip.push_str(&format!(" · {}", light.what()));
+            tip.push_str(&format!(" · {}", light.what_in(language)));
         }
-        if let Some(background) = self.activity.background.describe() {
+        if let Some(background) = self.activity.background.describe_in(language) {
             tip.push_str(&format!(" · {background}"));
         }
         tip.into()
@@ -110,6 +110,10 @@ impl SpaceEntry {
 
 /// What a tab not built yet shows: its file, or its kind and folder.
 pub(super) fn saved_title(pane: &SavedPane) -> SharedString {
+    saved_title_in(pane, crate::shared::i18n::language())
+}
+
+fn saved_title_in(pane: &SavedPane, language: gentle_core::i18n::Language) -> SharedString {
     let name = |path: &Path| {
         path.file_name()
             .map(|n| n.to_string_lossy().into_owned())
@@ -126,7 +130,12 @@ pub(super) fn saved_title(pane: &SavedPane) -> SharedString {
         PaneKind::Canvas => "Canvas",
         PaneKind::Tower => "Tower",
     };
-    format!("{kind} · {}", name(&pane.cwd)).into()
+    format!(
+        "{} · {}",
+        gentle_core::i18n::tr(language, kind),
+        name(&pane.cwd)
+    )
+    .into()
 }
 
 impl Workspace {
@@ -363,7 +372,7 @@ impl Workspace {
             .xsmall()
             .icon(Icon::new(IconName::Plus))
             .when_some(label, |b, label| b.label(label))
-            .tooltip("New tab")
+            .tooltip(t("New tab"))
             .on_mouse_down(MouseButton::Right, |_, _, cx| cx.stop_propagation())
             .dropdown_menu(move |menu, window, _| new_tab_menu(menu, weak.clone(), window))
             .on_open_change(move |open, window, cx| {
@@ -390,17 +399,17 @@ impl Workspace {
             .child(Self::new_tab_tile(
                 agent,
                 IconName::Bot,
-                "Agent",
+                t("Agent"),
                 ui::platform_shortcut("⌘T", "Ctrl+T"),
-                "New agent tab",
+                t("New agent tab"),
                 cx.listener(|this, _, window, cx| this.on_new_tab(&NewTab, window, cx)),
             ))
             .child(Self::new_tab_tile(
                 terminal,
                 IconName::SquareTerminal,
-                "Terminal",
+                t("Terminal"),
                 ui::platform_shortcut("⌘⇧T", "Ctrl+Shift+T"),
-                "New terminal tab",
+                t("New terminal tab"),
                 cx.listener(|this, _, window, cx| {
                     this.on_new_terminal_tab(&NewTerminalTab, window, cx)
                 }),

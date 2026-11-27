@@ -40,7 +40,7 @@ impl Workspace {
                 .border_color(ui::border().opacity(0.6))
                 .gap_px();
             if tabs.is_empty() {
-                guide = guide.child(Self::quiet_row("No sessions yet", INDENT - 14.));
+                guide = guide.child(Self::quiet_row(t("No sessions yet"), INDENT - 14.));
             }
             for tab in &tabs {
                 guide = guide.child(self.tab_row(tab, INDENT - 14., cx));
@@ -51,7 +51,7 @@ impl Workspace {
             list = list.child(guide);
         }
         if searching && matches == 0 {
-            list = list.child(Self::quiet_row("No matching workspaces or sessions", 0.));
+            list = list.child(Self::quiet_row(t("No matching workspaces or sessions"), 0.));
         }
         v_flex()
             .size_full()

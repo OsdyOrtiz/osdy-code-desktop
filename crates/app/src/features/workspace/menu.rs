@@ -120,8 +120,8 @@ impl Workspace {
             move |menu, window, _| {
                 let mut menu = menu.min_w(rems(160. / 16.).to_pixels(window.rem_size()));
                 for (kind, label) in [
-                    (PaneKind::Agent, "New agent"),
-                    (PaneKind::Terminal, "New terminal"),
+                    (PaneKind::Agent, crate::shared::i18n::t("New agent")),
+                    (PaneKind::Terminal, crate::shared::i18n::t("New terminal")),
                 ] {
                     let weak = weak.clone();
                     let name = name.clone();
@@ -198,7 +198,7 @@ impl Workspace {
         let delete = weak;
         menu.min_w(rems(220. / 16.).to_pixels(window.rem_size()))
             .item(
-                PopupMenuItem::new("Rename")
+                PopupMenuItem::new(crate::shared::i18n::t("Rename"))
                     .icon(Icon::new(IconName::Pencil))
                     .on_click(move |_, window, cx| {
                         let _ = rename.update(cx, |this, cx| {
@@ -207,7 +207,7 @@ impl Workspace {
                     }),
             )
             .item(
-                PopupMenuItem::new("Badge…")
+                PopupMenuItem::new(crate::shared::i18n::t("Badge…"))
                     .icon(Icon::new(IconName::Palette))
                     .on_click(move |_, window, cx| {
                         let _ = badge.update(cx, |this, cx| {
@@ -220,7 +220,7 @@ impl Workspace {
             )
             .separator()
             .item(
-                PopupMenuItem::new("New agent tab")
+                PopupMenuItem::new(crate::shared::i18n::t("New agent tab"))
                     .icon(Icon::new(IconName::Bot))
                     .on_click(move |_, window, cx| {
                         let _ = agent.update(cx, |this, cx| {
@@ -231,7 +231,7 @@ impl Workspace {
                     }),
             )
             .item(
-                PopupMenuItem::new("New terminal tab")
+                PopupMenuItem::new(crate::shared::i18n::t("New terminal tab"))
                     .icon(Icon::new(IconName::SquareTerminal))
                     .on_click(move |_, window, cx| {
                         let _ = terminal.update(cx, |this, cx| {
@@ -242,7 +242,7 @@ impl Workspace {
                     }),
             )
             .item(
-                PopupMenuItem::new("New canvas tab")
+                PopupMenuItem::new(crate::shared::i18n::t("New canvas tab"))
                     .icon(Icon::new(IconName::PenTool))
                     .on_click(move |_, window, cx| {
                         let _ = canvas.update(cx, |this, cx| {
@@ -253,7 +253,7 @@ impl Workspace {
                     }),
             )
             .item(
-                PopupMenuItem::new("New tower tab")
+                PopupMenuItem::new(crate::shared::i18n::t("New tower tab"))
                     .icon(Icon::new(IconName::Building2))
                     .on_click(move |_, window, cx| {
                         let _ = tower.update(cx, |this, cx| {
@@ -270,7 +270,7 @@ impl Workspace {
             )
             .separator()
             .item(
-                PopupMenuItem::new("New workspace")
+                PopupMenuItem::new(crate::shared::i18n::t("New workspace"))
                     .icon(Icon::new(IconName::FolderPlus))
                     .on_click(move |_, window, cx| {
                         let _ = new_space
@@ -279,7 +279,7 @@ impl Workspace {
             )
             .separator()
             .item(
-                PopupMenuItem::new("Delete")
+                PopupMenuItem::new(crate::shared::i18n::t("Delete"))
                     .icon(Icon::new(IconName::Trash))
                     .disabled(!can_delete)
                     .on_click(move |_, window, cx| {
@@ -356,11 +356,14 @@ impl Workspace {
                     ));
                 }
                 let weak = workspace.clone();
-                menu = menu.item(PopupMenuItem::new("Search workspaces…").on_click(
-                    move |_, window, cx| {
-                        let _ = weak.update(cx, |ws, cx| ws.open_workspace_switcher(window, cx));
-                    },
-                ));
+                menu = menu.item(
+                    PopupMenuItem::new(crate::shared::i18n::t("Search workspaces…")).on_click(
+                        move |_, window, cx| {
+                            let _ =
+                                weak.update(cx, |ws, cx| ws.open_workspace_switcher(window, cx));
+                        },
+                    ),
+                );
                 Self::tab_placement_menu(menu.separator(), layout, compact, workspace)
             },
             window,

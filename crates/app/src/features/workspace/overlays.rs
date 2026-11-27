@@ -427,7 +427,7 @@ impl Workspace {
                 ProfilesEvent::UseInSession { profile, model, thinking } => {
                     if let Some(tab) = tab {
                         let (profile, model, thinking) = (profile.clone(), model.clone(), thinking.clone());
-                        let note = format!("Profile \u{201c}{profile}\u{201d} applied to this session's orchestrator; helpers keep the routing this session started with.");
+                        let note = crate::shared::i18n::t("Profile “{profile}” applied to this session's orchestrator; helpers keep the routing this session started with.").replace("{profile}", &profile);
                         tab.update(cx, |s, cx| {
                             s.note(note, cx);
                             s.set_session_profile(Some(profile), cx);
@@ -509,18 +509,20 @@ impl Workspace {
                 }
                 SettingsEvent::ShellCommand(text) => {
                     let view = view.downgrade();
-                    let report = move |result: Result<(), String>, cx: &mut App| {
+                    use crate::shared::i18n::Message;
+                    let report = move |result, cx: &mut App| {
                         let _ = view.update(cx, |view, cx| view.shell_done(result, cx));
                     };
                     match this.active_session() {
                         Some(session) => session.update(cx, |session, cx| {
-                            session.run_extension_command(text.clone(), cx, report)
+                            session.run_extension_command(text.clone(), cx, move |result, cx| {
+                                report(result.map_err(Message::raw), cx);
+                            })
                         }),
                         None => report(
-                            Err(
-                                "Open an agent tab first: Gentle Shell applies this setting."
-                                    .into(),
-                            ),
+                            Err(Message::new(
+                                "Open an agent tab first: Gentle Shell applies this setting.",
+                            )),
                             cx,
                         ),
                     }
@@ -740,7 +742,9 @@ impl Workspace {
         let Some(pane) = self.new_pane(PaneKind::Terminal, cwd, None, None, window, cx) else {
             cx.write_to_clipboard(ClipboardItem::new_string(command));
             window.push_notification(
-                Notification::info("The setup command is on your clipboard: run it in a terminal."),
+                Notification::info(crate::shared::i18n::t(
+                    "The setup command is on your clipboard: run it in a terminal.",
+                )),
                 cx,
             );
             return;
@@ -763,7 +767,7 @@ impl Workspace {
                 "The setup command is on your clipboard: paste it here and press Enter. Reopen Setup & requirements from the command palette when it's done."
             }
         };
-        window.push_notification(Notification::info(note), cx);
+        window.push_notification(Notification::info(crate::shared::i18n::t(note)), cx);
     }
 
     /// Start again every agent tab whose backend could not start (onboarding

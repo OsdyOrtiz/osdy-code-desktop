@@ -449,6 +449,7 @@ pub struct Workspace {
     workspace_rename: Option<WorkspaceRename>,
     tab_selection: Option<TabSelection>,
     tab_search: Entity<InputState>,
+    tab_search_language: gentle_core::i18n::Language,
     save_task: Option<Task<()>>,
     /// Re-reads every pane's title and busy state once a second (non-agent
     /// views can't be observed through `AnyView`), redrawing only on change.
@@ -530,7 +531,9 @@ impl Workspace {
                 }
             })
             .collect();
-        let tab_search = cx.new(|cx| InputState::new(window, cx).placeholder("Search tabs"));
+        let tab_search = cx.new(|cx| {
+            InputState::new(window, cx).placeholder(crate::shared::i18n::t("Search tabs"))
+        });
         let music = cx.new(|cx| Music::new(window, cx));
         let devices = cx.new(DevicePanel::new);
         let mut lifecycle = vec![
@@ -606,6 +609,7 @@ impl Workspace {
             workspace_rename: None,
             tab_selection: None,
             tab_search,
+            tab_search_language: crate::shared::i18n::language(),
             save_task: None,
             notices: cx.new(|_| Notices::default()),
             renaming: None,

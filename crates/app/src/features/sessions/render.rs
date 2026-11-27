@@ -3,7 +3,7 @@
 
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use gentle_core::sessions::{listed_title, project_name, relative_time};
+use gentle_core::sessions::{listed_title, project_name, relative_time_in};
 use gpui_kit::assets::IconName;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::input::Input;
@@ -12,10 +12,11 @@ use gpui_kit::component::{Icon, Sizable as _, h_flex, v_flex};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
 
+use crate::shared::i18n::language;
 use crate::shared::ui;
 
 use super::view::Row;
-use super::{Scope, SessionsEvent, SessionsView};
+use super::{FILTER_PLACEHOLDER, OpenError, Scope, SessionsEvent, SessionsView, t};
 
 /// Most rows rendered at once; the search box narrows the rest.
 const MAX_ROWS: usize = 200;
@@ -45,6 +46,18 @@ pub(super) fn first_message_line(first: &str) -> String {
     gentle_core::text::first_line(gentle_core::attachments::summary(first).trim(), 90)
 }
 
+fn message_count(count: u64, truncated: bool) -> String {
+    t(if count == 1 {
+        "{count} msg"
+    } else {
+        "{count} msgs"
+    })
+    .replace(
+        "{count}",
+        &format!("{count}{}", if truncated { "+" } else { "" }),
+    )
+}
+
 impl SessionsView {
     fn row_text(&self, row: Row, now: i64) -> RowText {
         match row {
@@ -64,15 +77,13 @@ impl SessionsView {
                 if let Some(model) = &session.model {
                     meta.push(model.clone());
                 }
-                meta.push(format!(
-                    "{}{} msg{}",
-                    session.message_count,
-                    if session.truncated { "+" } else { "" },
-                    if session.message_count == 1 { "" } else { "s" }
+                meta.push(message_count(
+                    session.message_count as u64,
+                    session.truncated,
                 ));
-                meta.push(relative_time(now, session.modified_ms));
+                meta.push(relative_time_in(language(), now, session.modified_ms));
                 RowText {
-                    title: session.title(),
+                    title: session.title_in(language()),
                     titled: session.name.is_some() || session.first_message.is_some(),
                     subtitle,
                     meta,
@@ -90,9 +101,9 @@ impl SessionsView {
                 }
                 let mut meta = Vec::new();
                 if let Some(count) = entry.message_count {
-                    meta.push(format!("{count} msg{}", if count == 1 { "" } else { "s" }));
+                    meta.push(message_count(count, false));
                 }
-                meta.push(relative_time(now, entry.modified as i64));
+                meta.push(relative_time_in(language(), now, entry.modified as i64));
                 RowText {
                     title: listed_title(entry.name.as_deref(), &entry.first_message),
                     titled: entry.name.is_some() || entry.message_count != Some(0),
@@ -187,10 +198,10 @@ impl SessionsView {
                                     .child(text.title),
                             )
                             .when(current, |d| {
-                                d.child(ui::chip("current", ui::accent()).flex_shrink_0())
+                                d.child(ui::chip(t("current"), ui::accent()).flex_shrink_0())
                             })
                             .when(text.elsewhere && self.scope == Scope::All, |d| {
-                                d.child(ui::chip("new tab", ui::warning()).flex_shrink_0())
+                                d.child(ui::chip(t("new tab"), ui::warning()).flex_shrink_0())
                             }),
                     )
                     .when(!text.subtitle.is_empty(), |d| {
@@ -235,13 +246,13 @@ impl SessionsView {
                     .text_sm()
                     .text_color(ui::muted())
                     .child(Spinner::new().small().color(ui::accent()))
-                    .child("Reading sessions…")
+                    .child(t("Reading sessions…"))
                     .into_any_element();
             }
-            return empty(match self.scope {
+            return empty(t(match self.scope {
                 Scope::Project => "No sessions for this project yet.",
                 Scope::All => "No sessions found.",
-            });
+            }));
         }
         let visible = self.visible(cx);
         let more = self.has_more().then(|| {
@@ -254,18 +265,18 @@ impl SessionsView {
                         .small()
                         .ghost()
                         .icon(Icon::new(IconName::ChevronDown))
-                        .label("Load older sessions")
+                        .label(t("Load older sessions"))
                         .loading(self.loading)
                         .on_click(cx.listener(|this, _, _, cx| this.list_page(true, cx))),
                 )
         });
         if visible.is_empty() {
             return v_flex()
-                .child(empty(if more.is_some() {
+                .child(empty(t(if more.is_some() {
                     "No loaded session matches; older ones may."
                 } else {
                     "No sessions match."
-                }))
+                })))
                 .children(more)
                 .into_any_element();
         }
@@ -283,21 +294,16 @@ impl SessionsView {
                 div()
                     .px_3()
                     .pb_1()
-                    .child(ui::section_label(match self.scope {
+                    .child(ui::section_label(t(match self.scope {
                         Scope::Project => "This project",
                         Scope::All => "All projects",
-                    })),
+                    }))),
             )
             .children(rows)
             .when(hidden > 0, |d| {
-                d.child(
-                    div()
-                        .px_3()
-                        .py_2()
-                        .text_xs()
-                        .text_color(ui::faint())
-                        .child(format!("{hidden} more — refine the search")),
-                )
+                d.child(div().px_3().py_2().text_xs().text_color(ui::faint()).child(
+                    t("{count} more — refine the search").replace("{count}", &hidden.to_string()),
+                ))
             })
             .children(more)
             .into_any_element()
@@ -305,7 +311,14 @@ impl SessionsView {
 }
 
 impl Render for SessionsView {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        crate::shared::i18n::sync_placeholder(
+            &self.filter,
+            FILTER_PLACEHOLDER,
+            &mut self.filter_language,
+            window,
+            cx,
+        );
         let all = self.scope == Scope::All;
         let count = self.count();
         let plus = if self.has_more() { "+" } else { "" };
@@ -351,7 +364,7 @@ impl Render for SessionsView {
                                     cx.listener(move |this, _, _, cx| this.set_scope(scope, cx)),
                                 )
                                 .child(Icon::new(icon).xsmall())
-                                .child(label)
+                                .child(t(label))
                         }),
                     ),
             )
@@ -360,7 +373,7 @@ impl Render for SessionsView {
                     .small()
                     .ghost()
                     .icon(Icon::new(IconName::RefreshCw))
-                    .tooltip("Reload")
+                    .tooltip(t("Reload"))
                     .loading(self.loading && count > 0)
                     .on_click(cx.listener(|this, _, _, cx| this.reload(cx))),
             );
@@ -371,7 +384,7 @@ impl Render for SessionsView {
                 .text_xs()
                 .text_color(ui::muted())
                 .child(key)
-                .child(label)
+                .child(t(label))
         };
         let (backdrop, panel) = ui::screen(Some(760.));
         backdrop.occlude().child(ui::pop_in(
@@ -392,7 +405,7 @@ impl Render for SessionsView {
                                 .text_base()
                                 .font_weight(FontWeight::SEMIBOLD)
                                 .text_color(ui::fg())
-                                .child("Sessions"),
+                                .child(t("Sessions")),
                         )
                         .child(
                             div()
@@ -402,7 +415,7 @@ impl Render for SessionsView {
                                 .text_xs()
                                 .text_color(ui::muted())
                                 .child(if all {
-                                    "Every project".to_string()
+                                    t("Every project").to_string()
                                 } else {
                                     format!("{prefix}{leaf}")
                                 }),
@@ -425,7 +438,7 @@ impl Render for SessionsView {
                         .pb_3()
                         .gap_2()
                         .child(toolbar)
-                        .when_some(self.error.clone(), |d, error| {
+                        .when_some(self.error.as_ref().map(OpenError::text), |d, error| {
                             d.child(
                                 h_flex()
                                     .gap_2()
@@ -472,7 +485,7 @@ impl Render for SessionsView {
                                 .small()
                                 .primary()
                                 .icon(Icon::new(IconName::Plus))
-                                .label("New session")
+                                .label(t("New session"))
                                 .on_click(
                                     cx.listener(|_, _, _, cx| cx.emit(SessionsEvent::NewSession)),
                                 ),
