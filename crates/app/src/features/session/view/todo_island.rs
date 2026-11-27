@@ -1,5 +1,6 @@
 //! The todo island: the task list floating over the conversation.
 
+use crate::shared::i18n::t as translate;
 use std::time::{Duration, Instant};
 
 use gpui_kit::assets::IconName;
@@ -86,9 +87,9 @@ impl SessionView {
             .on_click(cx.listener(|this, _, _, cx| this.toggle_todo(cx)))
             .tooltip({
                 let tip = if self.todo.open {
-                    "Hide tasks"
+                    translate("Hide tasks")
                 } else {
-                    "Show tasks"
+                    translate("Show tasks")
                 };
                 move |window, cx| Tooltip::new(tip).build(window, cx)
             })
@@ -99,7 +100,7 @@ impl SessionView {
                     .text_size(rems(11.5 / 16.))
                     .font_weight(FontWeight::MEDIUM)
                     .text_color(ui::fg())
-                    .child("Todos"),
+                    .child(translate("Todos")),
             )
             .child(
                 div()
@@ -126,7 +127,9 @@ impl SessionView {
                     .text_color(ui::faint())
                     .hover(|d| d.text_color(ui::fg()).bg(ui::surface_hover()))
                     .child(Icon::new(IconName::ListChecks).xsmall())
-                    .tooltip(|window, cx| Tooltip::new("Show as checklist").build(window, cx))
+                    .tooltip(|window, cx| {
+                        Tooltip::new(translate("Show as checklist")).build(window, cx)
+                    })
                     .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
                     .on_click(cx.listener(|this, _, _, cx| {
                         cx.stop_propagation();

@@ -22,8 +22,8 @@ use gentle_core::transcript::{UserImage, image_key};
 
 pub use gentle_core::attachments::{
     AttachedFile, PastedText, Rejection, chip_text, expand, file_name, find_tokens, human_size,
-    is_long_paste, missing_files, needs_lead, present, rejection_warning, remove_token, renumber,
-    split_files, summary, token, unprintable, with_files,
+    is_long_paste, missing_files_in, needs_lead, present, rejection_warning_in, remove_token,
+    renumber, split_files, summary, token, unprintable, with_files,
 };
 
 /// Largest image accepted, before base64.

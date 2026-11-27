@@ -10,6 +10,8 @@
 mod view;
 
 use std::fs;
+
+use crate::shared::i18n::{self, t};
 use std::path::{Path, PathBuf};
 
 use gentle_core::docs::{Report, Standing, title};
@@ -61,6 +63,13 @@ impl Ask {
         }
     }
 
+    fn placeholder(self) -> &'static str {
+        match self {
+            Ask::Feature => "Feature name, e.g. payments",
+            _ => "The decision, e.g. Keep balances in minor units",
+        }
+    }
+
     fn needs_name(self) -> bool {
         matches!(self, Ask::Feature | Ask::Decision)
     }
@@ -73,7 +82,7 @@ enum SkillState {
     /// Installed from here; agent tabs started from now on have it.
     JustInstalled,
     Ready(PathBuf),
-    Failed(String),
+    Failed(Option<String>),
 }
 
 pub struct DocsView {
@@ -81,11 +90,12 @@ pub struct DocsView {
     skill: SkillState,
     docs: Option<Vec<Doc>>,
     /// Why the documents' standing is unknown.
-    check_note: Option<String>,
+    check_note: Option<CheckNote>,
     head: Option<String>,
     /// The row asking for a name, open.
     asking: Option<Ask>,
     name: Entity<InputState>,
+    name_language: gentle_core::i18n::Language,
     _load: Task<()>,
     _install: Task<()>,
     _renderer: Subscription,
@@ -116,6 +126,7 @@ impl DocsView {
             head: None,
             asking: None,
             name,
+            name_language: i18n::language(),
             _load: Task::ready(()),
             _install: Task::ready(()),
             _renderer: cx.observe_global::<crate::features::files::DiagramRendererState>(
@@ -180,9 +191,7 @@ impl DocsView {
                             .lines()
                             .rev()
                             .find(|l| !l.trim().is_empty())
-                            .unwrap_or("gentle-shell install failed")
-                            .trim()
-                            .to_string(),
+                            .map(|line| line.trim().to_string()),
                     ),
                 };
                 cx.notify();
@@ -197,14 +206,11 @@ impl DocsView {
             cx.emit(DocsEvent::Run(format!("/skill:{SKILL} {}", ask.command())));
             return;
         }
-        let placeholder = match ask {
-            Ask::Feature => "Feature name, e.g. payments",
-            _ => "The decision, e.g. Keep balances in minor units",
-        };
+        self.name_language = i18n::language();
         self.asking = Some(ask);
         self.name.update(cx, |state, cx| {
             state.set_value("", window, cx);
-            state.set_placeholder(placeholder, window, cx);
+            state.set_placeholder(t(ask.placeholder()), window, cx);
             state.focus(window, cx);
         });
         cx.notify();
@@ -230,16 +236,13 @@ impl DocsView {
 
 /// Blocking: the documents under `<root>/docs` with their standing from
 /// `script` (the skill's `docs-check.mjs`), and why there is none.
-fn load(root: &Path, script: Option<&Path>) -> (Vec<Doc>, Option<Report>, Option<String>) {
+fn load(root: &Path, script: Option<&Path>) -> (Vec<Doc>, Option<Report>, Option<CheckNote>) {
     let dir = root.join("docs");
     let mut paths = Vec::new();
     markdown_files(&dir, &mut paths);
     paths.sort();
     let (report, note) = match script {
-        None => (
-            None,
-            Some("Install the docs skill to see which documents are current.".to_string()),
-        ),
+        None => (None, Some(CheckNote::NoSkill)),
         Some(_) if paths.is_empty() => (None, None),
         Some(script) => match check(root, script) {
             Ok(report) => (Some(report), None),
@@ -297,25 +300,39 @@ fn markdown_files(dir: &Path, out: &mut Vec<PathBuf>) {
     }
 }
 
+enum CheckNote {
+    NoSkill,
+    NoNode,
+    Run(String),
+    NoReport(Option<String>),
+}
+
+impl CheckNote {
+    fn message(&self) -> String {
+        match self {
+            Self::NoSkill => t("Install the docs skill to see which documents are current.").into(),
+            Self::NoNode => t("Node.js wasn't found to run the docs check.").into(),
+            Self::Run(error) => t("Couldn't run the docs check: {error}").replace("{error}", error),
+            Self::NoReport(error) => match error {
+                Some(error) => format!("{}: {error}", t("The docs check gave no report")),
+                None => t("The docs check gave no report").into(),
+            },
+        }
+    }
+}
+
 /// Blocking: `node <script> --json` in `root`.
-fn check(root: &Path, script: &Path) -> Result<Report, String> {
-    let node = pi_rpc::find_program("node").ok_or("Node.js wasn't found to run the docs check.")?;
+fn check(root: &Path, script: &Path) -> Result<Report, CheckNote> {
+    let node = pi_rpc::find_program("node").ok_or(CheckNote::NoNode)?;
     let out = pi_rpc::command(&node)
         .arg(script)
         .arg("--json")
         .current_dir(root)
         .stdin(std::process::Stdio::null())
         .output()
-        .map_err(|e| format!("Couldn't run the docs check: {e}"))?;
+        .map_err(|e| CheckNote::Run(e.to_string()))?;
     Report::parse(&String::from_utf8_lossy(&out.stdout)).ok_or_else(|| {
         let error = String::from_utf8_lossy(&out.stderr);
-        format!(
-            "The docs check gave no report{}",
-            error
-                .lines()
-                .next()
-                .map(|l| format!(": {l}"))
-                .unwrap_or_default()
-        )
+        CheckNote::NoReport(error.lines().next().map(str::to_string))
     })
 }

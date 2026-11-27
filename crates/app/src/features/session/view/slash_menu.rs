@@ -1,5 +1,6 @@
 //! The `/` command menu over the composer.
 
+use crate::shared::i18n::t;
 use gpui_kit::component::{ActiveTheme as _, h_flex, v_flex};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
@@ -148,7 +149,7 @@ impl SessionView {
                             .px_2()
                             .pt_1()
                             .pb_1()
-                            .child(ui::section_label("Commands")),
+                            .child(ui::section_label(t("Commands"))),
                     )
                     .child(
                         v_flex()

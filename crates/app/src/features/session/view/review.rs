@@ -3,6 +3,7 @@
 //! offers `get_review_mode`/`set_review_mode` and has a review owner; older
 //! ones show nothing here.
 
+use crate::shared::i18n::t;
 use std::rc::Rc;
 
 use gpui_kit::assets::IconName;
@@ -86,7 +87,7 @@ pub(super) fn review_chip(
         .xsmall()
         .text_color(if quiet { ui::faint() } else { color })
         .icon(Icon::new(icon))
-        .tooltip(format!("{label} (receipt-driven development)"));
+        .tooltip(t("{label} (receipt-driven development)").replace("{label}", label));
     let mode = *mode;
     let known = mode.effective != ReviewEffective::Unknown;
     Popover::new("review-mode-popover")
@@ -103,13 +104,13 @@ pub(super) fn review_chip(
             let rows = [
                 (
                     ReviewScope::Clone,
-                    "This repository",
+                    t("This repository"),
                     setting_label(mode.scopes.clone),
                     clone_target(&mode),
                 ),
                 (
                     ReviewScope::Global,
-                    "All repositories",
+                    t("All repositories"),
                     setting_label(mode.scopes.global),
                     global_target(&mode),
                 ),
@@ -150,7 +151,7 @@ pub(super) fn review_chip(
                         Button::new(SharedString::from(format!("review-{id}")))
                             .ghost()
                             .xsmall()
-                            .label(if target { "Turn on" } else { "Turn off" })
+                            .label(if target { t("Turn on") } else { t("Turn off") })
                             .disabled(changing || !known)
                             .debug_selector(move || format!("review-{id}"))
                             .on_click(cx.listener(
@@ -172,7 +173,7 @@ pub(super) fn review_chip(
                         .px_2()
                         .pt_1p5()
                         .pb_1()
-                        .child(ui::section_label("Review mode")),
+                        .child(ui::section_label(t("Review mode"))),
                 )
                 .child(
                     div()
@@ -192,9 +193,9 @@ pub(super) fn review_chip(
                         .text_size(rems(11. / 16.))
                         .text_color(ui::faint())
                         .child(if changing {
-                            "Waiting for Gentle Shell…"
+                            t("Waiting for Gentle Shell…")
                         } else {
-                            "Gentle Shell asks you to confirm before anything changes."
+                            t("Gentle Shell asks you to confirm before anything changes.")
                         }),
                 );
             ui::island(cx)
@@ -213,9 +214,9 @@ pub(super) fn review_confirm_card(confirmation: &Confirmation, on_answer: Answer
     let approve = on_answer.clone();
     let decline = on_answer;
     let action = if confirmation.enabled {
-        "Turn on"
+        t("Turn on")
     } else {
-        "Turn off"
+        t("Turn off")
     };
     let card = v_flex()
         .w_full()
@@ -279,7 +280,7 @@ pub(super) fn review_confirm_card(confirmation: &Confirmation, on_answer: Answer
                     Button::new("review-cancel")
                         .ghost()
                         .small()
-                        .label("Cancel")
+                        .label(t("Cancel"))
                         .debug_selector(|| "review-cancel".into())
                         .on_click(move |_, window, cx| decline(false, window, cx)),
                 ),
@@ -290,9 +291,9 @@ pub(super) fn review_confirm_card(confirmation: &Confirmation, on_answer: Answer
 /// The chip's icon, color and text for the effective switch.
 fn chip_look(effective: ReviewEffective) -> (IconName, Hsla, &'static str) {
     match effective {
-        ReviewEffective::Enabled => (IconName::Eye, ui::muted(), "Review on"),
-        ReviewEffective::Disabled => (IconName::EyeOff, ui::warning(), "Review off"),
-        ReviewEffective::Unknown => (IconName::Eye, ui::faint(), "Review ?"),
+        ReviewEffective::Enabled => (IconName::Eye, ui::muted(), t("Review on")),
+        ReviewEffective::Disabled => (IconName::EyeOff, ui::warning(), t("Review off")),
+        ReviewEffective::Unknown => (IconName::Eye, ui::faint(), t("Review ?")),
     }
 }
 
@@ -300,25 +301,25 @@ fn chip_look(effective: ReviewEffective) -> (IconName, Hsla, &'static str) {
 fn summary(mode: &ReviewMode) -> &'static str {
     match (mode.effective, mode.source) {
         (ReviewEffective::Unknown, _) | (_, ReviewSource::Unknown) => {
-            "Gentle Shell could not read the review mode; nothing is assumed."
+            t("Gentle Shell could not read the review mode; nothing is assumed.")
         }
-        (ReviewEffective::Enabled, ReviewSource::Default) => "On: nothing turned it off.",
-        (ReviewEffective::Enabled, ReviewSource::Clone) => "On: turned on for this repository.",
-        (ReviewEffective::Enabled, ReviewSource::Global) => "On: turned on machine-wide.",
+        (ReviewEffective::Enabled, ReviewSource::Default) => t("On: nothing turned it off."),
+        (ReviewEffective::Enabled, ReviewSource::Clone) => t("On: turned on for this repository."),
+        (ReviewEffective::Enabled, ReviewSource::Global) => t("On: turned on machine-wide."),
         (ReviewEffective::Disabled, ReviewSource::Global) => {
-            "Off machine-wide, which wins over this repository's setting."
+            t("Off machine-wide, which wins over this repository's setting.")
         }
-        (ReviewEffective::Disabled, ReviewSource::Clone) => "Off for this repository.",
-        (ReviewEffective::Disabled, ReviewSource::Default) => "Off.",
+        (ReviewEffective::Disabled, ReviewSource::Clone) => t("Off for this repository."),
+        (ReviewEffective::Disabled, ReviewSource::Default) => t("Off."),
     }
 }
 
 fn setting_label(setting: ReviewSetting) -> &'static str {
     match setting {
-        ReviewSetting::Enabled => "On",
-        ReviewSetting::Disabled => "Off",
-        ReviewSetting::Unset => "Not set",
-        ReviewSetting::Unknown => "Unknown",
+        ReviewSetting::Enabled => t("On"),
+        ReviewSetting::Disabled => t("Off"),
+        ReviewSetting::Unset => t("Not set"),
+        ReviewSetting::Unknown => t("Unknown"),
     }
 }
 

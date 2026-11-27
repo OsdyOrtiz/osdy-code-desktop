@@ -2,6 +2,7 @@
 //! windows ("Plan usage limits · plus", one row per window with its reset
 //! clock), just after the effort picker, sharing the Usage screen's data.
 
+use crate::shared::i18n::t;
 use std::collections::BTreeMap;
 
 use gpui_kit::assets::IconName;
@@ -11,7 +12,7 @@ use gpui_kit::component::{Sizable as _, h_flex, v_flex};
 use gpui_kit::*;
 
 use gentle_core::usage::subscription::{
-    LimitTone, limit_tone, provider_alias, reset_clock_label, window_display_label,
+    LimitTone, limit_tone, provider_alias, reset_clock_label_in, window_display_label_in,
     windows_by_length, windows_most_used,
 };
 use pi_rpc::desktop_rpc::{ProviderUsage as RpcProviderUsage, UsageStatus};
@@ -93,16 +94,21 @@ pub(super) fn plan_chip(
             plan: core.plan.clone(),
             status_line: Some(match provider.status {
                 UsageStatus::Ok => updated_ago(core.fetched_at, now),
-                UsageStatus::Pending => "updating…".into(),
-                UsageStatus::Stale => "stale".into(),
-                UsageStatus::Failed => "failed".into(),
-                UsageStatus::Unavailable => "unavailable".into(),
+                UsageStatus::Pending => t("updating…").into(),
+                UsageStatus::Stale => t("stale").into(),
+                UsageStatus::Failed => t("failed").into(),
+                UsageStatus::Unavailable => t("unavailable").into(),
             }),
             rows: windows_by_length(&core.limits)
                 .iter()
                 .map(|window| PlanRow {
-                    label: window_display_label(window),
-                    reset: reset_clock_label(window.reset_at, now, offset_secs),
+                    label: window_display_label_in(crate::shared::i18n::language(), window),
+                    reset: reset_clock_label_in(
+                        crate::shared::i18n::language(),
+                        window.reset_at,
+                        now,
+                        offset_secs,
+                    ),
                     percent: percent(window.used_percent),
                 })
                 .collect(),
@@ -173,11 +179,13 @@ impl SessionView {
         let weak = cx.entity().downgrade();
         let color = row_color(chip.percent);
         let title: SharedString = match &chip.plan {
-            Some(plan) => format!("Plan usage limits · {plan}").into(),
-            None => "Plan usage limits".into(),
+            Some(plan) => t("Plan usage limits · {plan}")
+                .replace("{plan}", plan)
+                .into(),
+            None => t("Plan usage limits").into(),
         };
         let rows = chip.rows;
-        let fallback = chip.fallback_line;
+        let fallback = chip.fallback_line.map(t);
         let status_line = chip.status_line;
         let body = move || {
             let mut items: Vec<AnyElement> = rows
@@ -267,7 +275,7 @@ impl SessionView {
                 Button::new("plan-see-all")
                     .ghost()
                     .xsmall()
-                    .label("See all →")
+                    .label(t("See all →"))
                     .on_click(cx.listener(move |state, _, window, cx| {
                         state.dismiss(window, cx);
                         let _ = weak.update(cx, |_, cx| {

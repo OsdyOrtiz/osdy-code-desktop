@@ -1,6 +1,7 @@
 //! What the composer sends: `!` shell commands, built-ins and natively shown
 //! commands run here, prompts with their image attachments and long pastes.
 
+use crate::shared::i18n::t;
 use std::collections::HashMap;
 use std::ops::Range;
 use std::path::{Path, PathBuf};
@@ -21,9 +22,7 @@ const SHELL_ATTACHMENTS: &str =
 /// What a model that takes no image input is told when images wait beside the
 /// text.
 fn image_warning(model: &str) -> String {
-    format!(
-        "{model} does not accept images. Switch to a model with image input, or remove the attachments."
-    )
+    t("{model} does not accept images. Switch to a model with image input, or remove the attachments.").replace("{model}", model)
 }
 
 impl SessionView {
@@ -43,7 +42,7 @@ impl SessionView {
         }
         if shell && (!self.attachments.is_empty() || !self.files.is_empty()) {
             // A shell command carries no attachments; nothing would show them.
-            self.warn(SHELL_ATTACHMENTS.into(), window, cx);
+            self.warn(t(SHELL_ATTACHMENTS).into(), window, cx);
             return;
         }
         if images && let Some(model) = self.no_image_model() {
@@ -269,12 +268,14 @@ impl SessionView {
         match gentle_core::commands::pi_builtin(&command) {
             PiBuiltin::NewSession => self.replace_session(json!({"type": "new_session"}), cx),
             PiBuiltin::Clone => self.replace_session(json!({"type": "clone"}), cx),
-            PiBuiltin::Elsewhere { terminal: true } => self.note(
-                format!("/{name} only works in Gentle Shell's terminal."),
-                cx,
-            ),
-            PiBuiltin::Elsewhere { terminal: false } => {
-                self.note(format!("/{name} isn't available in the app yet."), cx)
+            PiBuiltin::Elsewhere { terminal } => {
+                let name = name.to_string();
+                let key = if terminal {
+                    "/{name} only works in Gentle Shell's terminal."
+                } else {
+                    "/{name} isn't available in the app yet."
+                };
+                self.localized_note(move || t(key).replace("{name}", &name), cx);
             }
         }
         true
@@ -285,10 +286,10 @@ impl SessionView {
     fn open_web(&mut self, url: String, cx: &mut Context<Self>) {
         let url = url.trim();
         if url.is_empty() {
-            self.note("Usage: /web <url>".to_string(), cx);
+            self.localized_note(|| t("Usage: /web <url>").to_string(), cx);
         } else if !(url.starts_with("http://") || url.starts_with("https://")) {
-            self.note(
-                "Only http:// and https:// URLs can open here.".to_string(),
+            self.localized_note(
+                || t("Only http:// and https:// URLs can open here.").to_string(),
                 cx,
             );
         } else {
@@ -300,13 +301,19 @@ impl SessionView {
         match builtin {
             builtins::Builtin::Compact(instructions) => self.compact(instructions, cx),
             builtins::Builtin::Name(name) if name.trim().is_empty() => {
-                let text = match &self.session_name {
-                    Some(name) => {
-                        format!("This session is named “{name}”. Rename it with /name <title>.")
-                    }
-                    None => "This session has no name yet. Name it with /name <title>.".into(),
-                };
-                self.note(text, cx);
+                let name = self.session_name.clone();
+                self.localized_note(
+                    move || match &name {
+                        Some(name) => {
+                            t("This session is named “{name}”. Rename it with /name <title>.")
+                                .replace("{name}", name)
+                        }
+                        None => {
+                            t("This session has no name yet. Name it with /name <title>.").into()
+                        }
+                    },
+                    cx,
+                );
             }
             builtins::Builtin::Name(name) => self.rename(name, cx),
             builtins::Builtin::Copy => self.copy_last_answer(cx),
@@ -420,7 +427,9 @@ impl SessionView {
         }
         self.composer
             .update(cx, |state, cx| state.focus(window, cx));
-        if let Some(message) = attachments::rejection_warning(&rejected) {
+        if let Some(message) =
+            attachments::rejection_warning_in(crate::shared::i18n::language(), &rejected)
+        {
             self.warn(message, window, cx);
         }
         cx.notify();
@@ -500,7 +509,7 @@ impl SessionView {
                     images
                         .into_iter()
                         .map(|bytes| {
-                            attachments::Attachment::from_bytes("The pasted image", bytes)
+                            attachments::Attachment::from_bytes(t("The pasted image"), bytes)
                                 .map(attachments::Loaded::Image)
                         })
                         .collect()
@@ -549,7 +558,7 @@ impl SessionView {
             files: true,
             directories: false,
             multiple: true,
-            prompt: Some("Attach".into()),
+            prompt: Some(t("Attach").into()),
         });
         cx.spawn_in(window, async move |this, cx| {
             let Ok(Ok(Some(paths))) = paths.await else {
@@ -805,7 +814,7 @@ fn after_check(
     // The guards `submit` ran before the check, on the composer as it is now.
     let shell = now.typed.starts_with('!');
     if shell && (!now.images.is_empty() || !now.files.is_empty()) {
-        return AfterCheck::Warn(SHELL_ATTACHMENTS.to_string());
+        return AfterCheck::Warn(t(SHELL_ATTACHMENTS).to_string());
     }
     if !shell
         && !now.images.is_empty()
@@ -814,7 +823,9 @@ fn after_check(
         return AfterCheck::Warn(image_warning(model));
     }
     // Then the disk's own answer, and a backend to send to.
-    if let Some(message) = attachments::missing_files(&now.files, there) {
+    if let Some(message) =
+        attachments::missing_files_in(crate::shared::i18n::language(), &now.files, there)
+    {
         return AfterCheck::Warn(message);
     }
     if !ready {

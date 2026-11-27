@@ -2,6 +2,7 @@
 //! island of rows (icon, title and line, action on the right). Asking the
 //! agent is a list of rows; the two that need a name open in place.
 
+use crate::shared::i18n::t;
 use gentle_core::docs::Standing;
 use gpui_kit::assets::IconName;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
@@ -71,7 +72,7 @@ fn standing_chip(standing: Standing) -> Div {
         Standing::Unverified => ui::muted(),
         Standing::Issues => ui::danger(),
     };
-    ui::chip(standing.label(), color)
+    ui::chip(t(standing.label()), color)
 }
 
 impl Ask {
@@ -86,23 +87,23 @@ impl Ask {
 
     fn title(self) -> &'static str {
         match self {
-            Ask::Project => "Document this project",
-            Ask::Feature => "Document a feature",
-            Ask::Decision => "Record a decision",
-            Ask::Update => "Update after changes",
+            Ask::Project => t("Document this project"),
+            Ask::Feature => t("Document a feature"),
+            Ask::Decision => t("Record a decision"),
+            Ask::Update => t("Update after changes"),
         }
     }
 
     fn line(self) -> &'static str {
         match self {
-            Ask::Project => {
-                "Maps the code and writes the structure, the index and every document it can ground in it. Shows the plan first."
-            }
-            Ask::Feature => "Its components, data model, states and flows.",
+            Ask::Project => t(
+                "Maps the code and writes the structure, the index and every document it can ground in it. Shows the plan first.",
+            ),
+            Ask::Feature => t("Its components, data model, states and flows."),
             Ask::Decision => {
-                "An ADR from what was decided: why, the alternatives and what it costs."
+                t("An ADR from what was decided: why, the alternatives and what it costs.")
             }
-            Ask::Update => "Brings the documents whose code changed up to date.",
+            Ask::Update => t("Brings the documents whose code changed up to date."),
         }
     }
 
@@ -122,15 +123,20 @@ impl DocsView {
         let skill_ok = self.skill_ready();
         let skill_line = match &self.skill {
             SkillState::Missing => {
-                "Teaches the agent to write and keep these docs. Installs into Gentle Shell."
+                t("Teaches the agent to write and keep these docs. Installs into Gentle Shell.")
                     .to_string()
             }
-            SkillState::Installing => "Installing into Gentle Shell…".to_string(),
+            SkillState::Installing => t("Installing into Gentle Shell…").to_string(),
             SkillState::JustInstalled => {
-                "Installed. Agent tabs started from now on have it.".to_string()
+                t("Installed. Agent tabs started from now on have it.").to_string()
             }
-            SkillState::Ready(_) => "Agents can write, update and check the docs.".to_string(),
-            SkillState::Failed(error) => format!("Couldn't install it: {error}"),
+            SkillState::Ready(_) => t("Agents can write, update and check the docs.").to_string(),
+            SkillState::Failed(error) => t("Couldn't install it: {error}").replace(
+                "{error}",
+                error
+                    .as_deref()
+                    .unwrap_or_else(|| t("gentle-shell install failed")),
+            ),
         };
         let skill_icon = match &self.skill {
             SkillState::Failed(_) => tone_icon(IconName::CircleX, ui::danger()),
@@ -138,7 +144,7 @@ impl DocsView {
             _ => tone_icon(IconName::BookOpen, ui::muted()),
         };
         let installing_skill = matches!(self.skill, SkillState::Installing);
-        let skill = row(skill_icon, "Docs skill", skill_line)
+        let skill = row(skill_icon, t("Docs skill"), skill_line)
             .when(skill_ok, |d| d.bg(ui::success().opacity(0.08)))
             .when(!skill_ok, |d| {
                 d.child(
@@ -151,11 +157,11 @@ impl DocsView {
                             IconName::ArrowDown
                         }))
                         .label(if installing_skill {
-                            "Installing…"
+                            t("Installing…")
                         } else if matches!(self.skill, SkillState::Failed(_)) {
-                            "Retry"
+                            t("Retry")
                         } else {
-                            "Install"
+                            t("Install")
                         })
                         .loading(installing_skill)
                         .disabled(installing_skill)
@@ -167,17 +173,20 @@ impl DocsView {
         let renderer_ok = matches!(renderer, DiagramRenderer::Ready(_));
         let installing = matches!(renderer, DiagramRenderer::Installing(_));
         let renderer_line = match &renderer {
-            DiagramRenderer::Missing => "Draws the docs' diagrams in the preview. Optional: a one-time download of about 20 MB, not part of the app.".to_string(),
+            DiagramRenderer::Missing => t("Draws the docs' diagrams in the preview. Optional: a one-time download of about 20 MB, not part of the app.").to_string(),
+            DiagramRenderer::Installing(progress) if progress == "Starting the download…" => {
+                t("Starting the download…").into()
+            }
             DiagramRenderer::Installing(progress) => progress.clone(),
-            DiagramRenderer::Ready(_) => "Mermaid diagrams are drawn in the Markdown preview.".to_string(),
-            DiagramRenderer::Failed(error) => format!("Couldn't install it: {error}"),
+            DiagramRenderer::Ready(_) => t("Mermaid diagrams are drawn in the Markdown preview.").to_string(),
+            DiagramRenderer::Failed(error) => t("Couldn't install it: {error}").replace("{error}", error),
         };
         let renderer_icon = match &renderer {
             DiagramRenderer::Ready(_) => tone_icon(IconName::CircleCheck, ui::success()),
             DiagramRenderer::Failed(_) => tone_icon(IconName::CircleX, ui::danger()),
             _ => tone_icon(IconName::Workflow, ui::muted()),
         };
-        let diagrams = row(renderer_icon, "Diagram renderer", renderer_line)
+        let diagrams = row(renderer_icon, t("Diagram renderer"), renderer_line)
             .when(renderer_ok, |d| d.bg(ui::success().opacity(0.08)))
             .when(!renderer_ok, |d| {
                 d.child(
@@ -192,18 +201,22 @@ impl DocsView {
                             },
                         ))
                         .label(if installing {
-                            "Installing…"
+                            t("Installing…")
                         } else if matches!(renderer, DiagramRenderer::Failed(_)) {
-                            "Retry"
+                            t("Retry")
                         } else {
-                            "Install"
+                            t("Install")
                         })
                         .loading(installing)
                         .disabled(installing)
                         .on_click(|_, _, cx| install_diagram_renderer(cx)),
                 )
             });
-        group("Set up", v_flex().gap_1().child(skill).child(diagrams), cx)
+        group(
+            t("Set up"),
+            v_flex().gap_1().child(skill).child(diagrams),
+            cx,
+        )
     }
 
     fn render_ask(&self, ask: Ask, cx: &mut Context<Self>) -> AnyElement {
@@ -249,7 +262,7 @@ impl DocsView {
                         Button::new("docs-ask-cancel")
                             .small()
                             .ghost()
-                            .label("Cancel")
+                            .label(t("Cancel"))
                             .on_click(cx.listener(|this, _, _, cx| this.cancel_ask(cx))),
                     )
                     .child(
@@ -257,7 +270,7 @@ impl DocsView {
                             .small()
                             .outline()
                             .icon(Icon::new(IconName::ArrowRight))
-                            .label("Ask")
+                            .label(t("Ask"))
                             .disabled(!typed)
                             .on_click(cx.listener(|this, _, _, cx| this.submit(cx))),
                     ),
@@ -270,14 +283,14 @@ impl DocsView {
             .into_iter()
             .map(|ask| self.render_ask(ask, cx))
             .collect();
-        group("Ask the agent", v_flex().gap_1().children(rows), cx)
+        group(t("Ask the agent"), v_flex().gap_1().children(rows), cx)
             .when(!self.skill_ready(), |d| {
                 d.child(
                     div()
                         .px_1()
                         .text_xs()
                         .text_color(ui::faint())
-                        .child("Install the docs skill to ask for these."),
+                        .child(t("Install the docs skill to ask for these.")),
                 )
             })
             .when(self.skill_ready(), |d| {
@@ -286,7 +299,7 @@ impl DocsView {
                         .px_1()
                         .text_xs()
                         .text_color(ui::faint())
-                        .child("Each opens an agent tab in this folder, so you can follow along and answer its questions."),
+                        .child(t("Each opens an agent tab in this folder, so you can follow along and answer its questions.")),
                 )
             })
     }
@@ -294,29 +307,27 @@ impl DocsView {
     fn render_docs(&self, cx: &mut Context<Self>) -> Div {
         let Some(docs) = &self.docs else {
             return labelled(
-                "Documents",
+                t("Documents"),
                 h_flex()
                     .px_1()
                     .gap_2()
                     .text_sm()
                     .text_color(ui::muted())
                     .child(Spinner::new().small().color(ui::accent()))
-                    .child("Reading docs/…"),
+                    .child(t("Reading docs/…")),
             );
         };
         if docs.is_empty() {
             return labelled(
-                "Documents",
+                t("Documents"),
                 v_flex()
                     .items_center()
                     .py_8()
                     .gap_2()
                     .child(Icon::new(IconName::BookOpen).text_color(ui::faint()))
-                    .child(
-                        div().text_sm().text_color(ui::muted()).child(
-                            "No docs yet. \u{201c}Document this project\u{201d} starts them.",
-                        ),
-                    ),
+                    .child(div().text_sm().text_color(ui::muted()).child(t(
+                        "No docs yet. \u{201c}Document this project\u{201d} starts them.",
+                    ))),
             );
         }
         let attention = docs
@@ -324,26 +335,20 @@ impl DocsView {
             .filter(|d| d.standing.is_some_and(|s| s != Standing::Current))
             .count();
         let summary = match (&self.check_note, attention) {
-            (Some(note), _) => note.clone(),
-            (None, 0) => format!(
-                "{} documents, all current{}.",
-                docs.len(),
-                self.head
-                    .as_ref()
-                    .map(|h| format!(" at {h}"))
-                    .unwrap_or_default()
-            ),
-            (None, n) => format!(
-                "{} documents, {n} need attention: \u{201c}Update after changes\u{201d} catches them up.",
-                docs.len()
-            ),
+            (Some(note), _) => note.message(),
+            (None, 0) => t("{count} documents, all current{commit}.")
+                .replace("{count}", &docs.len().to_string())
+                .replace("{commit}", &self.head.as_ref().map(|h| t(" at {commit}").replace("{commit}", h)).unwrap_or_default()),
+            (None, n) => t("{count} documents, {attention} need attention: “Update after changes” catches them up.")
+                .replace("{count}", &docs.len().to_string())
+                .replace("{attention}", &n.to_string()),
         };
         let rows: Vec<AnyElement> = docs
             .iter()
             .enumerate()
             .map(|(ix, doc)| self.render_doc(ix, doc, cx).into_any_element())
             .collect();
-        group("Documents", v_flex().gap_1().children(rows), cx).child(
+        group(t("Documents"), v_flex().gap_1().children(rows), cx).child(
             div()
                 .px_1()
                 .text_xs()
@@ -407,7 +412,16 @@ impl DocsView {
 }
 
 impl Render for DocsView {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        if let Some(ask) = self.asking {
+            crate::shared::i18n::sync_placeholder(
+                &self.name,
+                ask.placeholder(),
+                &mut self.name_language,
+                window,
+                cx,
+            );
+        }
         let folder = self
             .root
             .file_name()
@@ -433,7 +447,7 @@ impl Render for DocsView {
                                 .text_base()
                                 .font_weight(FontWeight::SEMIBOLD)
                                 .text_color(ui::fg())
-                                .child("Architecture docs"),
+                                .child(t("Architecture docs")),
                         )
                         .child(
                             div()
@@ -442,16 +456,17 @@ impl Render for DocsView {
                                 .truncate()
                                 .text_xs()
                                 .text_color(ui::muted())
-                                .child(format!(
-                                    "{folder}/docs, written and kept current by the agent"
-                                )),
+                                .child(
+                                    t("{folder}/docs, written and kept current by the agent")
+                                        .replace("{folder}", &folder),
+                                ),
                         )
                         .child(
                             Button::new("docs-refresh")
                                 .ghost()
                                 .xsmall()
                                 .icon(Icon::new(IconName::RefreshCw))
-                                .tooltip("Check the documents again")
+                                .tooltip(t("Check the documents again"))
                                 .loading(loading)
                                 .on_click(cx.listener(|this, _, _, cx| this.reload(cx))),
                         )

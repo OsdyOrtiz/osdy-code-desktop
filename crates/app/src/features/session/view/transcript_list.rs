@@ -439,6 +439,16 @@ impl TranscriptList {
         self.shape = shape;
     }
 
+    /// Drop localized card copy, but keep folds, the rail and the scroll anchor.
+    pub(super) fn language_changed(&mut self, items: usize) {
+        for prepared in self.prepared.values_mut() {
+            if let Prepared::Card(card) = prepared {
+                card.take();
+            }
+        }
+        self.remeasure_items(0..items);
+    }
+
     /// Items `items` changed height (a fold toggled, a run of steps grew).
     pub(super) fn remeasure_items(&mut self, items: Range<usize>) {
         let rows = (items.start + 1)..(items.end + 1).min(self.shape.len());

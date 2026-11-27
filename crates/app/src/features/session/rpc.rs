@@ -1,6 +1,7 @@
 //! Requests a tab makes of its backend: the request/response plumbing, the
 //! state it reads back, and the commands the UI and window run.
 
+use crate::shared::i18n::t;
 use std::path::PathBuf;
 use std::sync::{Arc, Weak};
 use std::time::{Duration, Instant};
@@ -135,8 +136,7 @@ impl SessionView {
     /// path, then send whatever the channel asked for.
     pub(super) fn apply_desktop(&mut self, applied: DesktopApplied, cx: &mut Context<Self>) {
         if let Some(report) = applied.report {
-            self.transcript
-                .notice(NoticeLevel::Warning, report.message());
+            self.localized_notice(NoticeLevel::Warning, move || report.message());
             cx.notify();
         }
         self.send_desktop(applied.sends, cx);
@@ -150,8 +150,7 @@ impl SessionView {
         cx: &mut Context<Self>,
     ) {
         if let Some(report) = applied.report {
-            self.transcript
-                .notice(NoticeLevel::Warning, report.message());
+            self.localized_notice(NoticeLevel::Warning, move || report.message());
             cx.notify();
         }
         self.send_desktop(applied.sends, cx);
@@ -165,11 +164,10 @@ impl SessionView {
         applied: SubscriptionApplied,
         cx: &mut Context<Self>,
     ) {
-        if let Some(report) = &applied.report
+        if let Some(report) = applied.report
             && !report.is_legacy()
         {
-            self.transcript
-                .notice(NoticeLevel::Warning, report.message());
+            self.localized_notice(NoticeLevel::Warning, move || report.message());
             cx.notify();
         }
         self.send_desktop(applied.sends, cx);
@@ -180,11 +178,10 @@ impl SessionView {
     /// the slice asked for, and hand the canvas notice to the browser flow.
     /// The report never carries the canvas URL; only the notice does.
     pub(super) fn apply_design(&mut self, applied: DesignApplied, cx: &mut Context<Self>) {
-        if let Some(report) = &applied.report
+        if let Some(report) = applied.report
             && !report.is_legacy()
         {
-            self.transcript
-                .notice(NoticeLevel::Warning, report.message());
+            self.localized_notice(NoticeLevel::Warning, move || report.message());
             cx.notify();
         }
         self.send_desktop(applied.sends, cx);
@@ -203,11 +200,10 @@ impl SessionView {
     /// outcomes and changes from the session. A profile Gentle Shell applied
     /// may have switched this session's orchestrator, so its model is re-read.
     pub(super) fn apply_config(&mut self, applied: ConfigApplied, cx: &mut Context<Self>) {
-        if let Some(report) = &applied.report
+        if let Some(report) = applied.report
             && !report.is_legacy()
         {
-            self.transcript
-                .notice(NoticeLevel::Warning, report.message());
+            self.localized_notice(NoticeLevel::Warning, move || report.message());
         }
         if applied.profile_applied {
             self.refresh_model(cx);
@@ -247,8 +243,7 @@ impl SessionView {
     /// asked for, and redraw the chip and its confirmation.
     pub(super) fn apply_review(&mut self, applied: ReviewApplied, cx: &mut Context<Self>) {
         if let Some(report) = applied.report {
-            self.transcript
-                .notice(NoticeLevel::Warning, report.message());
+            self.localized_notice(NoticeLevel::Warning, move || report.message());
         }
         self.send_desktop(applied.sends, cx);
         // A gap seen while the review request was in flight is due now that
@@ -511,8 +506,7 @@ impl SessionView {
     /// for and reflect the server-confirmed mode into the picker.
     pub(super) fn apply_permission(&mut self, applied: PermissionApplied, cx: &mut Context<Self>) {
         if let Some(report) = applied.report {
-            self.transcript
-                .notice(NoticeLevel::Warning, report.message());
+            self.localized_notice(NoticeLevel::Warning, move || report.message());
             cx.notify();
         }
         self.send_desktop(applied.sends, cx);
@@ -839,6 +833,7 @@ impl SessionView {
         if messages.is_empty() {
             return;
         }
+        self.localized_notices.clear();
         self.transcript.load_messages(messages);
         self.seed_prompt_history();
         self.markdown.clear();
@@ -1127,9 +1122,10 @@ impl SessionView {
                 };
                 match data["text"].as_str().filter(|t| !t.trim().is_empty()) {
                     Some(text) => this.copy_text(text.to_string(), cx),
-                    None => {
-                        this.toast(Notification::warning("There is no answer to copy yet."), cx)
-                    }
+                    None => this.toast(
+                        Notification::warning(t("There is no answer to copy yet.")),
+                        cx,
+                    ),
                 }
             },
         );
@@ -1162,8 +1158,11 @@ impl SessionView {
             if let Some(data) = this.report(result) {
                 let written = data["path"].as_str().map_or(path, PathBuf::from);
                 cx.reveal_path(&written);
-                this.note(
-                    format!("Exported the conversation to {}", written.display()),
+                this.localized_note(
+                    move || {
+                        t("Exported the conversation to {path}")
+                            .replace("{path}", &written.display().to_string())
+                    },
                     cx,
                 );
             }
@@ -1269,6 +1268,8 @@ impl SessionView {
     ) {
         if self.process().is_none() {
             done(
+                // Invariant: the error also reaches an agent-authored page's
+                // JSON-RPC reply and the log, so it isn't translated.
                 Err("Gentle Shell is still starting in this tab; try again in a moment.".into()),
                 cx,
             );

@@ -6,6 +6,7 @@
 //! plugin claims a span when it names something that exists
 //! ([`gentle_core::markdown::paths`] says where to look).
 
+use crate::shared::i18n::t;
 use std::collections::HashMap;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
@@ -194,9 +195,9 @@ fn menu_for(
         move |_: &ClickEvent, _: &mut Window, cx: &mut App| open_path(&found, &view, cx)
     };
     let (label, icon) = if found.dir {
-        ("Open folder", IconName::FolderOpen)
+        (t("Open folder"), IconName::FolderOpen)
     } else {
-        ("Open file", IconName::File)
+        (t("Open file"), IconName::File)
     };
     let menu = menu.item(
         PopupMenuItem::new(label)
@@ -208,7 +209,7 @@ fn menu_for(
     } else {
         let path = found.path.clone();
         menu.item(
-            PopupMenuItem::new("Open in default app")
+            PopupMenuItem::new(t("Open in default app"))
                 .icon(Icon::new(IconName::ArrowUpRight))
                 .on_click(move |_, _, cx| cx.open_with_system(&path)),
         )
@@ -220,12 +221,12 @@ fn menu_for(
         cx.write_to_clipboard(ClipboardItem::new_string(path.clone()))
     };
     menu.item(
-        PopupMenuItem::new(REVEAL)
+        PopupMenuItem::new(t(REVEAL))
             .icon(Icon::new(IconName::FolderInput))
             .on_click(reveal),
     )
     .item(
-        PopupMenuItem::new("Copy path")
+        PopupMenuItem::new(t("Copy path"))
             .icon(Icon::new(IconName::Copy))
             .on_click(copy),
     )

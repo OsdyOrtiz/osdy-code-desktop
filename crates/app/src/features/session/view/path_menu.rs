@@ -14,6 +14,7 @@
 //! Enter pressed while the folder is still being read waits for its files
 //! instead of sending the draft with the raw `@query`.
 
+use crate::shared::i18n::t;
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -572,12 +573,12 @@ impl SessionView {
                             .px_2()
                             .pt_1()
                             .pb_1()
-                            .child(ui::section_label("Files"))
+                            .child(ui::section_label(t("Files")))
                             .child(
                                 div()
                                     .text_size(rems(10. / 16.))
                                     .text_color(ui::faint())
-                                    .child("↵ insert · tab folders"),
+                                    .child(t("↵ insert · tab folders")),
                             ),
                     )
                     .child(

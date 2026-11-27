@@ -3,6 +3,7 @@
 //! plus a button back to the latest output. Both show only while the
 //! conversation is longer than the pane.
 
+use crate::shared::i18n::t;
 use std::time::{Duration, Instant};
 
 use gpui_kit::assets::IconName;
@@ -432,7 +433,7 @@ impl SessionView {
                         .text_color(ui::muted())
                         .cursor_pointer()
                         .hover(|s| s.text_color(ui::fg()).bg(ui::surface_hover()))
-                        .tooltip(|window, cx| Tooltip::new("Latest output").build(window, cx))
+                        .tooltip(|window, cx| Tooltip::new(t("Latest output")).build(window, cx))
                         .on_click(cx.listener(|this, _, _, cx| this.start_glide(Target::End, cx)))
                         .child(Icon::new(IconName::ArrowDown).small()),
                 )

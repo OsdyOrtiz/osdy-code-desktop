@@ -1,5 +1,6 @@
 //! The effort (thinking level) control and its slider card.
 
+use crate::shared::i18n::t;
 use std::time::{Duration, Instant};
 
 use gpui_kit::assets::IconName;
@@ -40,7 +41,9 @@ impl SessionView {
             .xsmall()
             .text_color(ui::muted())
             .icon(Icon::new(effort_icon(&current)))
-            .tooltip(format!("Effort: {current}. How long the model thinks"))
+            .tooltip(
+                t("Effort: {current}. How long the model thinks").replace("{current}", &current),
+            )
             .when(!tiny, |b| b.label(current.clone()));
         Popover::new("effort-popover")
             .anchor(Anchor::BottomLeft)
@@ -60,7 +63,7 @@ impl SessionView {
                                     .small()
                                     .text_color(ui::petal()),
                             )
-                            .child(ui::section_label("Effort"))
+                            .child(ui::section_label(t("Effort")))
                             .child(div().flex_1())
                             .child(
                                 div()
@@ -195,22 +198,28 @@ fn effort_fill_w(fraction: f32) -> f32 {
 fn effort_copy(level: &str) -> (&'static str, &'static str) {
     match level {
         "off" => (
-            "No thinking",
-            "Answers right away: fastest, lightest on limits",
+            t("No thinking"),
+            t("Answers right away: fastest, lightest on limits"),
         ),
-        "minimal" => ("A quick glance", "Barely thinks before answering"),
-        "low" => ("Light thinking", "Quick reasoning for simple tasks"),
-        "medium" => ("Balanced", "Thinks it through without dragging"),
+        "minimal" => (t("A quick glance"), t("Barely thinks before answering")),
+        "low" => (t("Light thinking"), t("Quick reasoning for simple tasks")),
+        "medium" => (t("Balanced"), t("Thinks it through without dragging")),
         "high" => (
-            "Deep thinking",
-            "Better on hard problems; uses limits faster",
+            t("Deep thinking"),
+            t("Better on hard problems; uses limits faster"),
         ),
-        "xhigh" => ("Extra deep", "Long reasoning; consumes usage limits faster"),
+        "xhigh" => (
+            t("Extra deep"),
+            t("Long reasoning; consumes usage limits faster"),
+        ),
         "max" => (
-            "All in",
-            "Thinks as long as it takes; slowest and costliest",
+            t("All in"),
+            t("Thinks as long as it takes; slowest and costliest"),
         ),
-        _ => ("Thinking", "How long the model reasons before answering"),
+        _ => (
+            t("Thinking"),
+            t("How long the model reasons before answering"),
+        ),
     }
 }
 

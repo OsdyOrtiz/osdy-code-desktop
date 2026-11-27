@@ -2,6 +2,7 @@
 //! conversation's items (tool cards, thinking, messages, notices). The
 //! composer, its pickers, dialogs and overlays live in the child modules.
 
+use crate::shared::i18n::t;
 use std::cell::OnceCell;
 use std::collections::HashMap;
 use std::ops::Range;
@@ -810,19 +811,26 @@ impl SessionView {
                                 .text_size(rems(13. / 16.))
                                 .text_color(ui::muted())
                                 .child(ui::spinner(Size::Small, ui::accent()))
-                                .child(ui::shimmer("Starting gentle-shell…", ui::muted(), ui::fg()))
+                                .child(ui::shimmer(
+                                    t("Starting gentle-shell…"),
+                                    ui::muted(),
+                                    ui::fg(),
+                                ))
                                 .into_any_element()
                         }))
                         .into_any_element(),
                 );
             }
             BackendStatus::Ready(_) => return None,
-            BackendStatus::Failed(error) => ("Could not start gentle-shell", error.clone()),
+            BackendStatus::Failed(error) => (t("Could not start gentle-shell"), error.clone()),
             BackendStatus::Exited(code) => (
-                "gentle-shell stopped",
+                t("gentle-shell stopped"),
                 format!(
-                    "Exit code {}.\n{}",
-                    code.map_or("unknown".into(), |c| c.to_string()),
+                    "{}\n{}",
+                    t("Exit code {code}.").replace(
+                        "{code}",
+                        &code.map_or_else(|| t("unknown").into(), |c| c.to_string())
+                    ),
                     self.backend
                         .stderr
                         .iter()
@@ -962,7 +970,7 @@ impl SessionView {
                     column = column.child(working_indicator(
                         &self.live_slots,
                         ("working", ix),
-                        "Working…",
+                        t("Working…"),
                         since,
                     ));
                 }
@@ -1031,7 +1039,10 @@ impl SessionView {
                 };
                 self.render_command_output(ix, command, notices, lines, cx)
             }
-            Item::Notice { level, text } => notice_card(*level, text).into_any_element(),
+            Item::Notice { level, text } => {
+                let localized = self.localized_notices.get(&ix).map(|render| render());
+                notice_card(*level, localized.as_deref().unwrap_or(text)).into_any_element()
+            }
         }
     }
 
@@ -1121,7 +1132,7 @@ impl SessionView {
                     .child(star)
                     // Live, its time counts up once a second.
                     .when(live, |this| this.child(ui::each_second()))
-                    .child(if live { "Thinking…" } else { "Thought" })
+                    .child(if live { t("Thinking…") } else { t("Thought") })
                     .when_some(elapsed, |this, d| {
                         this.child(
                             div()
@@ -1259,9 +1270,10 @@ impl SessionView {
                 this.child(div().pb_1().child(self.fold_toggle(
                     key,
                     if open {
-                        "Show less".into()
+                        t("Show less").into()
                     } else {
-                        format!("{} more lines", lines - SHOWN_LINES)
+                        t("{count} more lines")
+                            .replace("{count}", &(lines - SHOWN_LINES).to_string())
                     },
                     open,
                     cx,
@@ -1283,7 +1295,7 @@ impl SessionView {
                     .xsmall()
                     .text_color(ui::faint())
                     .icon(Icon::new(IconName::Copy))
-                    .tooltip("Copy answer")
+                    .tooltip(t("Copy answer"))
                     .on_click(cx.listener(move |this, _, _, cx| {
                         let Some(Item::Assistant { blocks, .. }) = this.transcript.items.get(ix)
                         else {
@@ -1320,7 +1332,7 @@ impl SessionView {
                             .xsmall()
                             .text_color(ui::faint())
                             .icon(Icon::new(IconName::Copy))
-                            .tooltip("Copy message")
+                            .tooltip(t("Copy message"))
                             .on_click(cx.listener(move |this, _, _, cx| {
                                 let Some(item @ Item::User { text, images }) =
                                     this.transcript.items.get(ix)
@@ -1686,21 +1698,17 @@ impl SessionView {
             .overflow_hidden()
             .child(lines)
             .when(open && hidden > 0, |this| {
-                this.child(
-                    div()
-                        .px_3()
-                        .pb_1()
-                        .text_color(ui::faint())
-                        .child(format!("… {hidden} more lines not shown")),
-                )
+                this.child(div().px_3().pb_1().text_color(ui::faint()).child(
+                    t("… {count} more lines not shown").replace("{count}", &hidden.to_string()),
+                ))
             })
             .when(more > 0, |this| {
                 this.child(div().pb_1().child(self.fold_toggle(
                     key,
                     if open {
-                        "Show less".into()
+                        t("Show less").into()
                     } else {
-                        format!("{more} more lines")
+                        t("{count} more lines").replace("{count}", &more.to_string())
                     },
                     open,
                     cx,
@@ -1733,9 +1741,9 @@ impl SessionView {
                 this.child(self.fold_toggle(
                     key,
                     if open {
-                        "Show fewer lines".into()
+                        t("Show fewer lines").into()
                     } else {
-                        format!("{more} earlier lines")
+                        t("{count} earlier lines").replace("{count}", &more.to_string())
                     },
                     !open,
                     cx,
@@ -1751,9 +1759,10 @@ impl SessionView {
                     .text_color(ui::muted())
                     .when(open && hidden > 0, |this| {
                         this.child(
-                            div()
-                                .text_color(ui::faint())
-                                .child(format!("… {hidden} earlier lines not shown")),
+                            div().text_color(ui::faint()).child(
+                                t("… {count} earlier lines not shown")
+                                    .replace("{count}", &hidden.to_string()),
+                            ),
                         )
                     })
                     .children(shown.iter().map(|line| {
@@ -1777,9 +1786,9 @@ impl SessionView {
     ) -> Option<Stateful<Div>> {
         let (_, hidden) = shown.folded.as_ref()?;
         let label = if open {
-            "Show less".into()
+            t("Show less").into()
         } else {
-            format!("{hidden} more lines")
+            t("{count} more lines").replace("{count}", &hidden.to_string())
         };
         Some(self.fold_toggle(key, label, open, cx))
     }
@@ -1868,7 +1877,11 @@ impl SessionView {
                     .gap_2()
                     .flex_shrink_0()
                     .child(Icon::new(icon).small().text_color(step_tone(icon)))
-                    .child(div().text_color(ui::muted()).child(kind.label(count)))
+                    .child(
+                        div()
+                            .text_color(ui::muted())
+                            .child(kind.label_in(i18n::language(), count)),
+                    )
                     .into_any_element()])
             });
         h_flex()
@@ -1995,14 +2008,14 @@ impl SessionView {
             Row::Tail(Tail::Pending(base)) => {
                 let since = self.live.pending.as_ref().map(|p| p.since.elapsed());
                 let indicator =
-                    working_indicator(&self.live_slots, ("pending", base), "Thinking…", since);
+                    working_indicator(&self.live_slots, ("pending", base), t("Thinking…"), since);
                 self.list
                     .appear(("pending", base), now, div().w_full().child(indicator))
             }
             Row::Tail(Tail::Between(count)) => {
                 let since = self.live.turn.map(|t| t.elapsed());
                 let indicator =
-                    working_indicator(&self.live_slots, ("between", count), "Working…", since);
+                    working_indicator(&self.live_slots, ("between", count), t("Working…"), since);
                 self.list
                     .appear(("between", count), now, div().w_full().child(indicator))
             }
@@ -2067,6 +2080,21 @@ impl Render for SessionView {
         // A tab starts its backend once shown.
         self.ensure_started(window, cx);
         self.sync_view(cx);
+        i18n::sync_placeholder(
+            &self.model_search,
+            "Search models…",
+            &mut self.model_search_language,
+            window,
+            cx,
+        );
+        let language = i18n::language();
+        if self.composer_language != language {
+            self.composer_language = language;
+            self.composer.update(cx, |state, cx| {
+                state.set_placeholder(t("What are we cooking?"), window, cx)
+            });
+            self.list.language_changed(self.transcript.items.len());
+        }
         // An `@` reference searches this tab's folder: its files are read once
         // the composer holds one (see `path_menu`).
         self.ensure_path_files(cx);
@@ -2327,7 +2355,7 @@ impl SessionView {
                         .line_height(rems(28. / 16.))
                         .font_weight(FontWeight::SEMIBOLD)
                         .text_color(ui::fg())
-                        .child("Drop files here"),
+                        .child(t("Drop files here")),
                 )
                 .child(
                     div()
@@ -2335,7 +2363,7 @@ impl SessionView {
                         .text_size(rems(13. / 16.))
                         .line_height(rems(19. / 16.))
                         .text_color(ui::muted())
-                        .child("Files and images · folders aren’t attached"),
+                        .child(t("Files and images · folders aren’t attached")),
                 ),
         );
         div()
@@ -2545,7 +2573,7 @@ fn card_spec(item: &Item) -> Option<CardSpec> {
             details,
             ..
         } => {
-            let summary = tools::summarize(name, args, details);
+            let summary = tools::summarize_in(crate::shared::i18n::language(), name, args, details);
             let arg = |key: &str| args[key].as_str().filter(|s| !s.trim().is_empty());
             let command_like = matches!(
                 name.as_str(),
@@ -2603,7 +2631,7 @@ fn card_spec(item: &Item) -> Option<CardSpec> {
             ..
         } => Some(CardSpec {
             icon: IconName::CodeXml,
-            title: "Shell".into(),
+            title: t("Shell").into(),
             subject: SharedString::default(),
             chip: Some(command_language(command).into()),
             added: None,
@@ -2874,9 +2902,9 @@ fn clock(elapsed: Duration) -> String {
 /// A tool card's last line: how it ended, or "Running" while it runs.
 fn status_footer(status: ToolStatus, duration: Option<Duration>) -> Div {
     let (icon, label, color) = match status {
-        ToolStatus::Running => (None, "Running", ui::info()),
-        ToolStatus::Done => (Some(IconName::Check), "Done", ui::success()),
-        ToolStatus::Failed => (Some(IconName::X), "Failed", ui::danger()),
+        ToolStatus::Running => (None, t("Running"), ui::info()),
+        ToolStatus::Done => (Some(IconName::Check), t("Done"), ui::success()),
+        ToolStatus::Failed => (Some(IconName::X), t("Failed"), ui::danger()),
     };
     h_flex()
         .px_3()
@@ -3233,13 +3261,13 @@ fn code_block_header(block: &gpui_kit::base::text::CodeBlock, cx: &App) -> Div {
                 .id("copy")
                 .cursor_pointer()
                 .hover(|s| s.text_color(ui::fg()))
-                .child("Copy")
+                .child(t("Copy"))
                 .on_click(move |_, window, cx| {
                     cx.write_to_clipboard(ClipboardItem::new_string(code.to_string()));
                     window.push_notification(
-                        gpui_kit::component::notification::Notification::success(
+                        gpui_kit::component::notification::Notification::success(t(
                             "Copied to the clipboard.",
-                        ),
+                        )),
                         cx,
                     );
                 }),

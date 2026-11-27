@@ -4,6 +4,7 @@
 //! Staged, stage, stash, commit). The composer's `±` button and
 //! `/gentle:changes` open it; Esc or its ✕ closes it.
 
+use crate::shared::i18n::t;
 use std::path::PathBuf;
 
 use gpui_kit::assets::IconName;
@@ -130,9 +131,9 @@ impl ReviewView {
                     .text_size(rems(13. / 16.))
                     .text_color(ui::muted())
                     .child(if clean {
-                        "Working tree clean"
+                        t("Working tree clean")
                     } else {
-                        "Select a file"
+                        t("Select a file")
                     }),
             )
     }
@@ -153,8 +154,10 @@ impl Render for ReviewView {
             .unwrap_or_else(|| self.root.display().to_string());
         let detail = match files {
             0 => repo,
-            1 => format!("1 changed file · {repo}"),
-            n => format!("{n} changed files · {repo}"),
+            1 => t("1 changed file · {repo}").replace("{repo}", &repo),
+            n => t("{count} changed files · {repo}")
+                .replace("{count}", &n.to_string())
+                .replace("{repo}", &repo),
         };
         let header = ui::screen_header()
             .child(Icon::new(IconName::Diff).small().text_color(ui::muted()))
@@ -164,7 +167,7 @@ impl Render for ReviewView {
                     .text_base()
                     .font_weight(FontWeight::SEMIBOLD)
                     .text_color(ui::fg())
-                    .child("Review"),
+                    .child(t("Review")),
             )
             .child(
                 div()
@@ -180,7 +183,7 @@ impl Render for ReviewView {
                     .ghost()
                     .xsmall()
                     .icon(Icon::new(IconName::X))
-                    .tooltip("Close (Esc)")
+                    .tooltip(t("Close (Esc)"))
                     .on_click(cx.listener(|_, _, _, cx| cx.emit(ReviewEvent::Close))),
             );
         // No line between the columns: the list sits on its own surface,
