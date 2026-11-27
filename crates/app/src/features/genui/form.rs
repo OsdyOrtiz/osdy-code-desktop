@@ -37,6 +37,7 @@ impl TextField {
 
 pub(super) struct FormState {
     pub edits: Edits<Form>,
+    pub uses_default_submit_label: bool,
     /// Text, textarea, number and date fields (made at first draw: they
     /// need the window).
     pub texts: HashMap<String, TextField>,
@@ -44,14 +45,15 @@ pub(super) struct FormState {
     /// Checkbox, select, multiselect and radio answers.
     pub choices: Map<String, Value>,
     /// The last Submit's problems, by field id.
-    pub errors: Vec<(String, String)>,
+    pub errors: Vec<(String, gentle_core::genui::form::AnswerError)>,
     subscriptions: Vec<Subscription>,
 }
 
 impl FormState {
-    pub fn new(form: Form) -> Self {
+    pub fn new(form: Form, spec: &Value) -> Self {
         let mut state = Self {
             edits: Edits::new(form),
+            uses_default_submit_label: Form::custom_submit_label(spec.get("submitLabel")).is_none(),
             texts: HashMap::new(),
             sliders: HashMap::new(),
             choices: Map::new(),
@@ -77,7 +79,9 @@ impl FormState {
 
     /// A newer version: answers typed so far stay for the fields that are
     /// still there; new fields start from the agent's values.
-    pub fn rebase(&mut self, form: Form) {
+    pub fn rebase(&mut self, form: Form, spec: &Value) {
+        self.uses_default_submit_label =
+            Form::custom_submit_label(spec.get("submitLabel")).is_none();
         let reopened = self.edits.base().submitted && !form.submitted;
         self.edits.rebase(form);
         let form = self.edits.working();
@@ -276,7 +280,7 @@ impl PanelView {
             return;
         }
         let values = s.answers(cx);
-        if let Err(errors) = form.validate(&values) {
+        if let Err(errors) = form.validate_answers(&values) {
             if let Some(s) = state(self) {
                 s.errors = errors;
             }
@@ -344,7 +348,7 @@ impl PanelView {
             .errors
             .iter()
             .find(|(id, _)| *id == field.id)
-            .map(|(_, message)| message.clone());
+            .map(|(_, message)| message.render(crate::shared::i18n::language()));
         let choice = s.choices.get(&field.id).cloned().unwrap_or(Value::Null);
         let selector = format!("genui-field-{}", field.id);
         let control: AnyElement = match field.kind {
@@ -541,12 +545,14 @@ impl PanelView {
             return footer
                 .text_color(ui::success())
                 .child(Icon::new(IconName::CircleCheck).xsmall())
-                .child(div().flex_1().child("Submitted to the agent"))
                 .child(
                     div()
-                        .text_color(ui::faint())
-                        .child("It can reopen the form to ask again"),
-                );
+                        .flex_1()
+                        .child(crate::shared::i18n::t("Submitted to the agent")),
+                )
+                .child(div().text_color(ui::faint()).child(crate::shared::i18n::t(
+                    "It can reopen the form to ask again",
+                )));
         }
         if working.submitted {
             // Sent and not answered yet, or taken by an extension that doesn't
@@ -556,12 +562,12 @@ impl PanelView {
                 .when(sending, |d| {
                     d.text_color(ui::muted())
                         .child(ui::spinner(gpui_kit::component::Size::XSmall, ui::info()))
-                        .child(div().flex_1().child("Submitting…"))
+                        .child(div().flex_1().child(crate::shared::i18n::t("Submitting…")))
                 })
                 .when(!sending, |d| {
                     let error = match &self.send {
                         SendState::Failed(error) => error.clone(),
-                        _ => "Not sent yet".into(),
+                        _ => crate::shared::i18n::t("Not sent yet").into(),
                     };
                     d.child(
                         div()
@@ -575,7 +581,7 @@ impl PanelView {
                         Button::new("genui-form-edit")
                             .ghost()
                             .xsmall()
-                            .label("Edit answers")
+                            .label(crate::shared::i18n::t("Edit answers"))
                             .on_click(cx.listener(|this, _, _, cx| this.discard(cx))),
                     )
                     .child(
@@ -583,7 +589,7 @@ impl PanelView {
                             .primary()
                             .xsmall()
                             .icon(Icon::new(IconName::Send))
-                            .label("Retry")
+                            .label(crate::shared::i18n::t("Retry"))
                             .on_click(cx.listener(|this, _, _, cx| this.send(cx))),
                     )
                 });
@@ -597,14 +603,16 @@ impl PanelView {
                     .truncate()
                     .when(problems > 0, |d| {
                         d.text_color(ui::danger()).child(if problems == 1 {
-                            "1 answer needs a fix".to_string()
+                            crate::shared::i18n::t("1 answer needs a fix").to_string()
                         } else {
-                            format!("{problems} answers need a fix")
+                            crate::shared::i18n::t("{count} answers need a fix")
+                                .replace("{count}", &problems.to_string())
                         })
                     })
                     .when(problems == 0, |d| {
-                        d.text_color(ui::faint())
-                            .child("The agent gets every answer at once")
+                        d.text_color(ui::faint()).child(crate::shared::i18n::t(
+                            "The agent gets every answer at once",
+                        ))
                     }),
             )
             .child(
@@ -613,7 +621,11 @@ impl PanelView {
                         .primary()
                         .xsmall()
                         .icon(Icon::new(IconName::Send))
-                        .label(working.submit_label.clone())
+                        .label(if form.uses_default_submit_label {
+                            crate::shared::i18n::t("Submit").to_owned()
+                        } else {
+                            working.submit_label.clone()
+                        })
                         .disabled(matches!(self.send, SendState::Sending { .. }))
                         .on_click(cx.listener(|this, _, _, cx| this.submit_form(cx))),
                 ),

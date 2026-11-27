@@ -7,9 +7,9 @@
 
 use gentle_core::genui::chart::Chart;
 use gentle_core::genui::checklist::Checklist;
-use gentle_core::genui::edits::{Editable as _, plural};
+use gentle_core::genui::edits::Editable as _;
 use gentle_core::genui::form::Form;
-use gentle_core::genui::kanban::{self, Board, card_count};
+use gentle_core::genui::kanban::{self, Board};
 use gentle_core::genui::live::Live;
 use gentle_core::genui::review::{Decision, Review};
 use gentle_core::genui::table::Table;
@@ -65,10 +65,12 @@ pub(super) fn handles(kind: &str) -> bool {
 
 /// The title a surface of `kind` gets when the agent gives none.
 pub(super) fn default_title(kind: &str) -> &'static str {
-    KINDS
-        .iter()
-        .find(|(k, ..)| *k == kind)
-        .map_or("Diagram", |(_, title, _)| title)
+    crate::shared::i18n::t(
+        KINDS
+            .iter()
+            .find(|(k, ..)| *k == kind)
+            .map_or("Diagram", |(_, title, _)| title),
+    )
 }
 
 fn icon(kind: &str) -> IconName {
@@ -183,7 +185,7 @@ impl Body {
     fn parse(kind: &str, spec: &Value) -> Result<Body, Vec<String>> {
         Ok(match kind {
             "table" => Body::Table(TableState::new(Table::parse(spec)?)),
-            "form" => Body::Form(FormState::new(Form::parse(spec)?)),
+            "form" => Body::Form(FormState::new(Form::parse(spec)?, spec)),
             "checklist" => Body::Checklist(ChecklistState::new(Checklist::parse(spec)?)),
             "kanban" => Body::Kanban(KanbanState::new(Board::parse(spec)?)),
             "chart" => Body::Chart(ChartState::new(Chart::parse(spec)?)),
@@ -201,7 +203,7 @@ impl Body {
     pub(super) fn rebase(&mut self, spec: &Value) -> Result<(), Vec<String>> {
         match self {
             Body::Table(s) => s.rebase(Table::parse(spec)?),
-            Body::Form(s) => s.rebase(Form::parse(spec)?),
+            Body::Form(s) => s.rebase(Form::parse(spec)?, spec),
             Body::Checklist(s) => s.rebase(Checklist::parse(spec)?),
             Body::Kanban(s) => s.rebase(Board::parse(spec)?),
             Body::Chart(s) => s.rebase(Chart::parse(spec)?),
@@ -326,37 +328,49 @@ impl Body {
 
     /// The header's counts.
     fn stats(&self) -> String {
+        let language = crate::shared::i18n::language();
         match self {
             Body::Table(s) => {
                 let t = s.edits.working();
                 let mut text = format!(
                     "{} · {}",
-                    plural(t.rows.len(), "row"),
-                    plural(t.columns.len(), "column")
+                    super::count(t.rows.len(), "{count} row", "{count} rows"),
+                    super::count(t.columns.len(), "{count} column", "{count} columns")
                 );
                 if !t.selection.is_empty() {
-                    text.push_str(&format!(" · {} selected", t.selection.len()));
+                    text.push_str(" · ");
+                    text.push_str(&super::count(
+                        t.selection.len(),
+                        "{count} selected",
+                        "{count} selected",
+                    ));
                 }
                 text
             }
-            Body::Form(s) => gentle_core::genui::form::field_count(s.edits.working()),
+            Body::Form(s) => gentle_core::genui::form::field_count_in(s.edits.working(), language),
             Body::Checklist(s) => {
                 let c = s.edits.working();
-                format!("{} of {} done", c.done(), c.count())
+                crate::shared::i18n::t("{done} of {total} done")
+                    .replace("{done}", &c.done().to_string())
+                    .replace("{total}", &c.count().to_string())
             }
-            Body::Kanban(s) => card_count(s.edits.working()),
-            Body::Chart(s) => format!("{} · {} series", s.chart.kind.name(), s.chart.series.len()),
-            Body::Review(s) => s.edits.working().stats(),
-            Body::Sequence(s) => sequence::counts(s.edits.working()),
-            Body::Erd(s) => erd::counts(s.edits.working()),
-            Body::State(s) => states::counts(s.edits.working()),
-            Body::Timeline(s) => timeline::counts(s.edits.working()),
+            Body::Kanban(s) => kanban::card_count_in(s.edits.working(), language),
+            Body::Chart(s) => format!(
+                "{} · {}",
+                crate::shared::i18n::t(s.chart.kind.name()),
+                super::count(s.chart.series.len(), "{count} series", "{count} series")
+            ),
+            Body::Review(s) => s.edits.working().stats_in(language),
+            Body::Sequence(s) => sequence::counts_in(s.edits.working(), language),
+            Body::Erd(s) => erd::counts_in(s.edits.working(), language),
+            Body::State(s) => states::counts_in(s.edits.working(), language),
+            Body::Timeline(s) => timeline::counts_in(s.edits.working(), language),
         }
     }
 
     /// The footer's hint while nothing is pending.
     fn hint(&self) -> &'static str {
-        match self {
+        crate::shared::i18n::t(match self {
             Body::Table(s) if s.edits.working().editable => {
                 "Click a header to sort · check rows to select · double-click a cell to edit"
             }
@@ -382,7 +396,7 @@ impl Body {
             Body::Timeline(_) => {
                 "Drag a bar to move it, its ends to resize · drag ● to another task to link · double-click to rename"
             }
-        }
+        })
     }
 
     /// The body's height (px at 100 %) for the conversation card.
@@ -409,10 +423,11 @@ pub struct PanelView {
     /// `None` when the first version couldn't be read (see `error`).
     pub(super) body: Option<Body>,
     /// Why the latest spec could not be drawn (the previous one stays).
-    pub(super) error: Option<String>,
+    pub(super) error: Option<Vec<String>>,
     /// Why the last edit was refused.
-    pub(super) refused: Option<String>,
+    pub(super) refused: Option<crate::shared::i18n::Message>,
     pub(super) note: Option<Entity<InputState>>,
+    note_language: gentle_core::i18n::Language,
     pub(super) send: SendState,
     pub(super) expanded: bool,
     pub(super) focus: FocusHandle,
@@ -434,7 +449,7 @@ impl PanelView {
     pub fn new(snapshot: &Snapshot, cx: &mut Context<Self>) -> Self {
         let (body, error) = match Body::parse(&snapshot.kind, &snapshot.spec) {
             Ok(body) => (Some(body), None),
-            Err(errors) => (None, Some(errors.join("\n"))),
+            Err(errors) => (None, Some(errors)),
         };
         Self {
             id: snapshot.id.clone(),
@@ -445,6 +460,7 @@ impl PanelView {
             error,
             refused: None,
             note: None,
+            note_language: crate::shared::i18n::language(),
             send: SendState::Idle,
             expanded: false,
             focus: cx.focus_handle(),
@@ -478,6 +494,16 @@ impl PanelView {
         &self.id
     }
 
+    pub(super) fn display_title(&self) -> &str {
+        if self.read_only && self.id == super::TODO_SURFACE {
+            crate::shared::i18n::t("Todos")
+        } else if self.title.is_empty() {
+            default_title(&self.kind)
+        } else {
+            &self.title
+        }
+    }
+
     /// What the panel shows, for the Export menu.
     pub(super) fn source(&self) -> super::share::Source {
         super::share::Source {
@@ -508,7 +534,7 @@ impl PanelView {
             Some(body) => body.rebase(&snapshot.spec),
             None => Body::parse(&self.kind, &snapshot.spec).map(|body| self.body = Some(body)),
         };
-        self.error = result.err().map(|errors| errors.join("\n"));
+        self.error = result.err();
         self.sync_live(cx);
         cx.notify();
     }
@@ -593,7 +619,7 @@ impl PanelView {
                 true
             }
             Err(error) => {
-                self.refused = Some(error);
+                self.refused = Some(crate::shared::i18n::Message::raw(error));
                 false
             }
         };
@@ -670,8 +696,10 @@ impl PanelView {
 
     fn note_input(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if self.note.is_none() {
+            self.note_language = crate::shared::i18n::language();
             self.note = Some(cx.new(|cx| {
-                InputState::new(window, cx).placeholder("Add a note for the agent (optional)")
+                InputState::new(window, cx)
+                    .placeholder(crate::shared::i18n::t(super::NOTE_PLACEHOLDER))
             }));
         }
     }
@@ -719,7 +747,7 @@ impl PanelView {
                 .xsmall()
                 .text_color(ui::muted())
                 .icon(Icon::new(icon))
-                .tooltip(tip)
+                .tooltip(crate::shared::i18n::t(tip))
         };
         let locked = self.locked();
         let editable = !locked && !matches!(self.body, Some(Body::Chart(_)) | None);
@@ -751,11 +779,7 @@ impl PanelView {
                     .text_size(rems(13. / 16.))
                     .font_weight(FontWeight::SEMIBOLD)
                     .text_color(ui::champagne())
-                    .child(if self.title.is_empty() {
-                        default_title(&self.kind).to_string()
-                    } else {
-                        self.title.clone()
-                    }),
+                    .child(self.display_title().to_string()),
             )
             .child(ui::chip(format!("v{}", self.version), ui::info()).flex_shrink_0())
             .child(
@@ -896,11 +920,12 @@ impl PanelView {
     }
 
     fn render_error(&self) -> Option<AnyElement> {
-        let error = self.error.as_ref()?;
+        let errors = self.error.as_ref()?;
+        let error = super::diagnostic::render_all(errors, "\n");
         let title = if self.body.is_some() {
-            "The agent's latest version can't be drawn"
+            crate::shared::i18n::t("The agent's latest version can't be drawn")
         } else {
-            "This can't be drawn"
+            crate::shared::i18n::t("This can't be drawn")
         };
         Some(
             div()
@@ -929,7 +954,7 @@ impl PanelView {
                                 .text_size(ui::code_rems(11.))
                                 .text_color(ui::muted())
                                 .whitespace_normal()
-                                .child(error.clone()),
+                                .child(error),
                         ),
                 )
                 .into_any_element(),
@@ -952,14 +977,28 @@ impl PanelView {
             return footer
                 .text_color(ui::danger())
                 .child(Icon::new(IconName::CircleAlert).xsmall())
-                .child(div().flex_1().min_w_0().truncate().child(refused.clone()))
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w_0()
+                        .truncate()
+                        .child(super::diagnostic::render(&refused.render())),
+                )
                 .into_any_element();
         }
         let pending = self.pending();
         if pending > 0 {
             let (count, send) = match &self.body {
-                Some(Body::Review(s)) => (s.edits.working().progress(), "Send decisions"),
-                _ => (plural(pending, "change"), "Send to agent"),
+                Some(Body::Review(s)) => (
+                    s.edits
+                        .working()
+                        .progress_in(crate::shared::i18n::language()),
+                    "Send decisions",
+                ),
+                _ => (
+                    super::count(pending, "{count} change", "{count} changes"),
+                    "Send to agent",
+                ),
             };
             return self
                 .pending_footer(footer, count, send, cx)
@@ -969,7 +1008,7 @@ impl PanelView {
             SendState::Sent => footer
                 .text_color(ui::success())
                 .child(Icon::new(IconName::CircleCheck).xsmall())
-                .child("Sent to the agent")
+                .child(crate::shared::i18n::t("Sent to the agent"))
                 .into_any_element(),
             _ => footer
                 .text_color(ui::faint())
@@ -1006,7 +1045,7 @@ impl PanelView {
                     .cursor_pointer()
                     .text_color(ui::faint())
                     .hover(|d| d.text_color(ui::muted()))
-                    .child("Add a note…")
+                    .child(crate::shared::i18n::t("Add a note…"))
                     .on_click(cx.listener(|this, _, window, cx| {
                         this.note_input(window, cx);
                         if let Some(note) = &this.note {
@@ -1036,7 +1075,7 @@ impl PanelView {
                 Button::new("genui-panel-discard")
                     .ghost()
                     .xsmall()
-                    .label("Discard")
+                    .label(crate::shared::i18n::t("Discard"))
                     .disabled(sending)
                     .on_click(cx.listener(|this, _, _, cx| this.discard(cx))),
             )
@@ -1050,7 +1089,11 @@ impl PanelView {
                         } else {
                             IconName::Send
                         }))
-                        .label(if retry { "Retry" } else { send_label })
+                        .label(crate::shared::i18n::t(if retry {
+                            "Retry"
+                        } else {
+                            send_label
+                        }))
                         .loading(sending)
                         .on_click(cx.listener(|this, _, _, cx| this.send(cx))),
                 ),
@@ -1060,15 +1103,19 @@ impl PanelView {
     /// The footer's hint while nothing is pending.
     fn hint(&self) -> &'static str {
         match &self.body {
-            Some(Body::Checklist(_)) if self.read_only => {
-                "The agent's todo list, live · read-only · Ask about an item from its row"
+            Some(Body::Checklist(_)) if self.read_only => crate::shared::i18n::t(
+                "The agent's todo list, live · read-only · Ask about an item from its row",
+            ),
+            Some(Body::Checklist(_)) if self.locked() => {
+                crate::shared::i18n::t("Live items · read-only")
             }
-            Some(Body::Checklist(_)) if self.locked() => "Live items · read-only",
-            Some(Body::Checklist(s)) if s.edits.working().run.is_some() => {
-                "Skip or reorder steps, then Run (all) or Run next · the agent reports each step"
-            }
+            Some(Body::Checklist(s)) if s.edits.working().run.is_some() => crate::shared::i18n::t(
+                "Skip or reorder steps, then Run (all) or Run next · the agent reports each step",
+            ),
             Some(Body::Kanban(s)) if s.edits.working().columns.iter().any(|c| c.starts) => {
-                "Drag a card into a column marked with a bot: the agent starts a subagent on it"
+                crate::shared::i18n::t(
+                    "Drag a card into a column marked with a bot: the agent starts a subagent on it",
+                )
             }
             Some(body) => body.hint(),
             None => "",
@@ -1078,6 +1125,15 @@ impl PanelView {
 
 impl Render for PanelView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        if let Some(note) = &self.note {
+            crate::shared::i18n::sync_placeholder(
+                note,
+                super::NOTE_PLACEHOLDER,
+                &mut self.note_language,
+                window,
+                cx,
+            );
+        }
         self.glides.tick(window, cx);
         self.live_drawn(window, cx);
         let body = self.render_body(window, cx);

@@ -27,7 +27,10 @@ use crate::shared::ui;
 /// The file list's width (px at 100 %), shown with two files or more.
 const FILES_W: f32 = 196.;
 
+const COMMENT_PLACEHOLDER: &str = "Comment for the agent, Enter to keep";
+
 pub(super) struct CommentEdit {
+    language: gentle_core::i18n::Language,
     pub hunk: String,
     pub input: Entity<InputState>,
     _subscription: Subscription,
@@ -198,7 +201,7 @@ impl PanelView {
         let text = hunk.comment.clone().unwrap_or_default();
         let input = cx.new(|cx| {
             InputState::new(window, cx)
-                .placeholder("Comment for the agent, Enter to keep")
+                .placeholder(crate::shared::i18n::t(COMMENT_PLACEHOLDER))
                 .default_value(text)
         });
         let subscription = cx.subscribe_in(
@@ -220,6 +223,7 @@ impl PanelView {
         if let Some(s) = state(self) {
             s.current = Some(id.to_string());
             s.commenting = Some(CommentEdit {
+                language: crate::shared::i18n::language(),
                 hunk: id.to_string(),
                 input,
                 _subscription: subscription,
@@ -423,7 +427,20 @@ impl PanelView {
         Some(state_entity)
     }
 
-    pub(super) fn render_review(&mut self, _: &mut Window, cx: &mut Context<Self>) -> AnyElement {
+    pub(super) fn render_review(
+        &mut self,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) -> AnyElement {
+        if let Some(edit) = state(self).and_then(|s| s.commenting.as_mut()) {
+            crate::shared::i18n::sync_placeholder(
+                &edit.input,
+                COMMENT_PLACEHOLDER,
+                &mut edit.language,
+                window,
+                cx,
+            );
+        }
         let Some(viewer) = self.review_viewer(cx) else {
             return div().into_any_element();
         };
@@ -664,7 +681,7 @@ fn file_tools(
             Button::new(SharedString::from(id))
                 .ghost()
                 .xsmall()
-                .label(label)
+                .label(crate::shared::i18n::t(label))
                 .on_click(on_panel(
                     view,
                     Box::new(move |this, _, cx| this.decide_all(Some(&path), decision, cx)),
@@ -690,12 +707,16 @@ fn file_tools(
 fn hunk_bar(bar: &HunkBar, view: &WeakEntity<PanelView>) -> AnyElement {
     let id = bar.id.clone();
     let state = match (bar.applied, bar.decision) {
-        (true, _) => ui::chip("Applied", ui::info()).into_any_element(),
-        (false, Some(Decision::Accepted)) => ui::chip("Accepted", ui::success()).into_any_element(),
-        (false, Some(Decision::Rejected)) => ui::chip("Rejected", ui::danger()).into_any_element(),
+        (true, _) => ui::chip(crate::shared::i18n::t("Applied"), ui::info()).into_any_element(),
+        (false, Some(Decision::Accepted)) => {
+            ui::chip(crate::shared::i18n::t("Accepted"), ui::success()).into_any_element()
+        }
+        (false, Some(Decision::Rejected)) => {
+            ui::chip(crate::shared::i18n::t("Rejected"), ui::danger()).into_any_element()
+        }
         (false, None) => div()
             .text_color(ui::faint())
-            .child("Undecided")
+            .child(crate::shared::i18n::t("Undecided"))
             .into_any_element(),
     };
     let action = |name: &str,
@@ -712,7 +733,7 @@ fn hunk_bar(bar: &HunkBar, view: &WeakEntity<PanelView>) -> AnyElement {
                 .selected(on)
                 .when(on, |b| b.text_color(tone))
                 .icon(Icon::new(icon))
-                .label(label)
+                .label(crate::shared::i18n::t(label))
                 .on_click(on_panel(view, click)),
         )
     };

@@ -9,12 +9,12 @@
 use std::rc::Rc;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use gentle_core::genui::edits::{Editable as _, Edits, plural};
+use gentle_core::genui::edits::{Editable as _, Edits};
 use gentle_core::genui::layout::{Point as P, Rect};
 use gentle_core::genui::style::Tint;
 use gentle_core::genui::timeline::{
-    self, BAR_H, Change, DAY, LABEL_W, ROW, Task, Timeline, TimelineLayout, day_parts, month_label,
-    short_date,
+    self, BAR_H, Change, DAY, LABEL_W, ROW, Task, Timeline, TimelineLayout, day_parts,
+    month_label_in, short_date_in,
 };
 use gpui_kit::assets::IconName;
 use gpui_kit::component::{Icon, h_flex};
@@ -159,17 +159,33 @@ fn state(this: &mut PanelView) -> Option<&mut TimelineState> {
     }
 }
 
+fn short_date(day: i64) -> String {
+    short_date_in(day, crate::shared::i18n::language())
+}
+
+fn month_label(day: i64) -> String {
+    month_label_in(day, crate::shared::i18n::language())
+}
+
 fn span(t: &Task) -> String {
     if t.milestone {
-        format!("{} · milestone", short_date(t.start))
+        format!(
+            "{} · {}",
+            short_date(t.start),
+            crate::shared::i18n::t("milestone")
+        )
     } else if t.start == t.end {
-        format!("{} · 1 day", short_date(t.start))
+        format!(
+            "{} · {}",
+            short_date(t.start),
+            crate::shared::i18n::t("1 day")
+        )
     } else {
         format!(
             "{} – {} · {}",
             short_date(t.start),
             short_date(t.end),
-            plural(t.days() as usize, "day")
+            super::count(t.days() as usize, "{count} day", "{count} days")
         )
     }
 }
@@ -538,7 +554,7 @@ impl PanelView {
                     .absolute()
                     .left(x - rems(22. / 16.).to_pixels(rem))
                     .top(rems(4. / 16.))
-                    .child(ui::chip("Today", ui::accent())),
+                    .child(ui::chip(crate::shared::i18n::t("Today"), ui::accent())),
             );
         }
         children.push(axis.into_any_element());
@@ -567,7 +583,7 @@ impl PanelView {
             empty: shown
                 .tasks
                 .is_empty()
-                .then_some("No tasks yet. Add one with +."),
+                .then_some(crate::shared::i18n::t("No tasks yet. Add one with +.")),
         }
     }
 
@@ -742,7 +758,10 @@ impl PanelView {
                 |text: String, tone: Hsla| div().text_color(tone).child(text).into_any_element();
             let mut rows = vec![line(span(t), ui::muted())];
             if let Some(p) = t.progress {
-                rows.push(line(format!("{p}% done"), ui::muted()));
+                rows.push(line(
+                    crate::shared::i18n::t("{percent}% done").replace("{percent}", &p.to_string()),
+                    ui::muted(),
+                ));
             }
             if !t.depends_on.is_empty() {
                 let names: Vec<String> = t
@@ -750,16 +769,23 @@ impl PanelView {
                     .iter()
                     .map(|d| shown.task(d).map_or(d.clone(), |t| t.label.clone()))
                     .collect();
-                rows.push(line(format!("After {}", names.join(", ")), ui::muted()));
+                rows.push(line(
+                    crate::shared::i18n::t("After {tasks}").replace("{tasks}", &names.join(", ")),
+                    ui::muted(),
+                ));
             }
             for (di, _) in late.iter().filter(|(_, x)| *x == ti) {
                 rows.push(line(
-                    format!("Starts before “{}” ends", shown.tasks[*di].label),
+                    crate::shared::i18n::t("Starts before “{task}” ends")
+                        .replace("{task}", &shown.tasks[*di].label),
                     ui::danger(),
                 ));
             }
             if critical.len() > 1 && critical.contains(&t.id) {
-                rows.push(line("On the critical path".into(), ui::accent()));
+                rows.push(line(
+                    crate::shared::i18n::t("On the critical path").into(),
+                    ui::accent(),
+                ));
             }
             rows.push(canvas::actions(vec![
                 rename,
@@ -787,6 +813,11 @@ impl PanelView {
         let name = |id: &str| shown.task(id).map_or(id.to_string(), |t| t.label.clone());
         let title = format!("{} waits for {}", name(&task), name(&on));
         let subject = format!("the dependency “{title}”");
+        let title = crate::shared::i18n::Message::with(
+            "{task} waits for {dependency}",
+            [("{task}", name(&task)), ("{dependency}", name(&on))],
+        )
+        .render();
         Some(canvas::details(
             IconName::Link,
             ui::info(),

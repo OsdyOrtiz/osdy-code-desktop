@@ -89,10 +89,10 @@ pub(super) fn status_color(status: Status) -> Hsla {
 
 pub(super) fn style_name(style: EdgeStyle) -> &'static str {
     match style {
-        EdgeStyle::Sync => "sync call",
-        EdgeStyle::Async => "async",
-        EdgeStyle::Data => "data flow",
-        EdgeStyle::Dependency => "dependency",
+        EdgeStyle::Sync => crate::shared::i18n::t("sync call"),
+        EdgeStyle::Async => crate::shared::i18n::t("async"),
+        EdgeStyle::Data => crate::shared::i18n::t("data flow"),
+        EdgeStyle::Dependency => crate::shared::i18n::t("dependency"),
     }
 }
 
@@ -109,6 +109,27 @@ struct Shown {
 
 impl Render for DiagramView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        if let Some(fields) = &mut self.fields {
+            super::sync_placeholders(
+                fields
+                    .tech
+                    .iter()
+                    .map(|input| (input, super::diagram::TECH_PLACEHOLDER))
+                    .chain([(&fields.description, "Description")]),
+                &mut fields.language,
+                window,
+                cx,
+            );
+        }
+        if let Some(note) = &self.note {
+            crate::shared::i18n::sync_placeholder(
+                note,
+                super::NOTE_PLACEHOLDER,
+                &mut self.note_language,
+                window,
+                cx,
+            );
+        }
         let rem = window.rem_size();
         let now = Instant::now();
         let mut tweening = self.advance_view(now);
@@ -206,7 +227,7 @@ impl DiagramView {
                 .xsmall()
                 .text_color(ui::muted())
                 .icon(Icon::new(icon))
-                .tooltip(tip)
+                .tooltip(crate::shared::i18n::t(tip))
         };
         let nodes = self.working.nodes.len();
         let edges = self.working.edges.len();
@@ -239,7 +260,7 @@ impl DiagramView {
                     .font_weight(FontWeight::SEMIBOLD)
                     .text_color(ui::champagne())
                     .child(if self.title.is_empty() {
-                        "Diagram".to_string()
+                        crate::shared::i18n::t("Diagram").to_string()
                     } else {
                         self.title.clone()
                     }),
@@ -254,9 +275,9 @@ impl DiagramView {
                     .text_size(ui::code_rems(12.))
                     .text_color(ui::muted())
                     .child(format!(
-                        "{nodes} node{} · {edges} edge{}",
-                        if nodes == 1 { "" } else { "s" },
-                        if edges == 1 { "" } else { "s" }
+                        "{} · {}",
+                        super::count(nodes, "{count} node", "{count} nodes"),
+                        super::count(edges, "{count} edge", "{count} edges")
                     )),
             )
             .child(
@@ -659,21 +680,19 @@ impl DiagramView {
         }
 
         if self.working.nodes.is_empty() {
-            body = body.child(
-                v_flex()
-                    .absolute()
-                    .inset_0()
-                    .items_center()
-                    .justify_center()
-                    .gap_2()
-                    .child(Icon::new(IconName::Workflow).text_color(ui::faint()))
-                    .child(
-                        div()
-                            .text_sm()
-                            .text_color(ui::muted())
-                            .child("Nothing drawn yet. Add a node with +."),
-                    ),
-            );
+            body =
+                body.child(
+                    v_flex()
+                        .absolute()
+                        .inset_0()
+                        .items_center()
+                        .justify_center()
+                        .gap_2()
+                        .child(Icon::new(IconName::Workflow).text_color(ui::faint()))
+                        .child(div().text_sm().text_color(ui::muted()).child(
+                            crate::shared::i18n::t("Nothing drawn yet. Add a node with +."),
+                        )),
+                );
         }
         if let Some(error) = &self.error {
             body = body.child(
@@ -690,7 +709,9 @@ impl DiagramView {
                                 .text_size(rems(12. / 16.))
                                 .text_color(ui::danger())
                                 .child(Icon::new(IconName::CircleAlert).xsmall())
-                                .child("The agent's latest version can't be drawn"),
+                                .child(crate::shared::i18n::t(
+                                    "The agent's latest version can't be drawn",
+                                )),
                         )
                         .child(
                             div()
@@ -845,7 +866,7 @@ impl DiagramView {
                 .xsmall()
                 .text_color(ui::muted())
                 .icon(Icon::new(icon))
-                .tooltip(tip)
+                .tooltip(crate::shared::i18n::t(tip))
         };
         v_flex()
             .absolute()
@@ -971,7 +992,13 @@ impl DiagramView {
             return footer
                 .text_color(ui::danger())
                 .child(Icon::new(IconName::CircleAlert).xsmall())
-                .child(div().flex_1().min_w_0().truncate().child(refused.clone()));
+                .child(
+                    div()
+                        .flex_1()
+                        .min_w_0()
+                        .truncate()
+                        .child(super::diagnostic::render(refused)),
+                );
         }
         if self.pending > 0 {
             let sending = matches!(self.send, SendState::Sending { .. });
@@ -982,11 +1009,7 @@ impl DiagramView {
             let retry = failed.is_some();
             return footer
                 .child(ui::chip(
-                    format!(
-                        "{} change{}",
-                        self.pending,
-                        if self.pending == 1 { "" } else { "s" }
-                    ),
+                    super::count(self.pending, "{count} change", "{count} changes"),
                     ui::accent(),
                 ))
                 .child(match (&failed, &self.note) {
@@ -1021,7 +1044,7 @@ impl DiagramView {
                         .cursor_pointer()
                         .text_color(ui::faint())
                         .hover(|d| d.text_color(ui::muted()))
-                        .child("Add a note…")
+                        .child(crate::shared::i18n::t("Add a note…"))
                         .on_click(cx.listener(|this, _, window, cx| {
                             this.note_input(window, cx);
                             if let Some(note) = &this.note {
@@ -1036,7 +1059,7 @@ impl DiagramView {
                         .debug_selector(|| "genui-discard".into())
                         .ghost()
                         .xsmall()
-                        .label("Discard")
+                        .label(crate::shared::i18n::t("Discard"))
                         .disabled(sending)
                         .on_click(cx.listener(|this, _, _, cx| this.discard(cx))),
                 )
@@ -1050,7 +1073,11 @@ impl DiagramView {
                         } else {
                             IconName::Send
                         }))
-                        .label(if retry { "Retry" } else { "Send to agent" })
+                        .label(crate::shared::i18n::t(if retry {
+                            "Retry"
+                        } else {
+                            "Send to agent"
+                        }))
                         .loading(sending)
                         .on_click(cx.listener(|this, _, _, cx| this.send(cx))),
                 );
@@ -1059,12 +1086,12 @@ impl DiagramView {
             SendState::Sent => footer
                 .text_color(ui::success())
                 .child(Icon::new(IconName::CircleCheck).xsmall())
-                .child("Sent to the agent"),
+                .child(crate::shared::i18n::t("Sent to the agent")),
             _ => footer.text_color(ui::faint()).child(
                 div().flex_1().min_w_0().truncate().child(if self.locked {
-                    "View only · unlock to edit"
+                    crate::shared::i18n::t("View only · unlock to edit")
                 } else {
-                    "Drag to move · double-click to rename · drag ● to connect · shift-drag to select · ⌘/Ctrl-scroll to zoom"
+                    crate::shared::i18n::t("Drag to move · double-click to rename · drag ● to connect · shift-drag to select · ⌘/Ctrl-scroll to zoom")
                 }),
             ),
         }
@@ -1084,8 +1111,11 @@ fn node_card(node: &Node, rect: Rect, s: f32, alpha: f32) -> Div {
     let flat = note || kind == NodeKind::External;
     let tone = node_tone(node);
     let meta = match node.tech.as_deref().filter(|t| !t.is_empty()) {
-        Some(tech) => format!("{} · {tech}", kind.name().to_uppercase()),
-        None => kind.name().to_uppercase(),
+        Some(tech) => format!(
+            "{} · {tech}",
+            crate::shared::i18n::t(kind.name()).to_uppercase()
+        ),
+        None => crate::shared::i18n::t(kind.name()).to_uppercase(),
     };
     let description = node
         .description
@@ -1244,9 +1274,10 @@ pub(super) fn superseded_row(title: &str, version: u64, closed: bool) -> AnyElem
         ui::faint(),
         title.to_string(),
         Some(if closed {
-            "closed by the agent".into()
+            crate::shared::i18n::t("closed by the agent").into()
         } else {
-            format!("v{version} · updated below")
+            crate::shared::i18n::t("v{version} · updated below")
+                .replace("{version}", &version.to_string())
         }),
     )
     .opacity(0.7)
@@ -1259,14 +1290,14 @@ pub(super) fn expanded_row(surface: super::Surface, title: &str) -> AnyElement {
         IconName::Workflow,
         ui::info(),
         title.to_string(),
-        Some("open in the expanded view".into()),
+        Some(crate::shared::i18n::t("open in the expanded view").into()),
     )
     .child(
         Button::new("genui-collapse")
             .ghost()
             .xsmall()
             .icon(Icon::new(IconName::Minimize2))
-            .label("Back here")
+            .label(crate::shared::i18n::t("Back here"))
             .on_click(move |_, _, cx| surface.emit(DiagramEvent::Collapse, cx)),
     )
     .into_any_element()
@@ -1278,7 +1309,7 @@ pub(super) fn pinned_row(surface: super::Surface, title: &str) -> AnyElement {
         IconName::Pin,
         ui::info(),
         title.to_string(),
-        Some("pinned to the side panel".into()),
+        Some(crate::shared::i18n::t("pinned to the side panel").into()),
     )
     .child(
         Button::new("genui-unpin-here")
@@ -1286,7 +1317,7 @@ pub(super) fn pinned_row(surface: super::Surface, title: &str) -> AnyElement {
             .ghost()
             .xsmall()
             .icon(Icon::new(IconName::PinOff))
-            .label("Back here")
+            .label(crate::shared::i18n::t("Back here"))
             .on_click(move |_, _, cx| surface.emit(DiagramEvent::Pin(false), cx)),
     )
     .into_any_element()
@@ -1299,13 +1330,16 @@ pub(super) fn event_card(details: &serde_json::Value) -> AnyElement {
     let title = details["title"]
         .as_str()
         .filter(|t| !t.is_empty())
-        .unwrap_or("Diagram");
+        .unwrap_or_else(|| crate::shared::i18n::t("Diagram"));
     if details["request"] == "docs" {
         return row(
             IconName::BookOpen,
             ui::accent(),
-            format!("You asked to add {title} to the docs"),
-            details["format"].as_str().map(|f| format!("as {f}")),
+            crate::shared::i18n::t("You asked to add {title} to the docs")
+                .replace("{title}", title),
+            details["format"]
+                .as_str()
+                .map(|f| crate::shared::i18n::t("as {format}").replace("{format}", f)),
         )
         .into_any_element();
     }
@@ -1326,11 +1360,16 @@ pub(super) fn event_card(details: &serde_json::Value) -> AnyElement {
                 ui::accent(),
                 match details["kind"].as_str() {
                     _ if details["inserted"] == true => {
-                        format!("You inserted {title} from a template")
+                        crate::shared::i18n::t("You inserted {title} from a template")
+                            .replace("{title}", title)
                     }
-                    Some("html") => format!("You, from {title}"),
-                    Some("review") => format!("You reviewed {title}"),
-                    _ => format!("You edited {title}"),
+                    Some("html") => {
+                        crate::shared::i18n::t("You, from {title}").replace("{title}", title)
+                    }
+                    Some("review") => {
+                        crate::shared::i18n::t("You reviewed {title}").replace("{title}", title)
+                    }
+                    _ => crate::shared::i18n::t("You edited {title}").replace("{title}", title),
                 },
                 None,
             )
@@ -1356,9 +1395,10 @@ pub(super) fn event_card(details: &serde_json::Value) -> AnyElement {
                 }))
                 .when(more > 0, |d| {
                     d.child(
-                        div()
-                            .text_color(ui::faint())
-                            .child(format!("… {more} more")),
+                        div().text_color(ui::faint()).child(
+                            crate::shared::i18n::t("… {count} more")
+                                .replace("{count}", &more.to_string()),
+                        ),
                     )
                 })
                 .when_some(note, |d, note| {

@@ -63,7 +63,10 @@ pub fn panel(
                         .hover(|d| d.text_color(ui::fg()))
                         .child(Icon::new(IconName::X).xsmall())
                         .tooltip(|window, cx| {
-                            gpui_kit::component::tooltip::Tooltip::new("Unpin").build(window, cx)
+                            gpui_kit::component::tooltip::Tooltip::new(crate::shared::i18n::t(
+                                "Unpin",
+                            ))
+                            .build(window, cx)
                         })
                         .on_click(move |_, _, cx| {
                             cx.stop_propagation();
@@ -82,7 +85,7 @@ pub fn panel(
                     .p_4()
                     .text_size(rems(12. / 16.))
                     .text_color(ui::faint())
-                    .child("Open in the expanded view")
+                    .child(crate::shared::i18n::t("Open in the expanded view"))
                     .into_any_element()
             } else {
                 surface

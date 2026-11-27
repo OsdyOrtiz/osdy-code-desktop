@@ -26,6 +26,7 @@ mod canvas;
 mod chart;
 mod checklist;
 mod details;
+mod diagnostic;
 mod diagram;
 mod erd;
 mod extension;
@@ -61,6 +62,31 @@ use live::SharedEnv;
 pub use live::todo_records;
 pub use panel::PanelView;
 pub use templates::{TemplatesEvent, TemplatesView};
+
+const NOTE_PLACEHOLDER: &str = "Add a note for the agent (optional)";
+
+fn sync_placeholders<'a>(
+    fields: impl IntoIterator<
+        Item = (
+            &'a Entity<gpui_kit::component::input::InputState>,
+            &'static str,
+        ),
+    >,
+    seen: &mut gentle_core::i18n::Language,
+    window: &mut Window,
+    cx: &mut App,
+) {
+    let before = *seen;
+    for (input, key) in fields {
+        let mut previous = before;
+        crate::shared::i18n::sync_placeholder(input, key, &mut previous, window, cx);
+        *seen = previous;
+    }
+}
+
+fn count(count: usize, one: &'static str, many: &'static str) -> String {
+    gentle_core::genui::edits::count_in(crate::shared::i18n::language(), count, one, many)
+}
 
 /// The id of the app's own todo checklist (never a `gentle_ui` id: those
 /// are slugs without ":").

@@ -716,7 +716,11 @@ impl HtmlView {
     /// "12 KiB · isolated" or the origins the page may reach.
     fn reach(&self) -> (IconName, Hsla, String) {
         let Some(spec) = &self.spec else {
-            return (IconName::CircleAlert, ui::danger(), "can't be shown".into());
+            return (
+                IconName::CircleAlert,
+                ui::danger(),
+                crate::shared::i18n::t("can't be shown").into(),
+            );
         };
         let mut origins: Vec<&str> = spec
             .csp
@@ -732,13 +736,14 @@ impl HtmlView {
             (
                 IconName::ShieldCheck,
                 ui::success(),
-                "isolated · no network".into(),
+                crate::shared::i18n::t("isolated · no network").into(),
             )
         } else {
             (
                 IconName::Globe,
                 ui::warning(),
-                format!("may reach {}", origins.join(", ")),
+                crate::shared::i18n::t("may reach {origins}")
+                    .replace("{origins}", &origins.join(", ")),
             )
         }
     }
@@ -834,11 +839,11 @@ impl HtmlView {
     fn render_card(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let note = match (&self.error, &self.send) {
             (Some(error), _) => (ui::danger(), error.lines().next().unwrap_or_default().to_string()),
-            (None, SendState::Sent) => (ui::success(), "Your message from the page reached the agent".into()),
+            (None, SendState::Sent) => (ui::success(), crate::shared::i18n::t("Your message from the page reached the agent").into()),
             (None, SendState::Failed(error)) => (ui::danger(), error.clone()),
             _ => (
                 ui::faint(),
-                "An interactive page from the agent. Open it to use it; what you do there can reach the agent."
+                crate::shared::i18n::t("An interactive page from the agent. Open it to use it; what you do there can reach the agent.")
                     .into(),
             ),
         };
@@ -871,7 +876,7 @@ impl HtmlView {
                                 .primary()
                                 .xsmall()
                                 .icon(Icon::new(IconName::Maximize2))
-                                .label("Open")
+                                .label(crate::shared::i18n::t("Open"))
                                 .on_click(cx.listener(|_, _, _, cx| {
                                     cx.stop_propagation();
                                     cx.emit(DiagramEvent::Expand);
@@ -903,7 +908,7 @@ impl HtmlView {
                     .xsmall()
                     .text_color(ui::muted())
                     .icon(Icon::new(IconName::Minimize2))
-                    .tooltip("Back to the conversation")
+                    .tooltip(crate::shared::i18n::t("Back to the conversation"))
                     .on_click(cx.listener(|_, _, _, cx| cx.emit(DiagramEvent::Collapse))),
             )
     }
@@ -973,7 +978,7 @@ impl HtmlView {
                 div()
                     .text_size(rems(13. / 16.))
                     .text_color(ui::fg())
-                    .child("The page wants to open a link"),
+                    .child(crate::shared::i18n::t("The page wants to open a link")),
             )
             .child(
                 div()
@@ -995,7 +1000,7 @@ impl HtmlView {
                         Button::new("genui-html-link-cancel")
                             .ghost()
                             .small()
-                            .label("Cancel")
+                            .label(crate::shared::i18n::t("Cancel"))
                             .on_click(cx.listener(|this, _, _, cx| this.answer_link(false, cx))),
                     )
                     .child(
@@ -1003,7 +1008,7 @@ impl HtmlView {
                             .primary()
                             .small()
                             .icon(Icon::new(IconName::Globe))
-                            .label("Open in the browser card")
+                            .label(crate::shared::i18n::t("Open in the browser card"))
                             .on_click(cx.listener(|this, _, _, cx| this.answer_link(true, cx))),
                     ),
             )
@@ -1020,11 +1025,11 @@ impl HtmlView {
             SendState::Sending { .. } => footer
                 .text_color(ui::muted())
                 .child(ui::spinner(Size::XSmall, ui::info()))
-                .child("Sending the page's message to the agent…"),
+                .child(crate::shared::i18n::t("Sending the page's message to the agent…")),
             SendState::Sent => footer
                 .text_color(ui::success())
                 .child(Icon::new(IconName::CircleCheck).xsmall())
-                .child("Sent to the agent"),
+                .child(crate::shared::i18n::t("Sent to the agent")),
             SendState::Failed(error) => footer
                 .text_color(ui::danger())
                 .child(Icon::new(IconName::CircleAlert).xsmall())
@@ -1035,7 +1040,7 @@ impl HtmlView {
                             Button::new("genui-html-discard")
                                 .ghost()
                                 .xsmall()
-                                .label("Discard")
+                                .label(crate::shared::i18n::t("Discard"))
                                 .on_click(cx.listener(|this, _, _, cx| this.discard(cx))),
                         )
                         .child(
@@ -1043,7 +1048,7 @@ impl HtmlView {
                                 .primary()
                                 .xsmall()
                                 .icon(Icon::new(IconName::RefreshCw))
-                                .label("Retry")
+                                .label(crate::shared::i18n::t("Retry"))
                                 .on_click(cx.listener(|this, _, _, cx| this.retry(cx))),
                         )
                 }),
@@ -1052,7 +1057,7 @@ impl HtmlView {
                     .flex_1()
                     .min_w_0()
                     .truncate()
-                    .child("Runs isolated from your files and the app · messages from the page go to the agent"),
+                    .child(crate::shared::i18n::t("Runs isolated from your files and the app · messages from the page go to the agent")),
             ),
         }
     }

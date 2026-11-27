@@ -121,9 +121,14 @@ pub(super) struct CardEditor {
     pub description: Entity<InputState>,
     pub tags: Entity<InputState>,
     pub assignee: Entity<InputState>,
+    language: gentle_core::i18n::Language,
 }
 
+const ADD_CARD_PLACEHOLDER: &str = "Card title, Enter to add";
+const CARD_TAGS_PLACEHOLDER: &str = "Tags, comma-separated";
+
 pub(super) struct AddCard {
+    language: gentle_core::i18n::Language,
     pub column: String,
     pub input: Entity<InputState>,
     _subscription: Subscription,
@@ -331,8 +336,9 @@ impl PanelView {
         }) else {
             return;
         };
-        let input =
-            cx.new(|cx| InputState::new(window, cx).placeholder("Card title, Enter to add"));
+        let input = cx.new(|cx| {
+            InputState::new(window, cx).placeholder(crate::shared::i18n::t(ADD_CARD_PLACEHOLDER))
+        });
         let subscription = cx.subscribe_in(
             &input,
             window,
@@ -345,6 +351,7 @@ impl PanelView {
         input.update(cx, |state, cx| state.focus(window, cx));
         if let Some(s) = state(self) {
             s.adding = Some(AddCard {
+                language: crate::shared::i18n::language(),
                 column,
                 input,
                 _subscription: subscription,
@@ -403,7 +410,7 @@ impl PanelView {
                      cx: &mut Context<Self>| {
             cx.new(|cx| {
                 InputState::new(window, cx)
-                    .placeholder(placeholder)
+                    .placeholder(crate::shared::i18n::t(placeholder))
                     .default_value(text)
             })
         };
@@ -414,7 +421,7 @@ impl PanelView {
             window,
             cx,
         );
-        let tags = field(card.tags.join(", "), "Tags, comma-separated", window, cx);
+        let tags = field(card.tags.join(", "), CARD_TAGS_PLACEHOLDER, window, cx);
         let assignee = field(
             card.assignee.clone().unwrap_or_default(),
             "Assignee",
@@ -428,6 +435,7 @@ impl PanelView {
         if let Some(s) = state(self) {
             s.selected = Some(id.to_string());
             s.editor = Some(CardEditor {
+                language: crate::shared::i18n::language(),
                 card: id.to_string(),
                 title,
                 description,
@@ -659,6 +667,30 @@ impl PanelView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> AnyElement {
+        if let Some(s) = state(self) {
+            if let Some(add) = &mut s.adding {
+                crate::shared::i18n::sync_placeholder(
+                    &add.input,
+                    ADD_CARD_PLACEHOLDER,
+                    &mut add.language,
+                    window,
+                    cx,
+                );
+            }
+            if let Some(edit) = &mut s.editor {
+                super::sync_placeholders(
+                    [
+                        (&edit.title, "Title"),
+                        (&edit.description, "Description"),
+                        (&edit.tags, CARD_TAGS_PLACEHOLDER),
+                        (&edit.assignee, "Assignee"),
+                    ],
+                    &mut edit.language,
+                    window,
+                    cx,
+                );
+            }
+        }
         let Some(s) = self.kanban() else {
             return div().into_any_element();
         };
@@ -725,7 +757,7 @@ impl PanelView {
                                         .child(Icon::new(IconName::Bot).xsmall())
                                         .tooltip(|window, cx| {
                                             gpui_kit::component::tooltip::Tooltip::new(
-                                                "A card dropped here: the agent starts a subagent on it",
+                                                crate::shared::i18n::t("A card dropped here: the agent starts a subagent on it"),
                                             )
                                             .build(window, cx)
                                         }),
@@ -748,7 +780,7 @@ impl PanelView {
                             .text_color(ui::faint())
                             .hover(|d| d.text_color(ui::muted()))
                             .child(Icon::new(IconName::Plus).xsmall())
-                            .child("Add card")
+                            .child(crate::shared::i18n::t("Add card"))
                             .on_click(cx.listener(move |this, _, window, cx| {
                                 this.start_add_card(Some(column_id.clone()), window, cx)
                             })),
@@ -960,7 +992,10 @@ impl PanelView {
                 (parts.join(" · "), agent_color(s))
             }
             (None, Some(_)) => ("dispatched".to_string(), ui::info()),
-            (None, None) => ("not started".to_string(), ui::faint()),
+            (None, None) => (
+                crate::shared::i18n::t("not started").to_string(),
+                ui::faint(),
+            ),
         };
         let selector = format!("genui-card-agent-{}", card.id);
         h_flex()
@@ -1003,7 +1038,7 @@ impl PanelView {
                 .xsmall()
                 .text_color(ui::muted())
                 .icon(Icon::new(icon))
-                .label(label)
+                .label(crate::shared::i18n::t(label))
         };
         if let Some(editor) = s.editor.as_ref().filter(|e| e.card == card.id) {
             let field = |input: &Entity<InputState>| {
@@ -1013,7 +1048,7 @@ impl PanelView {
             };
             return Some(
                 panel
-                    .child(ui::section_label("Edit card"))
+                    .child(ui::section_label(crate::shared::i18n::t("Edit card")))
                     .child(field(&editor.title))
                     .child(field(&editor.description))
                     .child(field(&editor.tags))
@@ -1037,7 +1072,7 @@ impl PanelView {
                                     Button::new("genui-card-save")
                                         .primary()
                                         .xsmall()
-                                        .label("Save")
+                                        .label(crate::shared::i18n::t("Save"))
                                         .on_click(cx.listener(|this, _, _, cx| this.save_card(cx))),
                                 ),
                             ),

@@ -290,7 +290,7 @@ impl CanvasView {
                         .bg(ui::popover_bg())
                         .text_sm()
                         .text_color(ui::danger())
-                        .child(msg),
+                        .child(msg.render()),
                 )
             })
     }
@@ -528,24 +528,68 @@ impl CanvasView {
             IconName::Square
         };
         let geo_tip = if self.geo_tool == Tool::Ellipse {
-            "Ellipse (O) · click again for rectangle"
+            crate::shared::i18n::t("Ellipse (O) · click again for rectangle")
         } else {
-            "Rectangle (R) · click again for ellipse"
+            crate::shared::i18n::t("Rectangle (R) · click again for ellipse")
         };
         let tools: [(Tool, IconName, &'static str); 13] = [
-            (Tool::Select, IconName::MousePointer2, "Select (V)"),
-            (Tool::Lasso, IconName::Lasso, "Lasso (S)"),
-            (Tool::Hand, IconName::Hand, "Hand (H, or hold Space)"),
-            (Tool::Pen, IconName::Pen, "Pen (P)"),
-            (Tool::Highlighter, IconName::Highlighter, "Highlighter (M)"),
-            (Tool::Eraser, IconName::Eraser, "Eraser (E)"),
-            (Tool::Laser, IconName::WandSparkles, "Laser pointer (K)"),
+            (
+                Tool::Select,
+                IconName::MousePointer2,
+                crate::shared::i18n::t("Select (V)"),
+            ),
+            (
+                Tool::Lasso,
+                IconName::Lasso,
+                crate::shared::i18n::t("Lasso (S)"),
+            ),
+            (
+                Tool::Hand,
+                IconName::Hand,
+                crate::shared::i18n::t("Hand (H, or hold Space)"),
+            ),
+            (Tool::Pen, IconName::Pen, crate::shared::i18n::t("Pen (P)")),
+            (
+                Tool::Highlighter,
+                IconName::Highlighter,
+                crate::shared::i18n::t("Highlighter (M)"),
+            ),
+            (
+                Tool::Eraser,
+                IconName::Eraser,
+                crate::shared::i18n::t("Eraser (E)"),
+            ),
+            (
+                Tool::Laser,
+                IconName::WandSparkles,
+                crate::shared::i18n::t("Laser pointer (K)"),
+            ),
             (self.geo_tool, geo_icon, geo_tip),
-            (Tool::Arrow, IconName::MoveUpRight, "Arrow (A)"),
-            (Tool::Line, IconName::Slash, "Line (L)"),
-            (Tool::Text, IconName::Type, "Text (T)"),
-            (Tool::Note, IconName::StickyNote, "Sticky note (N)"),
-            (Tool::Image, IconName::Image, "Image"),
+            (
+                Tool::Arrow,
+                IconName::MoveUpRight,
+                crate::shared::i18n::t("Arrow (A)"),
+            ),
+            (
+                Tool::Line,
+                IconName::Slash,
+                crate::shared::i18n::t("Line (L)"),
+            ),
+            (
+                Tool::Text,
+                IconName::Type,
+                crate::shared::i18n::t("Text (T)"),
+            ),
+            (
+                Tool::Note,
+                IconName::StickyNote,
+                crate::shared::i18n::t("Sticky note (N)"),
+            ),
+            (
+                Tool::Image,
+                IconName::Image,
+                crate::shared::i18n::t("Image"),
+            ),
         ];
         let current = self.tool;
         h_flex()
@@ -576,7 +620,7 @@ impl CanvasView {
                             "canvas-agent",
                             IconName::Bot,
                             self.agent_shown(),
-                            "Agent: reads, sees and draws on this canvas",
+                            crate::shared::i18n::t("Agent: reads, sees and draws on this canvas"),
                         )
                         .on_click(cx.listener(|this, _, window, cx| this.toggle_agent(window, cx))),
                     )
@@ -589,7 +633,7 @@ impl CanvasView {
                                 IconName::LockOpen
                             },
                             self.tool_lock,
-                            "Keep the tool after drawing",
+                            crate::shared::i18n::t("Keep the tool after drawing"),
                         )
                         .on_click(cx.listener(|this, _, _, cx| {
                             this.tool_lock = !this.tool_lock;
@@ -619,19 +663,34 @@ impl CanvasView {
             .left_4()
             .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
             .child(
-                tool_button("canvas-undo", IconName::Undo2, false, "Undo")
-                    .when(!self.history.can_undo(), |d| d.opacity(0.4))
-                    .on_click(cx.listener(|this, _, window, cx| this.undo(&Undo, window, cx))),
+                tool_button(
+                    "canvas-undo",
+                    IconName::Undo2,
+                    false,
+                    crate::shared::i18n::t("Undo"),
+                )
+                .when(!self.history.can_undo(), |d| d.opacity(0.4))
+                .on_click(cx.listener(|this, _, window, cx| this.undo(&Undo, window, cx))),
             )
             .child(
-                tool_button("canvas-redo", IconName::Redo2, false, "Redo")
-                    .when(!self.history.can_redo(), |d| d.opacity(0.4))
-                    .on_click(cx.listener(|this, _, window, cx| this.redo(&Redo, window, cx))),
+                tool_button(
+                    "canvas-redo",
+                    IconName::Redo2,
+                    false,
+                    crate::shared::i18n::t("Redo"),
+                )
+                .when(!self.history.can_redo(), |d| d.opacity(0.4))
+                .on_click(cx.listener(|this, _, window, cx| this.redo(&Redo, window, cx))),
             )
             .child(div().w(px(1.)).h(px(18.)).mx_1().bg(ui::border()))
             .child(
-                tool_button("canvas-zoom-out", IconName::Minus, false, "Zoom out (−)")
-                    .on_click(cx.listener(|this, _, _, cx| this.zoom_center(0.8, cx))),
+                tool_button(
+                    "canvas-zoom-out",
+                    IconName::Minus,
+                    false,
+                    crate::shared::i18n::t("Zoom out (−)"),
+                )
+                .on_click(cx.listener(|this, _, _, cx| this.zoom_center(0.8, cx))),
             )
             .child(
                 div()
@@ -647,27 +706,43 @@ impl CanvasView {
                     .text_color(ui::muted())
                     .hover(|s| s.bg(ui::surface_hover()).text_color(ui::fg()))
                     .tooltip(|window, cx| {
-                        gpui_kit::component::tooltip::Tooltip::new("Zoom to 100% (⇧0)")
-                            .build(window, cx)
+                        gpui_kit::component::tooltip::Tooltip::new(crate::shared::i18n::t(
+                            "Zoom to 100% (⇧0)",
+                        ))
+                        .build(window, cx)
                     })
                     .on_click(cx.listener(|this, _, _, cx| this.zoom_to(1., cx)))
                     .child(format!("{zoom}%")),
             )
             .child(
-                tool_button("canvas-zoom-in", IconName::Plus, false, "Zoom in (=)")
-                    .on_click(cx.listener(|this, _, _, cx| this.zoom_center(1.25, cx))),
+                tool_button(
+                    "canvas-zoom-in",
+                    IconName::Plus,
+                    false,
+                    crate::shared::i18n::t("Zoom in (=)"),
+                )
+                .on_click(cx.listener(|this, _, _, cx| this.zoom_center(1.25, cx))),
             )
             .child(
-                tool_button("canvas-fit", IconName::Scan, false, "Zoom to fit (⇧1)")
-                    .on_click(cx.listener(|this, _, _, cx| this.fit(cx))),
+                tool_button(
+                    "canvas-fit",
+                    IconName::Scan,
+                    false,
+                    crate::shared::i18n::t("Zoom to fit (⇧1)"),
+                )
+                .on_click(cx.listener(|this, _, _, cx| this.fit(cx))),
             )
             .child(
-                tool_button("canvas-minimap", IconName::Map, self.minimap, "Minimap").on_click(
-                    cx.listener(|this, _, _, cx| {
-                        this.minimap = !this.minimap;
-                        cx.notify();
-                    }),
-                ),
+                tool_button(
+                    "canvas-minimap",
+                    IconName::Map,
+                    self.minimap,
+                    crate::shared::i18n::t("Minimap"),
+                )
+                .on_click(cx.listener(|this, _, _, cx| {
+                    this.minimap = !this.minimap;
+                    cx.notify();
+                })),
             )
             .child(div().w(px(1.)).h(px(18.)).mx_1().bg(ui::border()))
             .child(
@@ -684,9 +759,11 @@ impl CanvasView {
                                 &mut Context<CanvasView>,
                             )| {
                                 let weak = weak.clone();
-                                PopupMenuItem::new(label).on_click(move |_, window, cx| {
-                                    let _ = weak.update(cx, |this, cx| run(this, window, cx));
-                                })
+                                PopupMenuItem::new(crate::shared::i18n::t(label)).on_click(
+                                    move |_, window, cx| {
+                                        let _ = weak.update(cx, |this, cx| run(this, window, cx));
+                                    },
+                                )
                             };
                             menu.item(entry("Select all", |this, window, cx| {
                                 this.select_all(&SelectAll, window, cx)
@@ -768,7 +845,10 @@ impl CanvasView {
                         .when(active, |d| d.border_2().border_color(ui::accent()))
                         .hover(|d| d.bg(ui::surface_hover()))
                         .tooltip(move |window, cx| {
-                            gpui_kit::component::tooltip::Tooltip::new(c.name()).build(window, cx)
+                            gpui_kit::component::tooltip::Tooltip::new(crate::shared::i18n::t(
+                                c.name(),
+                            ))
+                            .build(window, cx)
                         })
                         .on_click(cx.listener(move |this, _, _, cx| {
                             let fill = this.picks_fill_color();
@@ -840,8 +920,12 @@ impl CanvasView {
                 .h(px(18.)),
             )
             .tooltip(move |window, cx| {
-                gpui_kit::component::tooltip::Tooltip::new(format!("{}: {}", p.name(), p.hint()))
-                    .build(window, cx)
+                gpui_kit::component::tooltip::Tooltip::new(format!(
+                    "{}: {}",
+                    crate::shared::i18n::t(p.name()),
+                    crate::shared::i18n::t(p.hint())
+                ))
+                .build(window, cx)
             })
             .on_click(cx.listener(move |this, _, _, cx| this.restyle(move |s| s.pen = p, cx)))
         });
@@ -892,7 +976,10 @@ impl CanvasView {
                 d.child(
                     ui::segmented(
                         "canvas-style-tab",
-                        &["Stroke", "Fill"],
+                        &[
+                            crate::shared::i18n::t("Stroke"),
+                            crate::shared::i18n::t("Fill"),
+                        ],
                         Some(usize::from(fill_tab)),
                         {
                             let weak = cx.entity().downgrade();
@@ -911,12 +998,18 @@ impl CanvasView {
             .when(controls.color || controls.fill, |d| {
                 d.child(v_flex().gap(px(2.)).px_1().children(colors))
             })
-            .when(controls.fill, |d| d.child(row("Fill").children(fills)))
-            .when(controls.opacity, |d| {
-                d.child(row("Opacity").children(opacities))
+            .when(controls.fill, |d| {
+                d.child(row(crate::shared::i18n::t("Fill")).children(fills))
             })
-            .when(controls.pen, |d| d.child(row("Pen").children(pens)))
-            .when(controls.size, |d| d.child(row("Size").children(sizes)))
+            .when(controls.opacity, |d| {
+                d.child(row(crate::shared::i18n::t("Opacity")).children(opacities))
+            })
+            .when(controls.pen, |d| {
+                d.child(row(crate::shared::i18n::t("Pen")).children(pens))
+            })
+            .when(controls.size, |d| {
+                d.child(row(crate::shared::i18n::t("Size")).children(sizes))
+            })
     }
 
     // ── Minimap ────────────────────────────────────────────────────────────

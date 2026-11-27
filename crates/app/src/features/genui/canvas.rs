@@ -644,7 +644,7 @@ impl PanelView {
                 .xsmall()
                 .text_color(ui::muted())
                 .icon(Icon::new(icon))
-                .tooltip(tip)
+                .tooltip(crate::shared::i18n::t(tip))
         };
         v_flex()
             .absolute()
@@ -999,7 +999,7 @@ pub(super) fn pills(
                 .text_size(rems(11. / 16.))
                 .text_color(if on { ui::accent() } else { ui::muted() })
                 .hover(|d| d.text_color(ui::fg()))
-                .child(choice)
+                .child(crate::shared::i18n::t(choice))
                 .on_click(cx.listener(move |this, _, _, cx| pick(this, choice, cx)))
         }))
         .into_any_element()
@@ -1021,5 +1021,5 @@ pub(super) fn action(id: &'static str, icon: IconName, label: &'static str) -> B
         .ghost()
         .xsmall()
         .icon(Icon::new(icon))
-        .label(label)
+        .label(crate::shared::i18n::t(label))
 }

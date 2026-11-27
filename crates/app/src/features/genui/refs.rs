@@ -48,17 +48,19 @@ pub fn chip<V: EventEmitter<DiagramEvent>>(
         RefState::Found(_) | RefState::Unknown => (
             IconName::FileCode,
             ui::accent(),
-            format!("Open {}", code_ref.text()),
+            crate::shared::i18n::t("Open {path}").replace("{path}", &code_ref.text()),
         ),
         RefState::Missing(_) => (
             IconName::FileX,
             ui::faint(),
-            format!("{} isn't in the workspace (yet)", code_ref.path),
+            crate::shared::i18n::t("{path} isn't in the workspace (yet)")
+                .replace("{path}", &code_ref.path),
         ),
         RefState::Outside => (
             IconName::FileX,
             ui::faint(),
-            format!("{} is outside the workspace", code_ref.path),
+            crate::shared::i18n::t("{path} is outside the workspace")
+                .replace("{path}", &code_ref.path),
         ),
     };
     let file = match &state {
@@ -97,7 +99,7 @@ pub fn chip<V: EventEmitter<DiagramEvent>>(
         .context_menu(move |menu, _, _| {
             let code_ref = menu_ref.clone();
             let mut menu = menu.item(
-                PopupMenuItem::new("Open in the file viewer")
+                PopupMenuItem::new(crate::shared::i18n::t("Open in the file viewer"))
                     .icon(Icon::new(IconName::FileCode))
                     .disabled(file.is_none())
                     .on_click({
@@ -113,22 +115,28 @@ pub fn chip<V: EventEmitter<DiagramEvent>>(
                     for ide in found {
                         let (ide, file, line) = (ide.clone(), file.clone(), code_ref.line);
                         menu = menu.item(
-                            PopupMenuItem::new(format!("Open in {}", ide.name))
-                                .icon(Icon::new(IconName::CodeXml))
-                                .on_click(move |_, _, _| {
-                                    let _ = ides::open_file(&ide, &file, line);
-                                }),
+                            PopupMenuItem::new(
+                                crate::shared::i18n::t("Open in {editor}")
+                                    .replace("{editor}", ide.name),
+                            )
+                            .icon(Icon::new(IconName::CodeXml))
+                            .on_click(move |_, _, _| {
+                                let _ = ides::open_file(&ide, &file, line);
+                            }),
                         );
                     }
                 }
                 (None, Some(_)) => {
-                    menu = menu.item(PopupMenuItem::new("Looking for editors…").disabled(true))
+                    menu = menu.item(
+                        PopupMenuItem::new(crate::shared::i18n::t("Looking for editors…"))
+                            .disabled(true),
+                    )
                 }
                 _ => {}
             }
             let path = code_ref.text();
             menu.separator().item(
-                PopupMenuItem::new("Copy path")
+                PopupMenuItem::new(crate::shared::i18n::t("Copy path"))
                     .icon(Icon::new(IconName::Copy))
                     .on_click(move |_, _, cx| {
                         cx.write_to_clipboard(ClipboardItem::new_string(path.clone()))

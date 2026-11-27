@@ -31,7 +31,7 @@ impl DiagramView {
                 .xsmall()
                 .text_color(ui::muted())
                 .icon(Icon::new(icon))
-                .label(label)
+                .label(crate::shared::i18n::t(label))
         };
         let rename = action("genui-rename", IconName::Pencil, "Rename").on_click(cx.listener(
             |this, _, window, cx| {
@@ -132,7 +132,7 @@ impl DiagramView {
                         move |mut menu: PopupMenu| {
                             for k in NodeKind::ALL {
                                 menu = menu.item(item(
-                                    k.name().to_string(),
+                                    crate::shared::i18n::t(k.name()).to_string(),
                                     k == kind,
                                     NodePatch {
                                         kind: Some(k),
@@ -150,7 +150,8 @@ impl DiagramView {
                         move |mut menu: PopupMenu| {
                             for s in [None].into_iter().chain(Status::ALL.map(Some)) {
                                 menu = menu.item(item(
-                                    s.map_or("none", Status::name).to_string(),
+                                    crate::shared::i18n::t(s.map_or("none", Status::name))
+                                        .to_string(),
                                     s == status,
                                     NodePatch {
                                         status: Some(s),
@@ -175,7 +176,7 @@ impl DiagramView {
                         let group = group.clone();
                         move |mut menu: PopupMenu| {
                             menu = menu.item(item(
-                                "No group".into(),
+                                crate::shared::i18n::t("No group").into(),
                                 group.is_none(),
                                 NodePatch {
                                     group: Some(None),
@@ -196,26 +197,31 @@ impl DiagramView {
                             }
                             let weak = weak.clone();
                             let node = node.clone();
-                            menu.separator()
-                                .item(PopupMenuItem::new("New group…").on_click(
+                            menu.separator().item(
+                                PopupMenuItem::new(crate::shared::i18n::t("New group…")).on_click(
                                     move |_, window, cx| {
                                         let _ = weak.update(cx, |this, cx| {
                                             this.new_group_for(&node, window, cx)
                                         });
                                     },
-                                ))
+                                ),
+                            )
                         }
                     };
                     let group_label = group
                         .as_deref()
                         .map(|g| self.working.group(g).map_or(g, |g| g.label.as_str()))
-                        .unwrap_or("none")
+                        .unwrap_or_else(|| crate::shared::i18n::t("none"))
                         .to_string();
                     panel = panel
-                        .child(pick("kind", kind.name().to_string(), Box::new(kinds)))
+                        .child(pick(
+                            "kind",
+                            crate::shared::i18n::t(kind.name()).to_string(),
+                            Box::new(kinds),
+                        ))
                         .child(pick(
                             "status",
-                            status.map_or("none", Status::name).to_string(),
+                            crate::shared::i18n::t(status.map_or("none", Status::name)).to_string(),
                             Box::new(statuses),
                         ))
                         .child(pick("group", group_label, Box::new(group_menu)));
@@ -235,9 +241,15 @@ impl DiagramView {
                             h_flex()
                                 .gap_1()
                                 .flex_wrap()
-                                .child(ui::chip(node.kind.name(), node_tone(node)))
+                                .child(ui::chip(
+                                    crate::shared::i18n::t(node.kind.name()),
+                                    node_tone(node),
+                                ))
                                 .when_some(node.status, |d, status| {
-                                    d.child(ui::chip(status.name(), status_color(status)))
+                                    d.child(ui::chip(
+                                        crate::shared::i18n::t(status.name()),
+                                        status_color(status),
+                                    ))
                                 })
                                 .when_some(group, |d, group| {
                                     d.child(ui::chip(group.to_string(), ui::muted()))
@@ -281,7 +293,7 @@ impl DiagramView {
                     Icon::new(IconName::SquareDashed)
                         .small()
                         .text_color(ui::accent()),
-                    format!("{} nodes", ids.len()),
+                    super::count(ids.len(), "{count} nodes", "{count} nodes"),
                 ));
                 panel = panel.child(text(
                     ids.iter()
@@ -365,10 +377,7 @@ impl DiagramView {
                         Icon::new(IconName::Group).small().text_color(ui::muted()),
                         group.label.clone(),
                     ))
-                    .child(text(format!(
-                        "{members} node{}",
-                        if members == 1 { "" } else { "s" }
-                    )));
+                    .child(text(super::count(members, "{count} node", "{count} nodes")));
                 match self.fields.as_ref().filter(|f| f.target == *selection) {
                     Some(fields) => panel = panel.child(field_input(&fields.description)),
                     None => {

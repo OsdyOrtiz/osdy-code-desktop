@@ -32,6 +32,8 @@ const RUN_H: f32 = 36.;
 const DRAG_SLOP: f32 = 3.;
 
 pub(super) struct TextEdit {
+    placeholder: &'static str,
+    language: gentle_core::i18n::Language,
     /// The item renamed, or the parent of the item being added (`None`: top level).
     pub target: Option<String>,
     pub input: Entity<InputState>,
@@ -192,7 +194,7 @@ impl PanelView {
             .and_then(|s| s.edits.working().next_step())
             .map(|item| item.id.clone());
         let Some(next) = next else {
-            self.refused = Some("Nothing pending to run".into());
+            self.refused = Some(crate::shared::i18n::Message::new("Nothing pending to run"));
             cx.notify();
             return;
         };
@@ -305,7 +307,7 @@ impl PanelView {
     ) -> TextEdit {
         let input = cx.new(|cx| {
             InputState::new(window, cx)
-                .placeholder(placeholder)
+                .placeholder(crate::shared::i18n::t(placeholder))
                 .default_value(text)
         });
         let subscription = cx.subscribe_in(
@@ -327,6 +329,8 @@ impl PanelView {
             state.select_all(window, cx);
         });
         TextEdit {
+            placeholder,
+            language: crate::shared::i18n::language(),
             target,
             input,
             _subscription: subscription,
@@ -615,6 +619,17 @@ impl PanelView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> AnyElement {
+        if let Some(s) = state(self) {
+            for edit in s.adding.iter_mut().chain(s.renaming.iter_mut()) {
+                crate::shared::i18n::sync_placeholder(
+                    &edit.input,
+                    edit.placeholder,
+                    &mut edit.language,
+                    window,
+                    cx,
+                );
+            }
+        }
         let animate = motion::allowed(window, cx);
         let rem = f32::from(window.rem_size()) / 16.;
         let Some(s) = self.checklist() else {
@@ -658,7 +673,7 @@ impl PanelView {
                 .text_color(ui::faint())
                 .hover(|d| d.text_color(ui::muted()))
                 .child(Icon::new(IconName::Plus).xsmall())
-                .child("Add item")
+                .child(crate::shared::i18n::t("Add item"))
                 .on_click(cx.listener(|this, _, window, cx| this.start_add_item(window, cx)))
                 .into_any_element(),
         };
@@ -694,7 +709,7 @@ impl PanelView {
                         .py_2()
                         .text_sm()
                         .text_color(ui::muted())
-                        .child("Nothing here yet."),
+                        .child(crate::shared::i18n::t("Nothing here yet.")),
                 )
             })
             .when(!locked, |d| d.child(add))
@@ -718,23 +733,28 @@ impl PanelView {
         let sending = matches!(self.send, super::diagram::SendState::Sending { .. });
         let next = list.next_step();
         let status = match running {
-            Some(item) => format!(
-                "Running step {} · {}",
-                list.step_number(&item.id).unwrap_or(0),
-                item.label
-            ),
-            None if next.is_none() => "Every step is through".to_string(),
-            None => format!(
-                "Next: step {} · {}",
-                next.and_then(|i| list.step_number(&i.id)).unwrap_or(0),
-                next.map_or("", |i| i.label.as_str())
-            ),
+            Some(item) => crate::shared::i18n::t("Running step {number} · {item}")
+                .replace(
+                    "{number}",
+                    &list.step_number(&item.id).unwrap_or(0).to_string(),
+                )
+                .replace("{item}", &item.label),
+            None if next.is_none() => crate::shared::i18n::t("Every step is through").to_string(),
+            None => crate::shared::i18n::t("Next: step {number} · {item}")
+                .replace(
+                    "{number}",
+                    &next
+                        .and_then(|i| list.step_number(&i.id))
+                        .unwrap_or(0)
+                        .to_string(),
+                )
+                .replace("{item}", next.map_or("", |i| i.label.as_str())),
         };
         let button = |id: &'static str, icon: IconName, label: &'static str| {
             Button::new(id)
                 .xsmall()
                 .icon(Icon::new(icon))
-                .label(label)
+                .label(crate::shared::i18n::t(label))
                 .disabled(sending)
         };
         let controls = if busy {
@@ -923,7 +943,8 @@ impl PanelView {
                 .hover(|d| d.text_color(ui::fg()).bg(ui::surface_hover()))
                 .child(Icon::new(icon).xsmall())
                 .tooltip(move |window, cx| {
-                    gpui_kit::component::tooltip::Tooltip::new(tip).build(window, cx)
+                    gpui_kit::component::tooltip::Tooltip::new(crate::shared::i18n::t(tip))
+                        .build(window, cx)
                 })
                 .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
         };
