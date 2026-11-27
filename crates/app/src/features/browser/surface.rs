@@ -13,7 +13,7 @@ use gentle_core::browser::Profile;
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
 
-use super::{PUMP_EVERY, PUMP_IDLE, Sandbox, native, page_background};
+use super::{NativeFailure, PUMP_EVERY, PUMP_IDLE, Sandbox, native, page_background};
 use crate::shared::ui;
 
 thread_local! {
@@ -66,7 +66,7 @@ pub struct WebSurface {
     view: Option<native::NativeView>,
     /// The view is being built (see `place`).
     creating: bool,
-    failed: Option<String>,
+    failed: Option<NativeFailure>,
     /// This view's share of the GTK pump while a native view exists (Linux).
     _pump: Option<Rc<Task<()>>>,
     /// Re-places the view when the window moves (Windows hosts it in a popup
@@ -184,8 +184,10 @@ impl WebSurface {
     }
 
     /// Why the page can't run, if it can't.
-    pub fn failure(&self) -> Option<&str> {
-        self.failed.as_deref()
+    pub fn failure(&self) -> Option<String> {
+        self.failed
+            .as_ref()
+            .map(|error| error.render_in(gentle_core::i18n::Language::English))
     }
 
     /// Run `script`; `done` gets its value as JSON. False when no view runs.
@@ -388,7 +390,7 @@ impl Render for WebSurface {
             self._window_moves = Some(cx.observe_window_bounds(window, |_, _, cx| cx.notify()));
         }
         let this = cx.entity();
-        let note = self.failed.clone();
+        let note = self.failed.as_ref().map(NativeFailure::render);
         div()
             .size_full()
             .relative()

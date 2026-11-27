@@ -81,7 +81,9 @@ impl RenderOnce for BellTrigger {
             })
             // The open popover sits right under the bell; a tooltip would cover its header.
             .when(!self.open, |d| {
-                d.tooltip(|window, cx| Tooltip::new("Notifications").build(window, cx))
+                d.tooltip(|window, cx| {
+                    Tooltip::new(crate::shared::i18n::t("Notifications")).build(window, cx)
+                })
             })
             .child(Icon::new(IconName::Bell).small())
             .when(unread > 0, |d| {

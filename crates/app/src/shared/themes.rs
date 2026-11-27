@@ -1216,9 +1216,11 @@ fn replace_user_themes(user: Vec<Theme>, cx: &mut App) {
 /// Add a shared theme (a `.gentletheme` file's text) to the app's themes
 /// folder and switch to it. Its name, or why it couldn't be added.
 pub fn install_shared(text: &str, cx: &mut App) -> Result<String, String> {
-    let theme = parse_pi_theme(text, Source::App, None)
-        .ok_or("That isn't a theme file: it needs at least a \"name\".")?;
-    let dir = app_themes_dir().ok_or("There's no data folder to keep themes in.")?;
+    let theme = parse_pi_theme(text, Source::App, None).ok_or_else(|| {
+        crate::shared::i18n::t("That isn't a theme file: it needs at least a \"name\".")
+    })?;
+    let dir = app_themes_dir()
+        .ok_or_else(|| crate::shared::i18n::t("There's no data folder to keep themes in."))?;
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     let path = dir.join(format!(
         "{}.{}",
@@ -1258,7 +1260,7 @@ pub fn share_text(theme: &Theme) -> Option<Result<(String, String), String>> {
                 parse_pi_theme(text, Source::App, None).is_some_and(|t| t.name == theme.name)
             })
             .map(|text| text.to_string())
-            .ok_or_else(|| "This theme has no file.".to_string()),
+            .ok_or_else(|| crate::shared::i18n::t("This theme has no file.").to_string()),
     };
     Some(text.map(|text| (stem, text)))
 }

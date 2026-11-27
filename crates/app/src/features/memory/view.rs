@@ -9,10 +9,20 @@ use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
 
 use super::{MemoryEvent, MemoryView};
-use crate::shared::ui;
+use crate::shared::{
+    i18n::{sync_placeholder, t},
+    ui,
+};
 
 impl Render for MemoryView {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        sync_placeholder(
+            &self.query,
+            "Search memory (Enter)",
+            &mut self.query_language,
+            window,
+            cx,
+        );
         let selected = self
             .selected
             .and_then(|id| self.items.iter().find(|o| o.id == id))
@@ -102,7 +112,7 @@ impl Render for MemoryView {
                                 .min_w_0()
                                 .text_sm()
                                 .text_color(ui::danger())
-                                .child(error.clone()),
+                                .child(error.render()),
                         ),
                 )
                 .into_any_element()
@@ -120,11 +130,11 @@ impl Render for MemoryView {
                         .text_center()
                         .text_sm()
                         .text_color(ui::muted())
-                        .child(if self.query.read(cx).value().is_empty() {
+                        .child(t(if self.query.read(cx).value().is_empty() {
                             "Nothing remembered for this project yet. el Gentleman saves decisions, bugs and discoveries here as you work."
                         } else {
                             "No memories match."
-                        }),
+                        })),
                 )
                 .into_any_element()
         } else {
@@ -180,7 +190,15 @@ impl Render for MemoryView {
                                     })
                                     .when(o.revision_count > 0, |d| {
                                         d.child(ui::chip(
-                                            format!("{} revisions", o.revision_count),
+                                            if o.revision_count == 1
+                                                && crate::shared::i18n::language()
+                                                    == gentle_core::i18n::Language::Spanish
+                                            {
+                                                t("{count} revision")
+                                            } else {
+                                                t("{count} revisions")
+                                            }
+                                            .replace("{count}", &o.revision_count.to_string()),
                                             ui::muted(),
                                         ))
                                     }),
@@ -214,7 +232,7 @@ impl Render for MemoryView {
                                 .text_base()
                                 .font_weight(FontWeight::SEMIBOLD)
                                 .text_color(ui::fg())
-                                .child("Memory"),
+                                .child(t("Memory")),
                         )
                         .child(
                             div()
@@ -224,7 +242,7 @@ impl Render for MemoryView {
                                 .text_xs()
                                 .text_color(ui::muted())
                                 .child(match (&self.project, all) {
-                                    (_, true) => "Engram · all projects".to_string(),
+                                    (_, true) => t("Engram · all projects").to_string(),
                                     (Some(p), false) => format!("Engram · {p}"),
                                     (None, false) => "Engram".to_string(),
                                 }),
@@ -256,7 +274,7 @@ impl Render for MemoryView {
                         )
                         .child(ui::segmented(
                             "memory-scope",
-                            &["This project", "All projects"],
+                            &[t("This project"), t("All projects")],
                             Some(usize::from(all)),
                             cx.listener(|this, index: &usize, _, cx| {
                                 let all = *index == 1;
@@ -271,7 +289,7 @@ impl Render for MemoryView {
                                 .ghost()
                                 .small()
                                 .icon(Icon::new(IconName::RefreshCw))
-                                .tooltip("Reload")
+                                .tooltip(t("Reload"))
                                 .on_click(cx.listener(|this, _, _, cx| this.reload(cx))),
                         ),
                 )

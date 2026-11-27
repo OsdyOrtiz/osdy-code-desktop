@@ -13,8 +13,11 @@ use gpui_kit::component::{Disableable as _, Icon, Selectable, Sizable as _, h_fl
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
 
-use super::{Job, Music};
-use crate::shared::ui;
+use super::{Job, Music, PlayerNote};
+use crate::shared::{
+    i18n::{sync_placeholder, t as tr},
+    ui,
+};
 
 /// The equalizer's height and bar count.
 const EQ_H: f32 = 40.;
@@ -55,8 +58,8 @@ impl Music {
                 (state.name.clone(), details)
             }
             None => (
-                "Music".to_string(),
-                "Composed live by gentle-stream".to_string(),
+                tr("Music").to_string(),
+                tr("Composed live by gentle-stream").to_string(),
             ),
         };
         h_flex()
@@ -99,7 +102,7 @@ impl Music {
                         .ghost()
                         .xsmall()
                         .icon(Icon::new(IconName::Square))
-                        .tooltip("Stop the music")
+                        .tooltip(tr("Stop the music"))
                         .on_click(cx.listener(|this, _, _, cx| this.stop(cx))),
                 )
             })
@@ -164,7 +167,7 @@ impl Music {
                         .small()
                         .primary()
                         .icon(Icon::new(IconName::Play))
-                        .label("Start music")
+                        .label(tr("Start music"))
                         .disabled(self.job.is_some())
                         .on_click(cx.listener(|this, _, _, cx| this.start(cx))),
                 );
@@ -192,7 +195,7 @@ impl Music {
                             .text_color(ui::popover_bg())
                             .hover(|d| d.bg(ui::petal_active()))
                             .tooltip(move |window, cx| {
-                                Tooltip::new(if playing { "Pause" } else { "Play" })
+                                Tooltip::new(tr(if playing { "Pause" } else { "Play" }))
                                     .build(window, cx)
                             })
                             .on_click(cx.listener(|this, _, _, cx| this.toggle(cx)))
@@ -210,7 +213,7 @@ impl Music {
                             .ghost()
                             .small()
                             .icon(Icon::new(IconName::SkipForward))
-                            .tooltip("Next piece, same mood")
+                            .tooltip(tr("Next piece, same mood"))
                             .on_click(cx.listener(|this, _, _, cx| this.next(cx))),
                     )
                     .child(div().w(px(1.)).h(rems(1.)).mx_1().bg(ui::border()))
@@ -219,7 +222,7 @@ impl Music {
                         div().flex_1().child(
                             Slider::new(&self.volume)
                                 .horizontal()
-                                .accessibility_label("Music volume"),
+                                .accessibility_label(tr("Music volume")),
                         ),
                     )
                     .child(
@@ -263,23 +266,40 @@ impl Music {
                     .text_color(ui::muted())
                     .child(Spinner::new().xsmall().color(ui::accent()))
                     .child(match job {
-                        Job::Starting => "Starting the player…".to_string(),
-                        Job::Composing(mood) => format!("Composing “{mood}”…"),
+                        Job::Starting => tr("Starting the player…").to_string(),
+                        Job::Composing(mood) => tr("Composing “{mood}”…").replace("{mood}", mood),
                     }),
-                (None, Some((text, ok))) => div()
-                    .text_xs()
-                    .text_color(if *ok { ui::success() } else { ui::danger() })
-                    .child(text.clone()),
+                (None, Some(note)) => {
+                    let (text, color) = match note {
+                        PlayerNote::MissingShell => (
+                            tr("Install Gentle Shell first: it reads the mood.").into(),
+                            ui::danger(),
+                        ),
+                        PlayerNote::NowPlaying(name) => (
+                            tr("Now playing {name}").replace("{name}", name),
+                            ui::success(),
+                        ),
+                        PlayerNote::Error(error) => (error.render(), ui::danger()),
+                    };
+                    div().text_xs().text_color(color).child(text)
+                }
                 (None, None) => div()
                     .text_xs()
                     .text_color(ui::faint())
-                    .child("Any language; Gentle Shell's model reads it."),
+                    .child(tr("Any language; Gentle Shell's model reads it.")),
             })
     }
 }
 
 impl Render for Music {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        sync_placeholder(
+            &self.mood,
+            "Describe a mood…",
+            &mut self.mood_language,
+            window,
+            cx,
+        );
         v_flex()
             .w_full()
             .p_3()
@@ -361,7 +381,7 @@ impl RenderOnce for MusicTrigger {
             .hover(|s| s.bg(ui::surface_hover()))
             .when(self.open, |d| d.bg(ui::surface_hover()))
             .when(!self.open, |d| {
-                d.tooltip(|window, cx| Tooltip::new("Music").build(window, cx))
+                d.tooltip(|window, cx| Tooltip::new(tr("Music")).build(window, cx))
             })
             .child(if self.playing {
                 h_flex()

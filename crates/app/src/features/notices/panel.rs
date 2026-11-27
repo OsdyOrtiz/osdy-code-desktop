@@ -11,16 +11,19 @@ use gpui_kit::component::{ActiveTheme as _, Icon, Sizable as _, WindowExt as _, 
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
 
-use crate::shared::ui;
+use crate::shared::{
+    i18n::{language, t},
+    ui,
+};
 use gentle_core::transcript::NoticeLevel;
 
 use super::{Notices, OnSelect, Reach, ReachOf};
 
 /// "now", "42s", "5m", "3h", "2d".
-fn ago(elapsed: Duration) -> String {
+fn ago(elapsed: Duration, language: gentle_core::i18n::Language) -> String {
     let s = elapsed.as_secs();
     match s {
-        0..10 => "now".into(),
+        0..10 => gentle_core::i18n::tr(language, "now").into(),
         10..60 => format!("{s}s"),
         60..3600 => format!("{}m", s / 60),
         3600..86400 => format!("{}h", s / 3600),
@@ -41,12 +44,12 @@ fn gone_texts(reach: Reach) -> Option<(&'static str, &'static str)> {
     match reach {
         Reach::Open => None,
         Reach::SessionGone => Some((
-            "session no longer open",
-            "The session that sent this is no longer open: its pane shows another one now.",
+            t("session no longer open"),
+            t("The session that sent this is no longer open: its pane shows another one now."),
         )),
         Reach::PaneClosed => Some((
-            "pane closed",
-            "The pane that sent this notification was closed.",
+            t("pane closed"),
+            t("The pane that sent this notification was closed."),
         )),
     }
 }
@@ -84,16 +87,19 @@ pub(super) fn panel(
                 .text_size(rems(13. / 16.))
                 .font_weight(FontWeight::SEMIBOLD)
                 .text_color(ui::fg())
-                .child("Notifications"),
+                .child(t("Notifications")),
         )
         .when(unread > 0, |d| {
-            d.child(ui::chip(format!("{unread} new"), ui::petal()))
+            d.child(ui::chip(
+                t("{count} new").replace("{count}", &unread.to_string()),
+                ui::petal(),
+            ))
         })
         .child(div().flex_1())
         .when(unread > 0, |d| {
             let store = store.clone();
             d.child(
-                action("notices-read", "Mark all read").on_click(cx.listener(
+                action("notices-read", t("Mark all read")).on_click(cx.listener(
                     move |_, _, _, cx| {
                         store.update(cx, |s, cx| {
                             s.mark_all_read();
@@ -109,7 +115,7 @@ pub(super) fn panel(
             d.child(
                 // Nothing is left to read: close the list instead of leaving
                 // an empty card open.
-                action("notices-clear", "Clear").on_click(cx.listener(
+                action("notices-clear", t("Clear")).on_click(cx.listener(
                     move |state: &mut PopoverState, _, window, cx| {
                         store.update(cx, |s, cx| {
                             s.clear();
@@ -128,7 +134,11 @@ pub(super) fn panel(
             .items_center()
             .text_color(ui::faint())
             .child(Icon::new(IconName::BellOff).small())
-            .child(div().text_size(rems(12. / 16.)).child("No notifications"))
+            .child(
+                div()
+                    .text_size(rems(12. / 16.))
+                    .child(t("No notifications")),
+            )
             .into_any_element()
     } else {
         let rows = notices.iter().map(|notice| {
@@ -151,7 +161,7 @@ pub(super) fn panel(
             if !meta.is_empty() {
                 meta.push_str("  ·  ");
             }
-            meta.push_str(&ago(now.saturating_duration_since(notice.at)));
+            meta.push_str(&ago(now.saturating_duration_since(notice.at), language()));
             if notice.repeats > 0 {
                 meta.push_str(&format!("  ·  ×{}", notice.repeats + 1));
             }
@@ -255,10 +265,16 @@ mod tests {
 
     #[test]
     fn relative_times() {
-        assert_eq!(ago(Duration::from_secs(3)), "now");
-        assert_eq!(ago(Duration::from_secs(42)), "42s");
-        assert_eq!(ago(Duration::from_secs(300)), "5m");
-        assert_eq!(ago(Duration::from_secs(7200)), "2h");
-        assert_eq!(ago(Duration::from_secs(200_000)), "2d");
+        let ago = |secs| {
+            ago(
+                Duration::from_secs(secs),
+                gentle_core::i18n::Language::English,
+            )
+        };
+        assert_eq!(ago(3), "now");
+        assert_eq!(ago(42), "42s");
+        assert_eq!(ago(300), "5m");
+        assert_eq!(ago(7200), "2h");
+        assert_eq!(ago(200_000), "2d");
     }
 }

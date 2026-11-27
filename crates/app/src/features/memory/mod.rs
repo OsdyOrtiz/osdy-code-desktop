@@ -24,12 +24,13 @@ pub struct MemoryView {
     project: Option<String>,
     all_projects: bool,
     query: Entity<InputState>,
+    query_language: gentle_core::i18n::Language,
     items: Vec<Observation>,
     selected: Option<i64>,
     /// The memory the screen was opened on, until the first load shows it.
     focus: Option<i64>,
     list_scroll: ScrollHandle,
-    error: Option<String>,
+    error: Option<crate::shared::i18n::Message>,
     loading: bool,
     _load: Task<()>,
     _subscription: Subscription,
@@ -45,7 +46,9 @@ impl MemoryView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
-        let query = cx.new(|cx| InputState::new(window, cx).placeholder("Search memory (Enter)"));
+        let query = cx.new(|cx| {
+            InputState::new(window, cx).placeholder(crate::shared::i18n::t("Search memory (Enter)"))
+        });
         let subscription = cx.subscribe_in(&query, window, |this, _, event: &InputEvent, _, cx| {
             if let InputEvent::PressEnter { .. } = event {
                 this.reload(cx);
@@ -56,6 +59,7 @@ impl MemoryView {
             project: target.project,
             all_projects: false,
             query,
+            query_language: crate::shared::i18n::language(),
             items: Vec::new(),
             selected: target.observation,
             focus: target.observation,

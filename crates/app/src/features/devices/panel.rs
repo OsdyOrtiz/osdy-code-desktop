@@ -16,7 +16,7 @@ use gpui_kit::*;
 use super::{Hub, HubStatus, hub};
 use crate::features::browser::WebSurface;
 use crate::shared::floating::{self, CardState, DragKind, Mode};
-use crate::shared::ui;
+use crate::shared::{i18n::t, ui};
 
 /// The docked column's width; a phone fits with its controls.
 pub const DOCK_WIDTH: f32 = 400.;
@@ -460,9 +460,9 @@ impl DevicePanel {
                             .group_hover("device-tab", |s| s.visible())
                             .hover(|s| s.bg(ui::surface_hover()).text_color(ui::fg()))
                             .tooltip(|window, cx| {
-                                gpui_kit::component::tooltip::Tooltip::new(
+                                gpui_kit::component::tooltip::Tooltip::new(t(
                                     "Close tab · the device keeps running",
-                                )
+                                ))
                                 .build(window, cx)
                             })
                             .on_click(cx.listener(move |this, _, _, cx| {
@@ -477,7 +477,7 @@ impl DevicePanel {
                     .ghost()
                     .xsmall()
                     .icon(Icon::new(IconName::Plus))
-                    .tooltip("Open a simulator or emulator")
+                    .tooltip(t("Open a simulator or emulator"))
                     .on_click(cx.listener(|this, _, _, cx| {
                         this.picking = !this.picking || this.tabs.is_empty();
                         this.hub.update(cx, |hub, cx| hub.refresh(cx));
@@ -516,7 +516,7 @@ impl DevicePanel {
                                 .ghost()
                                 .xsmall()
                                 .icon(Icon::new(IconName::Power))
-                                .tooltip(format!("Shut down {}", tab.device.name))
+                                .tooltip(t("Shut down {name}").replace("{name}", &tab.device.name))
                                 .on_click(cx.listener(|this, _, _, cx| this.shut_down_active(cx)))
                         })
                     }))
@@ -529,7 +529,7 @@ impl DevicePanel {
                             } else {
                                 IconName::PanelRight
                             }))
-                            .tooltip(if docked { "Float" } else { "Dock to the right" })
+                            .tooltip(t(if docked { "Float" } else { "Dock to the right" }))
                             .on_click(cx.listener(move |this, _, _, cx| {
                                 this.set_mode(
                                     if docked { Mode::Floating } else { Mode::Docked },
@@ -542,7 +542,7 @@ impl DevicePanel {
                             .ghost()
                             .xsmall()
                             .icon(Icon::new(IconName::Minus))
-                            .tooltip("Hide · devices keep running")
+                            .tooltip(t("Hide · devices keep running"))
                             .on_click(cx.listener(|this, _, _, cx| this.hide(cx))),
                     ),
             )
@@ -562,7 +562,7 @@ impl DevicePanel {
                     .p_3()
                     .text_xs()
                     .text_color(ui::muted())
-                    .child("No simulators or emulators yet: install Xcode (iOS) or Android Studio and create a virtual device."),
+                    .child(t("No simulators or emulators yet: install Xcode (iOS) or Android Studio and create a virtual device.")),
             );
         }
         for (i, device) in devices.into_iter().enumerate() {
@@ -599,27 +599,22 @@ impl DevicePanel {
                             ),
                     )
                     .child(if booting {
-                        ui::chip("Booting", ui::champagne())
+                        ui::chip(t("Booting"), ui::champagne())
                     } else if running {
-                        ui::chip("Running", ui::success())
+                        ui::chip(t("Running"), ui::success())
                     } else {
-                        ui::chip("Off", ui::faint())
+                        ui::chip(t("Off"), ui::faint())
                     }),
             );
         }
-        for error in hub
-            .errors()
-            .iter()
-            .map(String::as_str)
-            .chain(hub.last_error())
-        {
+        for error in hub.errors().iter().cloned().chain(hub.last_error()) {
             list = list.child(
                 div()
                     .px_2()
                     .pt_1()
                     .text_xs()
                     .text_color(ui::warning())
-                    .child(error.to_string()),
+                    .child(error),
             );
         }
         list
@@ -674,14 +669,14 @@ impl DevicePanel {
                         div()
                             .text_sm()
                             .text_color(ui::muted())
-                            .child(format!("{} is off.", tab.device.name)),
+                            .child(t("{name} is off.").replace("{name}", &tab.device.name)),
                     )
                     .child(
                         Button::new("device-boot")
                             .small()
                             .primary()
                             .icon(Icon::new(IconName::Play))
-                            .label("Start")
+                            .label(t("Start"))
                             .on_click(cx.listener(move |this, _, _, cx| {
                                 let device = device.clone();
                                 this.hub.update(cx, |hub, cx| hub.boot(device, cx));
@@ -689,7 +684,7 @@ impl DevicePanel {
                     )
                     .into_any_element()
             }
-            None => waiting(format!("Starting {}…", tab.device.name)),
+            None => waiting(t("Starting {name}…").replace("{name}", &tab.device.name)),
         }
     }
 
@@ -807,7 +802,7 @@ fn hub_note(status: &HubStatus) -> Option<HubNote> {
         HubStatus::Running(_) => None,
         HubStatus::Starting => Some(HubNote::Starting),
         HubStatus::Off => Some(HubNote::Off),
-        HubStatus::Failed(error) => Some(HubNote::Failed(error.clone())),
+        HubStatus::Failed(error) => Some(HubNote::Failed(error.render())),
     }
 }
 
@@ -819,20 +814,20 @@ impl HubNote {
                 .p_3()
                 .gap_2()
                 .child(Spinner::new().xsmall().color(ui::accent()))
-                .child(text("Starting the device hub…".into()))
+                .child(text(t("Starting the device hub…").into()))
                 .into_any_element(),
             Self::Off => v_flex()
                 .p_3()
                 .gap_2()
                 .child(text(
-                    "Turn on Use devices to see simulators and emulators here, live and touchable."
+                    t("Turn on Use devices to see simulators and emulators here, live and touchable.")
                         .into(),
                 ))
                 .child(
                     Button::new("device-settings")
                         .small()
                         .primary()
-                        .label("Configuration → Devices")
+                        .label(t("Configuration → Devices"))
                         .on_click(
                             cx.listener(|_, _, _, cx| cx.emit(DevicePanelEvent::OpenSettings)),
                         ),
@@ -847,7 +842,7 @@ impl HubNote {
                         .small()
                         .ghost()
                         .icon(Icon::new(IconName::RefreshCw))
-                        .label("Try again")
+                        .label(t("Try again"))
                         .on_click(cx.listener(|this, _, _, cx| {
                             this.hub.update(cx, |hub, cx| hub.ensure(cx));
                         })),

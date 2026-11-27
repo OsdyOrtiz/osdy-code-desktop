@@ -31,6 +31,7 @@ use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
 
 use crate::shared::floating::{self, CardState, DragKind, Mode};
+use crate::shared::i18n::{Message as NativeFailure, language, sync_placeholder, t};
 use crate::shared::ui;
 
 pub mod automation;
@@ -60,6 +61,7 @@ enum Choosing {
     /// New profile…: its name field.
     Naming {
         input: Entity<InputState>,
+        placeholder_language: gentle_core::i18n::Language,
         _enter: Subscription,
     },
     /// Clear website data…: the confirmation.
@@ -678,7 +680,7 @@ impl BrowserPanel {
     }
 
     fn start_naming(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        let input = cx.new(|cx| InputState::new(window, cx).placeholder("Profile name"));
+        let input = cx.new(|cx| InputState::new(window, cx).placeholder(t("Profile name")));
         input.update(cx, |state, cx| state.focus(window, cx));
         let subscription = cx.subscribe_in(&input, window, |this, input, event, _, cx| {
             if let InputEvent::PressEnter { .. } = event {
@@ -692,6 +694,7 @@ impl BrowserPanel {
         self.choose(
             Some(Choosing::Naming {
                 input,
+                placeholder_language: language(),
                 _enter: subscription,
             }),
             cx,
@@ -717,8 +720,19 @@ impl BrowserPanel {
 
     /// What the header and the tray call this page.
     pub fn title(&self) -> String {
+        self.title_in(language())
+    }
+
+    /// The title returned to `gentle-browser`, independent of desktop language.
+    pub fn protocol_title(&self) -> String {
+        self.title_in(gentle_core::i18n::Language::English)
+    }
+
+    fn title_in(&self, language: gentle_core::i18n::Language) -> String {
+        use gentle_core::i18n::tr;
         match (&self.label, design_slug(&self.url)) {
-            (Some(_), Some(slug)) => format!("Design · {slug}"),
+            (Some(_), Some(slug)) => tr(language, "Design · {slug}").replace("{slug}", slug),
+            (Some(label), None) if label == "Design canvas" => tr(language, "Design canvas").into(),
             (Some(label), None) => label.clone(),
             (None, _) => host_label(&self.url),
         }
@@ -814,7 +828,7 @@ impl BrowserPanel {
         let url = self.url.clone();
         let maximized = self.card.maximized();
         let docked = self.mode == Mode::Docked;
-        let profile_label = self.profile(cx).label();
+        let profile_label = self.profile(cx).localized_label(language());
         h_flex()
             .id("browser-header")
             .h(rems(floating::HEADER / 16.))
@@ -868,8 +882,8 @@ impl BrowserPanel {
                                 .ghost()
                                 .xsmall()
                                 .icon(Icon::new(IconName::Bot).text_color(ui::accent()))
-                                .label("Take over")
-                                .tooltip("An agent is driving this page · take it back")
+                                .label(t("Take over"))
+                                .tooltip(t("An agent is driving this page · take it back"))
                                 .on_click(cx.listener(|this, _, _, cx| this.set_driven(false, cx))),
                         )
                     })
@@ -879,7 +893,7 @@ impl BrowserPanel {
                             .xsmall()
                             .icon(Icon::new(IconName::User))
                             .label(profile_label.0)
-                            .tooltip("Where this page keeps its cookies and sign-ins")
+                            .tooltip(t("Where this page keeps its cookies and sign-ins"))
                             .on_click(cx.listener(|this, _, _, cx| {
                                 let next = if this.choosing.is_some() {
                                     None
@@ -894,7 +908,7 @@ impl BrowserPanel {
                             .ghost()
                             .xsmall()
                             .icon(Icon::new(IconName::RotateCw))
-                            .tooltip("Reload")
+                            .tooltip(t("Reload"))
                             .on_click(cx.listener(|this, _, _, cx| this.reload(cx))),
                     )
                     .child(
@@ -902,7 +916,7 @@ impl BrowserPanel {
                             .ghost()
                             .xsmall()
                             .icon(Icon::new(IconName::ArrowUpRight))
-                            .tooltip("Open in your browser")
+                            .tooltip(t("Open in your browser"))
                             .on_click(move |_, _, cx| external::open(&url, cx)),
                     )
                     .child(
@@ -914,7 +928,7 @@ impl BrowserPanel {
                             } else {
                                 IconName::PanelRight
                             }))
-                            .tooltip(if docked { "Float" } else { "Dock to the right" })
+                            .tooltip(t(if docked { "Float" } else { "Dock to the right" }))
                             .on_click(cx.listener(move |this, _, _, cx| {
                                 this.set_mode(
                                     if docked { Mode::Floating } else { Mode::Docked },
@@ -931,14 +945,14 @@ impl BrowserPanel {
                                     .ghost()
                                     .xsmall()
                                     .icon(Icon::new(IconName::Minimize2))
-                                    .label("Restore")
-                                    .tooltip("Restore · Esc")
+                                    .label(t("Restore"))
+                                    .tooltip(t("Restore · Esc"))
                             } else {
                                 Button::new("browser-maximize")
                                     .ghost()
                                     .xsmall()
                                     .icon(Icon::new(IconName::Maximize2))
-                                    .tooltip("Maximize")
+                                    .tooltip(t("Maximize"))
                             }
                             .on_click(
                                 cx.listener(|this, _, window, cx| {
@@ -952,7 +966,7 @@ impl BrowserPanel {
                             .ghost()
                             .xsmall()
                             .icon(Icon::new(IconName::Minus))
-                            .tooltip("Hide · it stays in the top bar")
+                            .tooltip(t("Hide · it stays in the top bar"))
                             .on_click(cx.listener(|_, _, _, cx| cx.emit(BrowserEvent::Hide))),
                     )
                     .child(
@@ -960,7 +974,7 @@ impl BrowserPanel {
                             .ghost()
                             .xsmall()
                             .icon(Icon::new(IconName::X))
-                            .tooltip("Close")
+                            .tooltip(t("Close"))
                             .on_click(cx.listener(|_, _, _, cx| cx.emit(BrowserEvent::Close))),
                     ),
             )
@@ -999,7 +1013,7 @@ impl BrowserPanel {
                     .into_iter()
                     .enumerate()
                     .map(|(ix, profile)| {
-                        let (name, kind) = profile.label();
+                        let (name, kind) = profile.localized_label(language());
                         let selected = profile == current;
                         Button::new(("browser-profile-pick", ix))
                             .ghost()
@@ -1018,16 +1032,16 @@ impl BrowserPanel {
                                 this.pick_profile(profile.clone(), cx)
                             }))
                     });
-                pane.child(note(
+                pane.child(note(t(
                     "Pages with the same profile share cookies and sign-ins. Agents open theirs in Agent.",
-                ))
+                )))
                 .children(rows)
                 .child(
                     Button::new("browser-profile-new")
                         .ghost()
                         .small()
                         .icon(Icon::new(IconName::Plus))
-                        .label("New profile…")
+                        .label(t("New profile…"))
                         .on_click(cx.listener(|this, _, window, cx| this.start_naming(window, cx))),
                 )
                 .child(
@@ -1035,7 +1049,7 @@ impl BrowserPanel {
                         .ghost()
                         .small()
                         .icon(Icon::new(IconName::Trash))
-                        .label("Clear website data…")
+                        .label(t("Clear website data…"))
                         .on_click(cx.listener(|this, _, _, cx| {
                             this.choose(Some(Choosing::Clearing), cx)
                         })),
@@ -1043,14 +1057,14 @@ impl BrowserPanel {
                 .into_any_element()
             }
             Choosing::Naming { input, .. } => pane
-                .child(note("Name the new profile; press Return to use it."))
+                .child(note(t("Name the new profile; press Return to use it.")))
                 .child(Input::new(input).small())
                 .child(
                     h_flex().pt_1().child(
                         Button::new("browser-profile-cancel")
                             .ghost()
                             .small()
-                            .label("Cancel")
+                            .label(t("Cancel"))
                             .on_click(
                                 cx.listener(|this, _, _, cx| this.choose(Some(Choosing::List), cx)),
                             ),
@@ -1058,16 +1072,16 @@ impl BrowserPanel {
                 )
                 .into_any_element(),
             Choosing::Clearing => {
-                let (name, _) = self.profile(cx).label();
+                let (name, _) = self.profile(cx).localized_label(language());
                 pane.child(
                     div()
                         .text_sm()
                         .text_color(ui::fg())
-                        .child(format!("Clear website data in {name}?")),
+                        .child(t("Clear website data in {name}?").replace("{name}", &name)),
                 )
-                .child(note(
+                .child(note(t(
                     "Sites using it sign you out and forget their settings. Pages using it reload.",
-                ))
+                )))
                 .child(
                     h_flex()
                         .pt_1()
@@ -1076,14 +1090,14 @@ impl BrowserPanel {
                             Button::new("browser-clear-ok")
                                 .danger()
                                 .small()
-                                .label("Clear")
+                                .label(t("Clear"))
                                 .on_click(cx.listener(|this, _, _, cx| this.clear_data(cx))),
                         )
                         .child(
                             Button::new("browser-clear-cancel")
                                 .ghost()
                                 .small()
-                                .label("Cancel")
+                                .label(t("Cancel"))
                                 .on_click(cx.listener(|this, _, _, cx| {
                                     this.choose(Some(Choosing::List), cx)
                                 })),
@@ -1103,7 +1117,15 @@ impl BrowserPanel {
 }
 
 impl Render for BrowserPanel {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        if let Some(Choosing::Naming {
+            input,
+            placeholder_language,
+            ..
+        }) = &mut self.choosing
+        {
+            sync_placeholder(input, "Profile name", placeholder_language, window, cx);
+        }
         if self.mode == Mode::Docked {
             // The window puts it in its right column and sizes it; the
             // column's divider changes the width.
