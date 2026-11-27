@@ -49,7 +49,7 @@ imagesize = "0.15"
 # Resource diagnostics (GENTLE_SHELL_GPUI_DIAGNOSTICS): CPU and memory of
 # the app and every process under it. The version another dependency
 # already locks; only process data, read on one thread.
-sysinfo = { version = "0.31", default-features = false, features = ["system"] }
+sysinfo = { version = "0.40", default-features = false, features = ["system"] }
 # The system language, for the interface's default (Settings › Language).
 # The version another dependency already locks.
 sys-locale = "0.3"
