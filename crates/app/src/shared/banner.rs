@@ -1,71 +1,13 @@
-//! The startup banner and the legacy braille rose used by onboarding and surge.
+//! The Osdy Code banner and its animated raccoon badge.
 
 use std::path::Path;
-use std::sync::LazyLock;
 use std::time::Duration;
 
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
 
-const ROSE: &[&str] = &[
-    "            ⣠⣿⣿⣶⣶⣤⣤⣤⣤⣤⣤⣤⣀    ⢀⡀",
-    "         ⢀⣴⣾⣿⣿⠟⠝⢙⣙⣙⣙⣙⢙⣿⣷⢿⢿⢿⢿⢿⣿⣷⣄⡀",
-    "      ⣀⣠⣴⣿⣿⣿⠟⢡⣶⡿⠟⢟⡽⣿⣿⣿⣿⡟⢶⣤⣤⣄⣁⠁⠙⢿⣿⣦",
-    "   ⢀⣴⣿⣿⠅⣿⣿⣿⠅⢀⣿⠏ ⢰⡏⢹⢯⡤⢖⣯⣍⠻⡍⢻⡌⢽⣷⠄ ⢿⣿⡷⢶⣤⣤",
-    "⢀⣀⣴⣿⣿⣿⠟ ⠹⣿⣿  ⢻⣇ ⠘⠻⣦⣈⢙⣻⣿⣷⣾⡥⠜⢁⣼⠟⠁⢴⣿⡿⠁⢽⣿⣿⣄",
-    "⢻⣿⢿⣿⣿⣟⠅  ⠘⢿⣧ ⠘⠙⢦⣀  ⠙⠳⢤  ⢀⡴⠞⠛⠝⢀⣴⣿⠟  ⢽⣿⣿⢿⡆",
-    " ⣿⢝⢿⣿⣧⠁   ⢸⠍⠳⣄  ⠉⠓⠦⢄⢀⣀⣁⣤⣥⣤⣤⣶⠿⢿⡟⠁   ⣽⣿⢿⣽⡇",
-    " ⢿⣟⠝⢿⣿⣷⣄  ⠝⠕⠅⠈⠂ ⢀⡤⠖⠛⠉⠉⡁⣀   ⢀⠅⢽⠇  ⢀⣽⣿⣿⣿⠏",
-    " ⠈⠻⢷⣝⣝⣿⢿⢷⣤⣄    ⠴⠉⠄⢔⢴⢾⢿⢿⢿⢗⠔⠔⠄⠁ ⢁⢄⣵⣿⡿⠟⢉⢽⣷⡄",
-    "    ⠈⠉⠉⢿⡛⠿⢿⣿⣶⣤⣀⡁  ⠁⠁⠙⠅⠙⠁⠁⠁ ⣀⣴⣾⢿⠿⠛⠉ ⢤⣽⣿⣿⣇",
-    "       ⠈⢿⣧⡄ ⠁⠉⠛⠿⠿⢷⣶⣤⣀   ⢀⡴⠛⠉⠁ ⠁ ⢀⣴⢿⢿⣽⠟⠉⠁",
-    "         ⠙⠻⣷⣥⣄⢀    ⠈⠙⢷⡄ ⠁ ⢀⢄⣴⣴⢵⠿⢟⣭⣽⠟⠁",
-    "            ⢉⢙⣛⣿⠷⢤⣄⡀  ⢿⢠⠔⢓⣛⠿⠿⠷⠷⠟⠛⠉⠁",
-    "            ⠈⠙⠛⠛⠓⠒⢖⠙⠷⡄⢈⡴⠟⢅⢴⣶⣤⣤⠄",
-    "                   ⢷⡄⠱⢍⡤⠐⠉⠉⠉⠉",
-    "                   ⠈⣷ ⠍",
-    "                    ⣿⢄",
-];
-
-struct RoseArt {
-    dots: Vec<(u16, u16)>,
-    size: (u16, u16),
-}
-
-static ROSE_ART: LazyLock<RoseArt> = LazyLock::new(|| {
-    // Braille U+2800: bits 0-2 and 6 are the left column (rows 0-3), 3-5 and 7 the right.
-    const DOTS: [(u16, u16); 8] = [
-        (0, 0),
-        (0, 1),
-        (0, 2),
-        (1, 0),
-        (1, 1),
-        (1, 2),
-        (0, 3),
-        (1, 3),
-    ];
-    let mut rose = Vec::new();
-    let mut rose_w = 0;
-    for (row, line) in ROSE.iter().enumerate() {
-        for (col, ch) in line.chars().enumerate() {
-            let code = ch as u32;
-            if !(0x2800..=0x28FF).contains(&code) {
-                continue;
-            }
-            let bits = code - 0x2800;
-            for (bit, (dx, dy)) in DOTS.iter().enumerate() {
-                if bits & (1 << bit) != 0 {
-                    rose.push((col as u16 * 2 + dx, row as u16 * 4 + dy));
-                    rose_w = rose_w.max(col as u16 * 2 + dx + 1);
-                }
-            }
-        }
-    }
-    RoseArt {
-        dots: rose,
-        size: (rose_w, ROSE.len() as u16 * 4),
-    }
-});
+#[path = "brand/orbit.rs"]
+mod orbit;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct BannerConfig {
@@ -135,33 +77,6 @@ pub fn read_config(config_home: &Path) -> BannerConfig {
     }
 }
 
-/// The rose's dots (x, y in dot units) and its size, for other effects that
-/// draw it (the max-effort surge).
-pub fn rose() -> (&'static [(u16, u16)], (u16, u16)) {
-    (&ROSE_ART.dots, ROSE_ART.size)
-}
-
-/// Gentle Shell's pixel rose, `height` px tall, in `color`.
-pub fn pixel_rose(height: f32, color: Hsla) -> impl IntoElement {
-    let (dots, (width, rows)) = rose();
-    let dot = height / rows.max(1) as f32;
-    canvas(
-        |_, _, _| {},
-        move |bounds, _, window, _| {
-            let side = px((dot * 0.55).max(1.0));
-            for &(x, y) in dots {
-                let origin = point(
-                    bounds.origin.x + px(x as f32 * dot),
-                    bounds.origin.y + px(y as f32 * dot),
-                );
-                window.paint_quad(fill(Bounds::new(origin, size(side, side)), color));
-            }
-        },
-    )
-    .w(px(width as f32 * dot))
-    .h(px(height))
-}
-
 /// Drive `reveal` linearly from 0 to 1 over this interval.
 pub const WRITE: Duration = Duration::from_millis(2600);
 
@@ -188,8 +103,9 @@ fn eyes_closed(seconds: f32) -> bool {
     seconds % EYE_PERIOD.as_secs_f32() >= 4.85
 }
 
-fn badge(scale: f32, still: bool) -> AnyElement {
-    let side = px(BADGE * scale);
+/// Full-color square badge, static when the caller has reduced motion enabled.
+pub fn badge(side: f32, still: bool) -> AnyElement {
+    let side = px(side);
     let path = if still {
         "brand/badge-still.png"
     } else {
@@ -205,7 +121,7 @@ fn badge(scale: f32, still: bool) -> AnyElement {
     }
     badge
         .with_animation(
-            "banner-eyes",
+            "brand-badge-motion",
             Animation::new(EYE_PERIOD).repeat(),
             |el, t| {
                 // Use the same canvas as the badge. The mask covers the eye positions
@@ -218,9 +134,56 @@ fn badge(scale: f32, still: bool) -> AnyElement {
                         .opacity(if visible { 1. } else { 0. })
                         .child(img("brand/eyes-closed.svg").size_full()),
                 )
+                // Two orbits per eye cycle; both repeat without a second frame driver.
+                .child(orbit_comet(2. * t + 0.18))
             },
         )
         .into_any_element()
+}
+
+fn orbit_comet(phase: f32) -> impl IntoElement {
+    canvas(
+        |_, _, _| {},
+        move |bounds, _, window, _| {
+            let scale = bounds.size.width / 384.;
+            let purple: Hsla = rgb(0xbb9af7).into();
+            let cyan: Hsla = rgb(0x7dcfff).into();
+            for i in (0..=10).rev() {
+                let p = orbit::position(phase - i as f32 * 0.006);
+                if p.visibility == 0. {
+                    continue;
+                }
+                let x = bounds.origin.x + scale * p.x;
+                let y = bounds.origin.y + scale * p.y;
+                let mut disc = |diameter: f32, ink: Hsla, alpha: f32| {
+                    let side = scale * diameter;
+                    let at = point(x - side / 2., y - side / 2.);
+                    window.paint_quad(
+                        fill(
+                            Bounds::new(at, size(side, side)),
+                            ink.opacity(alpha * p.visibility),
+                        )
+                        .corner_radii(side / 2.),
+                    );
+                };
+                if i == 0 {
+                    disc(33., purple, 0.18);
+                    disc(23., cyan, 0.45);
+                    disc(14., cyan, 0.95);
+                    disc(8., white(), 1.);
+                } else {
+                    let fade = 1. - i as f32 / 11.;
+                    disc(
+                        5. + 8. * fade,
+                        if i < 4 { cyan } else { purple },
+                        0.82 * fade,
+                    );
+                }
+            }
+        },
+    )
+    .absolute()
+    .inset_0()
 }
 
 fn wordmark(scale: f32, reveal: f32, still: bool) -> impl IntoElement {
@@ -301,7 +264,7 @@ impl RenderOnce for Banner {
             .items_center()
             .gap(px(self.scale * GAP))
             .when(self.config.show_rose, |el| {
-                el.child(badge(self.scale, still))
+                el.child(badge(BADGE * self.scale, still))
             })
             .when(self.config.show_text_logo, |el| {
                 el.child(wordmark(self.scale, self.reveal, still))
@@ -311,20 +274,7 @@ impl RenderOnce for Banner {
 
 #[cfg(test)]
 mod tests {
-    use super::{BannerConfig, read_config, rose};
-
-    #[test]
-    fn legacy_rose_still_decodes_braille_for_other_effects() {
-        let (dots, (width, height)) = rose();
-        // The first full braille cell at column 13 sets all eight dots.
-        for x in 26..28 {
-            for y in 0..4 {
-                assert!(dots.contains(&(x, y)));
-            }
-        }
-        assert_eq!(dots.iter().map(|(x, _)| *x).max().unwrap() + 1, width);
-        assert!(dots.iter().all(|(_, y)| *y < height));
-    }
+    use super::{BannerConfig, read_config};
 
     #[test]
     fn cursor_moves_with_the_clip_and_lands_on_the_svg_glyph() {

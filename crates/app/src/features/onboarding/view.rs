@@ -1,5 +1,5 @@
 //! Render: the hero, the grouped checklist rows with their install log, the
-//! footer (or the embedded bar in Configuration) and the pixel rose.
+//! footer (or the embedded bar in Configuration) and the raccoon badge.
 
 use gpui_kit::assets::IconName;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
@@ -11,14 +11,14 @@ use gpui_kit::*;
 use super::checks::{Tone, all_set, install_plan, is_ok, required_ok, status_text, tone};
 use super::{Mode, OnboardingEvent, OnboardingView};
 use crate::features::setup::{Check, Fix, Need, Status};
-use crate::shared::banner::pixel_rose;
+use crate::shared::banner::badge;
 use crate::shared::ui;
 
 /// Install output lines a running row shows.
 const LOG_LINES: usize = 8;
 
 impl OnboardingView {
-    fn render_hero(&self) -> Div {
+    fn render_hero(&self, cx: &App) -> Div {
         let checks = self.checks.as_deref();
         let done = checks.is_some_and(all_set);
         let (title, line) = match checks {
@@ -44,11 +44,27 @@ impl OnboardingView {
                 "Everything required is ready. The recommended extras below make it better.",
             ),
         };
-        let rose_size = if done { 88. } else { 56. };
-        let mark = div().flex().justify_center().child(pixel_rose(
-            rose_size,
-            if done { ui::success() } else { ui::petal() },
-        ));
+        let badge_size = if done { 88. } else { 56. };
+        let mark = div()
+            .relative()
+            .when(done, |d| {
+                let glow = ui::success();
+                d.child(
+                    div()
+                        .absolute()
+                        .inset(px(badge_size * 0.14))
+                        .rounded_full()
+                        .bg(glow.opacity(0.17))
+                        .shadow(vec![BoxShadow {
+                            color: glow.opacity(0.42),
+                            offset: point(px(0.), px(0.)),
+                            blur_radius: px(18.),
+                            spread_radius: px(3.),
+                            inset: false,
+                        }]),
+                )
+            })
+            .child(badge(badge_size, cx.reduce_motion()));
         v_flex()
             .items_center()
             .gap_2()
@@ -56,10 +72,10 @@ impl OnboardingView {
             .pt_8()
             .pb_4()
             .child(if done {
-                // A new id when the state flips, so the rose blooms again.
-                ui::pop_in("onboarding-rose-done", mark).into_any_element()
+                // A new id when the state flips, so the badge pops in again.
+                ui::pop_in("onboarding-badge-done", mark).into_any_element()
             } else {
-                ui::pop_in("onboarding-rose", mark).into_any_element()
+                ui::pop_in("onboarding-badge", mark).into_any_element()
             })
             .child(
                 div()
@@ -455,7 +471,7 @@ impl Render for OnboardingView {
                             .flex_1()
                             .min_h_0()
                             .overflow_y_scroll()
-                            .child(self.render_hero())
+                            .child(self.render_hero(cx))
                             .child(body),
                     )
                     .child(self.render_footer(cx))

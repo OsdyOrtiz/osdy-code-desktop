@@ -1,7 +1,7 @@
 <a id="top"></a>
 
 <div align="center">
-  <img src="packaging/icons/icon-512.png" width="160" alt="Gentle Shell's pixel rose">
+  <img src="packaging/icons/icon-512.png" width="160" alt="Osdy Code raccoon icon">
 </div>
 
 <h1 align="center">Osdy Code Desktop</h1>
@@ -260,7 +260,7 @@ Extension notices go to a notification center instead of piling up as toasts; on
 
 ### Start screen — Osdy Code_
 
-The welcome screen and empty session show the animated raccoon badge beside the blue and purple Osdy Code wordmark in every theme. The raccoon blinks, and a cyan cursor leads the left-to-right reveal, then blinks like a terminal cursor. With reduced motion, the entire banner is visible and still. The source art is in [`assets/mascot/`](assets/mascot/); `banner.json` still controls the badge (`showRose`) and wordmark (`showTextLogo`) independently.
+The welcome screen and empty session show the animated raccoon badge beside the blue and purple Osdy Code wordmark in every theme. The raccoon blinks and a comet circles its badge, ducking behind the disc. A cyan cursor leads the left-to-right wordmark reveal, then blinks like a terminal cursor. Onboarding uses the same badge and adds a green glow when all checks pass. With reduced motion, the entire banner is visible and the badge is still. The source art is in [`assets/mascot/`](assets/mascot/); `banner.json` still controls the badge (`showRose`) and wordmark (`showTextLogo`) independently.
 
 ---
 
@@ -296,7 +296,7 @@ The composer comes in five input styles, in **Configuration → Appearance → C
 
 <br>
 
-Click the context percentage to compact now or turn auto-compaction on or off. For reasoning models, the effort chip (the level's icon and name) opens a slider in Gentle Shell's rose gradient with one stop per level the model accepts (`get_available_thinking_levels`: off … high, and xhigh / max where supported): click, drag or pick a label; the card says what the level costs, and the icon follows the level (moon, feather, leaf, brain, circuit brain, bolt, flame). Every level plays its own surge over the window, and each one builds on the level below until max: minimal and low send a pixel comet along a quarter and half of the window's edge; medium runs the whole lap and the edge flares; high adds energy spiralling into a glowing core while the window trembles; xhigh trembles harder and hatches the core with a flash, a shockwave and a shower of sparks; max (about 4 seconds) goes all the way: one last jolt and Gentle Shell's pixel rose bursts out with a rebound. Off plays nothing. Shows model, effort, plan usage (a chip after the effort picker), context %, cost, the ODD phase (`✿ exploring…`), extension statuses, queued messages and running jobs.
+Click the context percentage to compact now or turn auto-compaction on or off. For reasoning models, the effort chip (the level's icon and name) opens a slider in Gentle Shell's rose gradient with one stop per level the model accepts (`get_available_thinking_levels`: off … high, and xhigh / max where supported): click, drag or pick a label; the card says what the level costs, and the icon follows the level (moon, feather, leaf, brain, circuit brain, bolt, flame). Every level plays its own surge over the window, and each one builds on the level below until max: minimal and low send a pixel comet along a quarter and half of the window's edge; medium runs the whole lap and the edge flares; high adds energy spiralling into a glowing core while the window trembles; xhigh trembles harder and hatches the core with a flash, a shockwave and a shower of sparks; max (about 4 seconds) goes all the way: one last jolt and a pixel raccoon bursts out with a rebound. Off plays nothing. Shows model, effort, plan usage (a chip after the effort picker), context %, cost, the ODD phase (`✿ exploring…`), extension statuses, queued messages and running jobs.
 
 </details>
 
@@ -765,7 +765,7 @@ Download the asset for your system from [Releases](https://github.com/OsdyOrtiz/
    ```
 
    The first build takes a few minutes. `.` opens the current folder as a workspace; pass any folder instead, or nothing to reopen the last workspace. `--prompt "first message"` starts a new agent tab with that message.
-3. Optional, macOS: to run it as a normal app (rose icon in the Dock, Finder, Spotlight), bundle it and copy it to `~/Applications`:
+3. Optional, macOS: to run it as a normal app (raccoon icon in the Dock, Finder, Spotlight), bundle it and copy it to `~/Applications`:
 
    ```bash
    packaging/macos/bundle.sh aarch64-apple-darwin 0.1.0   # x86_64-apple-darwin on Intel
@@ -873,7 +873,7 @@ cargo test
 
 <br>
 
-The app icon (the Gentle Shell pixel rose) lives in `packaging/icons/`. `generate.py` builds it from the `ROSE` art in `crates/app/src/shared/banner.rs`; run `packaging/icons/generate.sh` on macOS after editing and commit the outputs (`AppIcon.icns`, `icon.ico`, PNGs). A bare `cargo run` shows a generic icon in the Dock; the bundled app shows the rose.
+The raccoon app icon lives in `packaging/icons/`. `generate.py` builds it from `assets/mascot/osdy-code.png`; run `packaging/icons/generate.sh` on macOS after editing and commit the outputs (`AppIcon.icns`, `icon.ico`, PNGs).
 
 Build packages locally:
 

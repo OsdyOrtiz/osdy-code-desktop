@@ -1,8 +1,8 @@
 //! The effort surge. At max, a pixel comet laps the window's edge, shedding
 //! sparks and drawing a shimmering outline; the edge flares; the window
 //! shakes harder and harder while energy spirals into a glowing core; then
-//! the core hatches: a flash, a shockwave, one last jolt, and Gentle Shell's
-//! pixel rose bursts out with a rebound and a shower of sparks. Lower levels
+//! the core hatches: a flash, a shockwave, one last jolt, and a pixel raccoon
+//! bursts out with a rebound and a shower of sparks. Lower levels
 //! play the start of the same show and stop earlier ([`Level`]), so raising
 //! the effort step by step builds up to the full surge. Paint only (plus
 //! the root's shake offset); it never takes input.
@@ -12,7 +12,10 @@ use std::time::Duration;
 
 use gpui_kit::*;
 
-use crate::{shared::banner, shared::ui};
+use crate::shared::ui;
+
+#[path = "brand/dots.rs"]
+mod dots;
 
 /// The whole show at max, start to fade.
 pub const DURATION: Duration = Duration::from_millis(4400);
@@ -22,9 +25,9 @@ pub const DURATION: Duration = Duration::from_millis(4400);
 const LAP_END: f32 = 0.42;
 /// The window starts to tremble and energy gathers in the middle.
 const SHAKE_START: f32 = 0.46;
-/// The core hatches and the rose bursts out.
+/// The core hatches and the raccoon bursts out.
 const BLOOM: f32 = 0.64;
-/// The hard jolt as the rose bursts out lasts this long.
+/// The hard jolt as the raccoon bursts out lasts this long.
 const JOLT: f32 = 0.08;
 
 /// The comet's path: this far inside the window, following its corners.
@@ -59,7 +62,7 @@ const CORE_FADE: f32 = 0.1;
 /// How much of the surge an effort level plays. Each level adds a beat to
 /// the one below: a short comet run, half the edge, the full lap with the
 /// edge flaring, the core gathering while the window trembles, the hatch;
-/// max adds the rose.
+/// max adds the raccoon.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Level {
     /// Share of the edge the comet runs (1 is the whole lap).
@@ -71,8 +74,8 @@ pub struct Level {
     tremble: f32,
     /// The core hatches: a flash, a shockwave, one jolt and a shower of sparks.
     hatch: bool,
-    /// Gentle Shell's rose bursts out of the hatch.
-    rose: bool,
+    /// The raccoon bursts out of the hatch.
+    raccoon: bool,
 }
 
 /// The full show.
@@ -81,7 +84,7 @@ pub const MAX: Level = Level {
     flare: true,
     tremble: 1.,
     hatch: true,
-    rose: true,
+    raccoon: true,
 };
 
 impl Level {
@@ -92,7 +95,7 @@ impl Level {
             flare: false,
             tremble: 0.,
             hatch: false,
-            rose: false,
+            raccoon: false,
         };
         Some(match name {
             "minimal" => Level { lap: 0.25, ..quiet },
@@ -394,9 +397,9 @@ fn paint(bounds: Bounds<Pixels>, t: f32, level: Level, window: &mut Window) {
         }
     }
 
-    // 5. The rose bursts out, overshooting and settling, in a soft halo,
+    // 5. The raccoon bursts out, overshooting and settling, in a soft halo,
     //    then holds and fades. It is white-hot for an instant.
-    let shown = if !level.rose || t < BLOOM {
+    let shown = if !level.raccoon || t < BLOOM {
         0.
     } else if t < BLOOM + 0.03 {
         (t - BLOOM) / 0.03
@@ -406,11 +409,11 @@ fn paint(bounds: Bounds<Pixels>, t: f32, level: Level, window: &mut Window) {
         1. - ease_in_out((t - 0.88) / 0.12)
     };
     if shown > 0. {
-        let (dots, (rose_w, rose_h)) = banner::rose();
+        let (dots, (grid_w, grid_h)) = dots::raccoon();
         let grow = ui::spring(((t - BLOOM) / 0.16).clamp(0., 1.));
         let height = w.min(h) * 0.46 * (0.35 + 0.65 * grow);
-        let dot = height / rose_h as f32;
-        let left = cx - rose_w as f32 * dot / 2.;
+        let dot = height / grid_h as f32;
+        let left = cx - grid_w as f32 * dot / 2.;
         let top = cy - height / 2.;
         let halo = height * 0.8;
         for ring in 0..12 {
@@ -421,15 +424,21 @@ fn paint(bounds: Bounds<Pixels>, t: f32, level: Level, window: &mut Window) {
         }
         let side = px((dot * 0.6).max(1.));
         let heat = (1. - (t - BLOOM) / 0.08).clamp(0., 1.);
-        let ink = hsla(
-            petal.h,
-            petal.s + (spark.s - petal.s) * heat,
-            petal.l + (spark.l - petal.l) * heat,
-            shown,
-        );
-        for &(x, y) in dots {
+        let inks = [0.5, 0.7, 0.85, 1.].map(|shade| {
+            let light = petal.l * shade;
+            hsla(
+                petal.h,
+                petal.s + (spark.s - petal.s) * heat,
+                light + (spark.l - light) * heat,
+                shown,
+            )
+        });
+        for (x, y, shade) in dots {
             let origin = point(px(left + x as f32 * dot), px(top + y as f32 * dot));
-            window.paint_quad(fill(Bounds::new(origin, size(side, side)), ink));
+            window.paint_quad(fill(
+                Bounds::new(origin, size(side, side)),
+                inks[usize::from(shade - 1)],
+            ));
         }
     }
 
@@ -610,12 +619,13 @@ mod tests {
             assert!(lower.lap <= higher.lap);
             assert!(!lower.flare || higher.flare);
             assert!(!lower.hatch || higher.hatch);
-            assert!(!lower.rose || higher.rose);
+            assert!(!lower.raccoon, "only max shows the raccoon");
         }
         // The window only moves once the core starts gathering.
         assert_eq!(tremble(Level::of("medium").unwrap()), 0.);
         assert!(tremble(Level::of("high").unwrap()) > 0.);
-        // Max keeps its full length.
+        // Max shows the mascot and keeps its full length.
+        assert!(levels[5].raccoon);
         assert_eq!(MAX.duration(), super::DURATION);
     }
 
