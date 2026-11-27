@@ -258,9 +258,9 @@ Extension notices go to a notification center instead of piling up as toasts; on
 
 ## The conversation
 
-### Start screen — The rose, written in
+### Start screen — Osdy Code_
 
-The rose from Gentle Shell and the Osdy Code Desktop pixel wordmark, written in like the terminal intro. It follows `banner.json` (`showRose`, `showTextLogo`) and is drawn in Tokyo Night's colors (a solid theme tints it in its own).
+The welcome screen and empty session show the animated raccoon badge beside the blue and purple Osdy Code wordmark in every theme. The raccoon blinks, and a cyan cursor leads the left-to-right reveal, then blinks like a terminal cursor. With reduced motion, the entire banner is visible and still. The source art is in [`assets/mascot/`](assets/mascot/); `banner.json` still controls the badge (`showRose`) and wordmark (`showTextLogo`) independently.
 
 ---
 

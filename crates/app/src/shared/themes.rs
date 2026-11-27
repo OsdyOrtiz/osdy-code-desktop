@@ -895,9 +895,6 @@ impl TermColors {
 struct Resolved {
     palette: ui::Palette,
     term: TermColors,
-    /// The theme's `solid` flag, for effects that follow the theme (the
-    /// start banner tints itself in solid themes).
-    solid: bool,
 }
 
 impl Resolved {
@@ -905,7 +902,6 @@ impl Resolved {
         Self {
             palette: ui::Palette::new(theme, glass),
             term: TermColors::new(theme),
-            solid: theme.solid,
         }
     }
 }
@@ -966,13 +962,6 @@ pub fn palette<R>(read: impl FnOnce(&ui::Palette) -> R) -> R {
 pub fn term<R>(read: impl FnOnce(&TermColors) -> R) -> R {
     let active = ACTIVE.read().unwrap_or_else(|e| e.into_inner());
     read(&active.term)
-}
-
-/// Whether the active theme renders solid, non-glass surfaces (`"solid":
-/// true` in its file).
-pub fn solid() -> bool {
-    let active = ACTIVE.read().unwrap_or_else(|e| e.into_inner());
-    active.solid
 }
 
 fn install(theme: &Theme, glass: Glass) {

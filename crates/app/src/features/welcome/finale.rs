@@ -1,5 +1,5 @@
-//! The entrance after Continue, in three beats: Gentle Shell's banner writes
-//! itself in again in slow motion, the rose blows pixel kisses (and a few
+//! The entrance after Continue, in three beats: the wordmark writes itself
+//! in again, the raccoon blows pixel kisses (and a few
 //! hearts) that float up and pop, then "Sexyyyy" springs in letter by
 //! letter, the y's stretching one after another. The screen then dissolves
 //! into the app. Paint and layout only; it takes no input.
@@ -22,13 +22,8 @@ pub(super) const DISSOLVE: f32 = 0.86;
 const STAGE_W: f32 = 760.;
 const STAGE_H: f32 = 300.;
 const BANNER_SCALE: f32 = 2.6;
-/// The banner is ~175 px wide per unit of scale; the rose is its left part.
-const BANNER_W: f32 = 175. * BANNER_SCALE;
-
-/// The letters written in again: when they start and how long the banner
-/// takes to bloom and write (seconds); it paces itself, so it's fed linearly.
+/// When the letters start writing again; the banner takes WRITE to reveal.
 const LETTERS_AT: f32 = 0.25;
-const LETTERS_FOR: f32 = 2.6;
 /// The kisses fly from here (seconds), one after another.
 const KISSES_AT: f32 = 2.0;
 const KISS_GAP: f32 = 0.16;
@@ -43,9 +38,9 @@ fn ease_out(t: f32) -> f32 {
     1. - (1. - t.clamp(0., 1.)).powi(3)
 }
 
-/// The kisses the rose blows: each leaves the rose, floats up swaying,
-/// swells, and fades. Every fourth one is a heart.
-fn kisses() -> impl IntoElement {
+/// Kisses leave the raccoon's mouth, float up swaying, swell, and fade.
+/// Every fourth one is a heart.
+fn kisses(anchor: (f32, f32)) -> impl IntoElement {
     let total = FINALE.as_secs_f32();
     div().absolute().inset_0().with_animation(
         "finale-kisses",
@@ -57,10 +52,9 @@ fn kisses() -> impl IntoElement {
                     |_, _, _| {},
                     move |bounds, _, window, _| {
                         let center = bounds.center();
-                        // The rose sits at the banner's left.
-                        let rose = point(
-                            center.x - px(BANNER_W / 2. - BANNER_W * 0.15),
-                            center.y - px(STAGE_H * 0.08),
+                        let mouth = point(
+                            center.x + px(anchor.0 * BANNER_SCALE),
+                            center.y + px(anchor.1 * BANNER_SCALE),
                         );
                         for i in 0..KISSES {
                             let born = KISSES_AT + i as f32 * KISS_GAP;
@@ -75,8 +69,8 @@ fn kisses() -> impl IntoElement {
                             let sway = (age * 9. + i as f32).sin() * 10.;
                             let travel = ease_out(age);
                             let at = point(
-                                rose.x + px(drift * travel + sway),
-                                rose.y - px(rise * travel),
+                                mouth.x + px((drift + sway) * travel),
+                                mouth.y - px(rise * travel),
                             );
                             // Pops in, swells a little, fades at the end.
                             let grow = ui::spring((age * 3.).min(1.));
@@ -115,7 +109,8 @@ fn letters(config: BannerConfig) -> impl IntoElement {
         "finale-letters",
         Animation::new(FINALE),
         move |el, t| {
-            let reveal = ((t * total - LETTERS_AT) / LETTERS_FOR).clamp(0., 1.);
+            let reveal = ((t * total - LETTERS_AT) / crate::shared::banner::WRITE.as_secs_f32())
+                .clamp(0., 1.);
             el.child(banner(config, BANNER_SCALE, reveal))
         },
     )
@@ -198,7 +193,7 @@ pub(super) fn render(config: BannerConfig) -> impl IntoElement {
                 .items_center()
                 .justify_center()
                 .child(letters(config))
-                .child(kisses()),
+                .children(config.kiss_anchor().map(kisses)),
         )
         .child(h_flex().items_center().gap_3().child(word()).child(stamp()))
 }

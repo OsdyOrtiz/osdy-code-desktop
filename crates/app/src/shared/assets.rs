@@ -1,4 +1,4 @@
-//! Icons beyond GPUI Kit's default set, embedded on top of its `Assets`.
+//! Brand images and additional icons, embedded on top of GPUI Kit's `Assets`.
 
 use std::borrow::Cow;
 
@@ -293,8 +293,34 @@ gpui_kit::assets::icon_assets!(
 
 pub struct AppAssets;
 
+const BRAND: &[(&str, &[u8])] = &[
+    (
+        "brand/badge.webp",
+        include_bytes!("../../../../assets/mascot/osdy-code-logo.webp"),
+    ),
+    (
+        "brand/badge-still.png",
+        include_bytes!("../../assets/brand/badge-still.png"),
+    ),
+    (
+        "brand/eyes-closed.svg",
+        include_bytes!("../../assets/brand/eyes-closed.svg"),
+    ),
+    (
+        "brand/wordmark-text.svg",
+        include_bytes!("../../assets/brand/wordmark-text.svg"),
+    ),
+    (
+        "brand/cursor.svg",
+        include_bytes!("../../assets/brand/cursor.svg"),
+    ),
+];
+
 impl AssetSource for AppAssets {
     fn load(&self, path: &str) -> Result<Option<Cow<'static, [u8]>>> {
+        if let Some((_, bytes)) = BRAND.iter().find(|(name, _)| *name == path) {
+            return Ok(Some(Cow::Borrowed(bytes)));
+        }
         if let Some(bytes) = ExtraIcons.load(path)? {
             return Ok(Some(bytes));
         }
@@ -308,8 +334,62 @@ impl AssetSource for AppAssets {
         let mut paths = gpui_kit::assets::Assets.list(path)?;
         paths.extend(ExtraIcons.list(path)?);
         paths.extend(DiagramIcons.list(path)?);
+        paths.extend(
+            BRAND
+                .iter()
+                .filter(|(name, _)| name.starts_with(path))
+                .map(|(name, _)| SharedString::from(*name)),
+        );
         paths.sort();
         paths.dedup();
         Ok(paths)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use std::io::Cursor;
+
+    use image::{AnimationDecoder, ImageFormat, codecs::webp::WebPDecoder};
+    use resvg::usvg::{Options, Tree};
+
+    use super::*;
+
+    #[test]
+    fn embedded_banner_assets_decode_and_align() {
+        let load = |path| {
+            AppAssets
+                .load(path)
+                .unwrap()
+                .unwrap_or_else(|| panic!("missing {path}"))
+        };
+        let badge = load("brand/badge.webp");
+        let mut decoder = WebPDecoder::new(Cursor::new(badge.as_ref())).unwrap();
+        assert!(decoder.has_animation());
+        decoder.set_background_color(image::Rgba([0; 4])).unwrap();
+        let mut frames = decoder.into_frames();
+        let still = load("brand/badge-still.png");
+        let still = image::load_from_memory_with_format(&still, ImageFormat::Png)
+            .unwrap()
+            .into_rgba8();
+        let first = frames.next().unwrap().unwrap();
+        assert_eq!(first.buffer().dimensions(), still.dimensions());
+        // libwebp and image-webp can round the YUV conversion differently.
+        assert!(first.buffer().pixels().zip(still.pixels()).all(|(a, b)| {
+            a[3] == b[3] && (a[3] == 0 || (0..3).all(|c| a[c].abs_diff(b[c]) <= 5))
+        }));
+        assert_ne!(frames.next().unwrap().unwrap().buffer(), first.buffer());
+
+        let tree = |path| Tree::from_data(&load(path), &Options::default()).unwrap();
+        let eyes = tree("brand/eyes-closed.svg");
+        assert_eq!((eyes.size().width(), eyes.size().height()), (384., 384.));
+        let text = tree("brand/wordmark-text.svg");
+        let cursor = tree("brand/cursor.svg");
+        assert_eq!(text.size(), cursor.size());
+        let text_ink = text.root().abs_bounding_box();
+        let cursor_ink = cursor.root().abs_bounding_box();
+        assert!(text_ink.width() > cursor_ink.width());
+        assert!(text_ink.right() < cursor_ink.left());
+        assert!(cursor_ink.right() <= cursor.size().width());
     }
 }

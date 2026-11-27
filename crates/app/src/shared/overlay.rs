@@ -66,11 +66,22 @@ impl LiveSlots {
         key: impl Into<ElementId>,
         build: impl Fn() -> AnyElement + 'static,
     ) -> Div {
+        let held = ui::still(&build);
+        self.slot_with_placeholder(key, held, build)
+    }
+
+    /// Use an explicitly non-animated placeholder for elements that cannot
+    /// opt into `ui::still`, such as GPUI's own animations and animated images.
+    pub(crate) fn slot_with_placeholder(
+        &self,
+        key: impl Into<ElementId>,
+        placeholder: impl IntoElement,
+        build: impl Fn() -> AnyElement + 'static,
+    ) -> Div {
         let key = key.into();
         let build: Build = Rc::new(build);
-        let held = ui::still(|| build());
         let slots = self.clone();
-        div().relative().invisible().child(held).child(
+        div().relative().invisible().child(placeholder).child(
             canvas(
                 move |bounds, window, _| {
                     let slot = Slot {

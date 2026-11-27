@@ -213,8 +213,6 @@ pub struct SessionView {
     title: Option<String>,
     active_shell: Option<usize>,
     banner: crate::shared::banner::BannerConfig,
-    banner_reveal: f32,
-    _banner_anim: Task<()>,
     /// The conversation's virtualized list and its per-item display caches.
     list: view::TranscriptList,
     /// Where the live indicators of the conversation and the composer sit,
@@ -418,8 +416,6 @@ impl SessionView {
             active_shell: None,
             credentials_reload: None,
             banner: crate::shared::banner::read_config(&pi_rpc::resolve_homes().config),
-            banner_reveal: 0.0,
-            _banner_anim: Task::ready(()),
             list: view::TranscriptList::new(),
             live_slots,
             live_layer,

@@ -3753,6 +3753,7 @@ impl gpui_kit::Render for Pane {
 fn typing_pane(
     cx: &mut TestAppContext,
     reduce_motion: bool,
+    empty: bool,
 ) -> (Entity<SessionView>, &mut VisualTestContext, Backend) {
     use gpui_kit::AppContext as _;
     cx.update(|cx| {
@@ -3764,6 +3765,12 @@ fn typing_pane(
         Pane(cx.new(|cx| {
             let mut view = SessionView::new(cwd, None, window, cx, false);
             view.backend.started = true;
+            // Composer assertions measure only the focus pulse and kisses.
+            // An empty tab also has an independently animated hero.
+            if !empty {
+                view.transcript
+                    .load_messages(&[json!({"role": "user", "content": "Earlier prompt"})]);
+            }
             view
         }))
     });
@@ -3777,7 +3784,9 @@ fn typing_pane(
     cx.run_until_parked();
     // The focus pulse plays out first.
     frames_for(std::time::Duration::from_millis(600), cx);
-    assert_eq!(cx.update(|window, cx| window.simulate_next_frame(cx)), 0);
+    if !empty {
+        assert_eq!(cx.update(|window, cx| window.simulate_next_frame(cx)), 0);
+    }
     (view, cx, backend)
 }
 
@@ -3795,12 +3804,24 @@ fn frames_for(span: std::time::Duration, cx: &mut VisualTestContext) -> usize {
     asked
 }
 
+/// The empty hero keeps animating without invalidating the cached session pane.
+#[cfg(unix)]
+#[gpui::test]
+fn the_hero_banner_animates_without_redrawing_the_pane(cx: &mut TestAppContext) {
+    let (view, cx, backend) = typing_pane(cx, false, true);
+    let renders = || super::view::RENDERS.with(std::cell::Cell::get);
+    let before = renders();
+    assert!(frames_for(std::time::Duration::from_millis(200), cx) > 0);
+    assert_eq!(renders(), before);
+    backend.stop(&view, cx);
+}
+
 /// Typing blows a kiss from the caret; it flies while it lives (frames are
 /// asked for) and lands after its 900 ms (none are).
 #[cfg(unix)]
 #[gpui::test]
 fn a_typed_kiss_rises_from_the_caret_and_lands(cx: &mut TestAppContext) {
-    let (view, cx, backend) = typing_pane(cx, false);
+    let (view, cx, backend) = typing_pane(cx, false, false);
     let caret = view.read_with(cx, |view, cx| {
         let caret = view.composer.read(cx).prepaint_caret_geometry();
         caret
@@ -3823,7 +3844,7 @@ fn a_typed_kiss_rises_from_the_caret_and_lands(cx: &mut TestAppContext) {
 #[cfg(unix)]
 #[gpui::test]
 fn reduced_motion_blows_no_kiss(cx: &mut TestAppContext) {
-    let (view, cx, backend) = typing_pane(cx, true);
+    let (view, cx, backend) = typing_pane(cx, true, false);
     cx.simulate_keystrokes("a");
     assert!(view.read_with(cx, |view, _| view.kisses.is_empty()));
     assert_eq!(cx.update(|window, cx| window.simulate_next_frame(cx)), 0);
@@ -3835,7 +3856,7 @@ fn reduced_motion_blows_no_kiss(cx: &mut TestAppContext) {
 #[cfg(unix)]
 #[gpui::test]
 fn a_typed_kiss_redraws_only_the_live_layer(cx: &mut TestAppContext) {
-    let (view, cx, backend) = typing_pane(cx, false);
+    let (view, cx, backend) = typing_pane(cx, false, false);
     let renders = || super::view::RENDERS.with(std::cell::Cell::get);
     cx.simulate_keystrokes("a");
     // The keystroke draws the tab, and so does the next frame: an edit

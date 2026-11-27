@@ -13,7 +13,3 @@ pub mod pane;
 pub mod surge;
 pub mod themes;
 pub mod ui;
-
-// Used by the Tokyo Night banner (T4).
-#[allow(dead_code)]
-pub mod wordmark;

@@ -18,6 +18,7 @@ use gpui_kit::*;
 use super::attachments;
 use super::state::BackendStatus;
 use super::{CONTEXT, SessionView};
+use crate::shared::banner;
 use crate::shared::overlay::LiveSlots;
 use crate::shared::ui;
 use gentle_core::input_style::InputStyle;
@@ -717,8 +718,25 @@ impl SessionView {
         let version = self.backend.version.clone().unwrap_or_default();
         let needs_sign_in =
             self.backend.is_ready() && self.models.loaded && self.models.available.is_empty();
-        // The banner is ~175px per unit of scale; shrink it to fit the pane.
-        let scale = ((self.pane_width.get() - 48.) / 175.).clamp(1.5, 4.0);
+        // Shrink the visible banner layers to fit the pane.
+        let config = self.banner;
+        let scale = ((self.pane_width.get() - 48.) / config.width().max(1.)).clamp(1.5, 4.0);
+        let banner = self.live_slots.slot_with_placeholder(
+            "session-hero-banner",
+            config.placeholder(scale),
+            move || {
+                if !config.show_text_logo {
+                    return banner::banner(config, scale, 1.).into_any_element();
+                }
+                div()
+                    .with_animation(
+                        "session-hero-reveal",
+                        Animation::new(banner::WRITE),
+                        move |el, t| el.child(banner::banner(config, scale, t)),
+                    )
+                    .into_any_element()
+            },
+        );
         v_flex()
             .w_full()
             .min_w_0()
@@ -726,7 +744,7 @@ impl SessionView {
             .items_center()
             .gap_1()
             .pt(rems(80. / 16.))
-            .child(crate::shared::banner::banner(self.banner, scale, self.banner_reveal))
+            .child(banner)
             .child(
                 div()
                     .font_family(ui::mono())
