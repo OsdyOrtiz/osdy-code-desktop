@@ -16,6 +16,13 @@ use crate::shared::ui;
 
 impl Render for SettingsView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        crate::shared::i18n::sync_placeholder(
+            &self.settings_search,
+            "Find a setting…",
+            &mut self.search_language,
+            window,
+            cx,
+        );
         // Keep settings usable when there is not enough horizontal space
         // for both a category rail and the existing settings controls.
         let compact = window.viewport_size().width < rems(820. / 16.).to_pixels(window.rem_size());

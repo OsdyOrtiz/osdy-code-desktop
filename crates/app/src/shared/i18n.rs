@@ -7,7 +7,8 @@
 use std::sync::atomic::{AtomicU8, Ordering};
 
 use gentle_core::i18n::{self, Choice, Language};
-use gpui_kit::{App, Global};
+use gpui_kit::component::input::InputState;
+use gpui_kit::{App, Entity, Global, Window};
 
 use super::themes;
 
@@ -69,4 +70,22 @@ pub fn set_choice(choice: Choice, cx: &mut App) {
 /// `en` in the interface language (itself when it has no translation).
 pub fn t(en: &'static str) -> &'static str {
     i18n::tr(language(), en)
+}
+
+/// Text kept outside render (an input's placeholder) follows the language:
+/// a view keeps the `seen` language it last wrote it in and calls this from
+/// `render`; it writes `en` again only after a change, so a render never
+/// triggers another.
+pub fn sync_placeholder(
+    input: &Entity<InputState>,
+    en: &'static str,
+    seen: &mut Language,
+    window: &mut Window,
+    cx: &mut App,
+) {
+    let now = language();
+    if *seen != now {
+        *seen = now;
+        input.update(cx, |state, cx| state.set_placeholder(t(en), window, cx));
+    }
 }

@@ -68,6 +68,8 @@ pub struct SettingsView {
     page: SettingsPage,
     body_scroll: ScrollHandle,
     settings_search: Entity<InputState>,
+    /// The language the search placeholder was last written in.
+    search_language: gentle_core::i18n::Language,
     _settings_search: Subscription,
     compact_categories_open: bool,
     snapshot: Option<Snapshot>,
@@ -173,6 +175,7 @@ impl SettingsView {
             page: SettingsPage::default(),
             body_scroll: ScrollHandle::new(),
             settings_search,
+            search_language: crate::shared::i18n::language(),
             _settings_search: settings_search_subscription,
             _workspace_sub: cx.observe(&workspace, |this, workspace, cx| {
                 this.sync_workspace(workspace, cx);
