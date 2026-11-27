@@ -52,11 +52,17 @@ impl Language {
 }
 
 /// What the user picked: follow the operating system, or one language.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+/// Without a choice the interface is in Spanish.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Choice {
-    #[default]
     System,
     Fixed(Language),
+}
+
+impl Default for Choice {
+    fn default() -> Self {
+        Choice::Fixed(Language::Spanish)
+    }
 }
 
 impl Choice {
@@ -74,12 +80,12 @@ impl Choice {
         }
     }
 
-    /// The saved value; anything missing or unknown follows the system.
+    /// The saved value; anything missing or unknown is the default.
     pub fn from_id(id: Option<&str>) -> Choice {
         match id.map(str::trim) {
+            Some("system") => Choice::System,
             Some("en") => Choice::Fixed(Language::English),
-            Some("es") => Choice::Fixed(Language::Spanish),
-            _ => Choice::System,
+            _ => Choice::default(),
         }
     }
 
@@ -127,13 +133,23 @@ mod tests {
     }
 
     #[test]
-    fn a_saved_choice_round_trips_and_anything_else_follows_the_system() {
+    fn a_saved_choice_round_trips() {
         for choice in Choice::ALL {
             assert_eq!(Choice::from_id(Some(choice.id())), choice);
         }
-        assert_eq!(Choice::from_id(None), Choice::System);
-        assert_eq!(Choice::from_id(Some("fr")), Choice::System);
-        assert_eq!(Choice::from_id(Some("")), Choice::System);
+    }
+
+    #[test]
+    fn without_a_saved_choice_the_interface_is_in_spanish() {
+        let spanish = Choice::Fixed(Language::Spanish);
+        assert_eq!(Choice::default(), spanish);
+        assert_eq!(Choice::from_id(None), spanish);
+        assert_eq!(Choice::from_id(Some("fr")), spanish);
+        assert_eq!(Choice::from_id(Some("")), spanish);
+        assert_eq!(
+            Choice::from_id(None).resolve(Some("en-US")),
+            Language::Spanish
+        );
     }
 
     #[test]
