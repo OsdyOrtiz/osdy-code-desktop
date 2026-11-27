@@ -22,8 +22,10 @@ use gentle_core::git::ops::{CommitFile, PullMode};
 use gpui_kit::component::input::{InputEvent, InputState};
 use gpui_kit::*;
 
+use crate::features::files::Text;
 use crate::features::git::{self, Commit, Graph, History, Scope};
 use crate::platform::ides;
+use crate::shared::i18n::{language, t};
 
 /// Commits read at first, and how many more "Earlier history" adds.
 const PAGE: usize = 200;
@@ -49,8 +51,8 @@ struct Detail {
 
 /// The last action's outcome, shown in the footer until the next one.
 enum Outcome {
-    Done(String),
-    Failed(String),
+    Done(Text),
+    Failed(Text),
 }
 
 /// What the activity strip shows.
@@ -84,6 +86,7 @@ pub struct HistoryView {
     focus: FocusHandle,
     /// Narrows the loaded commits by subject, author, hash or ref.
     filter: Entity<InputState>,
+    filter_language: gentle_core::i18n::Language,
     query: String,
     pull_mode: PullMode,
     /// The action running, as the footer says it ("Pulling…").
@@ -100,7 +103,7 @@ pub struct HistoryView {
     repo_days: Option<Rc<Vec<(i64, u32)>>>,
     /// The user's GitHub calendar: `None` until asked for, else what came
     /// back (or why it didn't).
-    github: Option<Result<Rc<contributions::Contributions>, String>>,
+    github: Option<Result<Rc<contributions::Contributions>, Text>>,
     github_loading: bool,
     /// The strip, laid out from the shown source.
     activity: Option<Rc<Activity>>,
@@ -122,7 +125,7 @@ impl Focusable for HistoryView {
 impl HistoryView {
     /// `cwd` is any folder inside the repository.
     pub fn new(cwd: PathBuf, window: &mut Window, cx: &mut Context<Self>) -> Self {
-        let filter = cx.new(|cx| InputState::new(window, cx).placeholder("Filter commits"));
+        let filter = cx.new(|cx| InputState::new(window, cx).placeholder(t("Filter commits")));
         let subscriptions = vec![
             cx.subscribe(&filter, |this, input, event, cx| {
                 if let InputEvent::Change = event {
@@ -151,6 +154,7 @@ impl HistoryView {
             width: Rc::default(),
             focus: cx.focus_handle(),
             filter,
+            filter_language: language(),
             query: String::new(),
             pull_mode: PullMode::default(),
             busy: None,

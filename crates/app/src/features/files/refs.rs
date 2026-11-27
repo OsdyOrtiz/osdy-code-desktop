@@ -17,7 +17,9 @@ use gpui_kit::component::{Icon, Sizable as _, WindowExt as _, h_flex, v_flex};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
 
+use super::Text;
 use crate::features::git::{self, RefEntry, RefsSnapshot, StashAction, Worktree};
+use crate::shared::i18n::{language, sync_placeholder, t};
 use crate::shared::ui;
 
 const POLL: Duration = Duration::from_secs(5);
@@ -46,12 +48,12 @@ enum Section {
 impl Section {
     fn label(self) -> &'static str {
         match self {
-            Self::Branches => "Branches",
-            Self::Remotes => "Remotes",
-            Self::Tags => "Tags",
-            Self::Stashes => "Stashes",
-            Self::Worktrees => "Worktrees",
-            Self::Submodules => "Submodules",
+            Self::Branches => t("Branches"),
+            Self::Remotes => t("Remotes"),
+            Self::Tags => t("Tags"),
+            Self::Stashes => t("Stashes"),
+            Self::Worktrees => t("Worktrees"),
+            Self::Submodules => t("Submodules"),
         }
     }
 }
@@ -91,6 +93,7 @@ pub struct RefsView {
     /// `None` until the first read, `Some(None)` outside a git work tree.
     repo: Option<Option<Repo>>,
     filter: Entity<InputState>,
+    filter_language: gentle_core::i18n::Language,
     collapsed: HashSet<Section>,
     /// The list's rows, rebuilt when the refs, filter or collapsed sections change.
     lines: Rc<Vec<Line>>,
@@ -98,7 +101,7 @@ pub struct RefsView {
     reveal_stashes: bool,
     scroll: UniformListScrollHandle,
     busy: bool,
-    error: Option<String>,
+    error: Option<Text>,
     visible: bool,
     _poll: Task<()>,
     _subscriptions: Vec<Subscription>,
@@ -108,7 +111,7 @@ impl EventEmitter<RefsEvent> for RefsView {}
 
 impl RefsView {
     pub fn new(root: PathBuf, window: &mut Window, cx: &mut Context<Self>) -> Self {
-        let filter = cx.new(|cx| InputState::new(window, cx).placeholder("Filter refs"));
+        let filter = cx.new(|cx| InputState::new(window, cx).placeholder(t("Filter refs")));
         let subscriptions = vec![cx.subscribe(&filter, |this, _, event: &InputEvent, cx| {
             if let InputEvent::Change = event {
                 this.relayout(cx);
@@ -119,6 +122,7 @@ impl RefsView {
             root,
             repo: None,
             filter,
+            filter_language: language(),
             collapsed: HashSet::new(),
             lines: Rc::new(Vec::new()),
             reveal_stashes: false,
@@ -294,7 +298,7 @@ impl RefsView {
     /// Run a git operation in the background, then re-read the refs.
     fn git_op(
         &mut self,
-        job: impl FnOnce(&Path) -> Result<(), String> + Send + 'static,
+        job: impl FnOnce(&Path) -> Result<(), Text> + Send + 'static,
         cx: &mut Context<Self>,
     ) {
         self.git_op_then_open(move |top| job(top).map(|()| None), cx);
@@ -304,7 +308,7 @@ impl RefsView {
     /// worktree) to open an agent tab in once it succeeds.
     fn git_op_then_open(
         &mut self,
-        job: impl FnOnce(&Path) -> Result<Option<PathBuf>, String> + Send + 'static,
+        job: impl FnOnce(&Path) -> Result<Option<PathBuf>, Text> + Send + 'static,
         cx: &mut Context<Self>,
     ) {
         let Some(toplevel) = self.snapshot().map(|repo| repo.toplevel.clone()) else {
@@ -369,13 +373,10 @@ impl RefsView {
         window.open_alert_dialog(cx, move |alert, _, _| {
             let (this, path) = (this.clone(), path.clone());
             alert
-                .title(format!("Remove the \u{201c}{title}\u{201d} worktree?"))
-                .description(format!(
-                    "Its folder {} is deleted; the branch stays. git refuses while \
-                     it has uncommitted changes.",
-                    path.display()
-                ))
-                .ok_text("Remove")
+                .title(t("Remove the “{title}” worktree?").replace("{title}", &title))
+                .description(t("Its folder {path} is deleted; the branch stays. git refuses while it has uncommitted changes.").replace("{path}", &path.display().to_string()))
+                .ok_text(t("Remove"))
+                .cancel_text(t("Cancel"))
                 .ok_variant(ButtonVariant::Danger)
                 .show_cancel(true)
                 .on_ok(move |_, _, cx| {
@@ -397,28 +398,30 @@ impl RefsView {
         }
         if !repo.refs.head.dirty {
             self.git_op(
-                move |top| crate::features::palette::switch_branch(top, &branch),
+                move |top| {
+                    crate::features::palette::switch_branch(top, &branch).map_err(Text::from)
+                },
                 cx,
             );
             return;
         }
-        let title = format!("Switch to \u{201c}{branch}\u{201d}?");
+        let title = Text::from("Switch to “{branch}”?").with("{branch}", branch.clone());
         let this = cx.entity().downgrade();
         window.open_alert_dialog(cx, move |alert, _, _| {
             let (this, branch) = (this.clone(), branch.clone());
             alert
-                .title(title.clone())
+                .title(title.render())
                 .description(
-                    "You have uncommitted changes. They come along to the other branch; \
-                     git refuses the switch if they conflict.",
+                    t("You have uncommitted changes. They come along to the other branch; git refuses the switch if they conflict."),
                 )
-                .ok_text("Switch")
+                .ok_text(t("Switch"))
+                .cancel_text(t("Cancel"))
                 .show_cancel(true)
                 .on_ok(move |_, _, cx| {
                     let branch = branch.clone();
                     let _ = this.update(cx, |this, cx| {
                         this.git_op(
-                            move |top| crate::features::palette::switch_branch(top, &branch),
+                            move |top| crate::features::palette::switch_branch(top, &branch).map_err(Text::from),
                             cx,
                         )
                     });
@@ -438,11 +441,13 @@ impl RefsView {
         window.open_alert_dialog(cx, move |alert, _, _| {
             let (this, name) = (this.clone(), name.clone());
             alert
-                .title(format!("Drop {name}?"))
-                .description(format!(
-                    "\u{201c}{message}\u{201d} is deleted. This can't be undone."
-                ))
-                .ok_text("Drop")
+                .title(t("Drop {name}?").replace("{name}", &name))
+                .description(
+                    t("“{message}” is deleted. This can't be undone.")
+                        .replace("{message}", &message),
+                )
+                .ok_text(t("Drop"))
+                .cancel_text(t("Cancel"))
                 .ok_variant(ButtonVariant::Danger)
                 .show_cancel(true)
                 .on_ok(move |_, _, cx| {
@@ -542,9 +547,9 @@ impl RefsView {
                 Section::Submodules => {
                     let s = refs.submodules.get(ix)?;
                     let state = match s.state {
-                        '-' => Some(ui::chip("not initialized", ui::muted())),
-                        '+' => Some(ui::chip("moved", ui::warning())),
-                        'U' => Some(ui::chip("conflict", ui::danger())),
+                        '-' => Some(ui::chip(t("not initialized"), ui::muted())),
+                        '+' => Some(ui::chip(t("moved"), ui::warning())),
+                        'U' => Some(ui::chip(t("conflict"), ui::danger())),
                         _ => None,
                     };
                     row(
@@ -576,7 +581,7 @@ impl RefsView {
         .context_menu(move |menu, _, _| {
             let (weak, name) = (weak.clone(), name.clone());
             menu.item(
-                PopupMenuItem::new("Check out as local branch")
+                PopupMenuItem::new(t("Check out as local branch"))
                     .icon(Icon::new(IconName::GitBranch))
                     .on_click(move |_, _, cx| {
                         let name = name.clone();
@@ -628,11 +633,11 @@ impl RefsView {
                         weak.update(cx, |this, cx| this.confirm_drop(name, message, window, cx));
                 }
             };
-            menu.item(action("Apply", IconName::Check, StashAction::Apply))
-                .item(action("Pop", IconName::ArrowUp, StashAction::Pop))
+            menu.item(action(t("Apply"), IconName::Check, StashAction::Apply))
+                .item(action(t("Pop"), IconName::ArrowUp, StashAction::Pop))
                 .separator()
                 .item(
-                    PopupMenuItem::new("Drop…")
+                    PopupMenuItem::new(t("Drop…"))
                         .icon(Icon::new(IconName::Trash))
                         .on_click(drop),
                 )
@@ -645,13 +650,15 @@ impl RefsView {
     fn render_worktree(&self, w: &Worktree, cx: &mut Context<Self>) -> AnyElement {
         let title = match (&w.branch, &w.head) {
             (Some(branch), _) => branch.clone(),
-            (None, Some(head)) => format!("detached at {}", &head[..head.len().min(7)]),
-            (None, None) => "bare".to_string(),
+            (None, Some(head)) => {
+                t("detached at {sha}").replace("{sha}", &head[..head.len().min(7)])
+            }
+            (None, None) => t("bare").to_string(),
         };
         let flag = if w.prunable {
-            Some(ui::chip("prunable", ui::warning()))
+            Some(ui::chip(t("prunable"), ui::warning()))
         } else if w.locked {
-            Some(ui::chip("locked", ui::muted()))
+            Some(ui::chip(t("locked"), ui::muted()))
         } else {
             None
         };
@@ -683,7 +690,7 @@ impl RefsView {
             if prunable {
                 let weak = weak.clone();
                 return menu.item(
-                    PopupMenuItem::new("Prune")
+                    PopupMenuItem::new(t("Prune"))
                         .icon(Icon::new(IconName::Trash))
                         .on_click(move |_, _, cx| {
                             let _ =
@@ -707,13 +714,13 @@ impl RefsView {
                 }
             };
             menu.item(
-                PopupMenuItem::new("Open in agent tab")
+                PopupMenuItem::new(t("Open in agent tab"))
                     .icon(Icon::new(IconName::Bot))
                     .on_click(open),
             )
             .separator()
             .item(
-                PopupMenuItem::new("Remove worktree…")
+                PopupMenuItem::new(t("Remove worktree…"))
                     .icon(Icon::new(IconName::Trash))
                     .disabled(locked)
                     .on_click(remove),
@@ -730,9 +737,9 @@ impl RefsView {
             SharedString::from("refs-new-worktree"),
             IconName::Plus,
             ui::accent(),
-            format!("New worktree on branch \u{201c}{name}\u{201d}"),
+            t("New worktree on branch “{name}”").replace("{name}", &name),
             ui::fg(),
-            Some(detail("from HEAD".into())),
+            Some(detail(t("from HEAD").into())),
         )
         .cursor_pointer()
         .on_click(cx.listener(move |this, _, window, cx| {
@@ -743,14 +750,14 @@ impl RefsView {
 
     fn render_body(&self, cx: &mut Context<Self>) -> AnyElement {
         match &self.repo {
-            None => return note("Reading refs…").into_any_element(),
-            Some(None) => return note("Not a git repository").into_any_element(),
+            None => return note(t("Reading refs…")).into_any_element(),
+            Some(None) => return note(t("Not a git repository")).into_any_element(),
             Some(Some(_)) => {}
         }
         // Unfiltered, Stashes always has a header: only a filter empties the list.
         if self.lines.is_empty() {
             let value = self.filter.read(cx).value();
-            return note(format!("No refs match \u{201c}{}\u{201d}", value.trim()))
+            return note(t("No refs match “{query}”").replace("{query}", value.trim()))
                 .into_any_element();
         }
         div()
@@ -779,7 +786,7 @@ impl RefsView {
 
     fn render_branch(&self, branch: &RefEntry, cx: &mut Context<Self>) -> AnyElement {
         let trailing = if branch.gone {
-            Some(ui::chip("gone", ui::warning()).into_any_element())
+            Some(ui::chip(t("gone"), ui::warning()).into_any_element())
         } else if branch.ahead > 0 || branch.behind > 0 {
             Some(ahead_behind(branch.ahead, branch.behind).into_any_element())
         } else if branch.current {
@@ -834,13 +841,13 @@ impl RefsView {
                 }
             };
             menu.item(
-                PopupMenuItem::new("Check out")
+                PopupMenuItem::new(t("Check out"))
                     .icon(Icon::new(IconName::GitBranch))
                     .disabled(current)
                     .on_click(checkout),
             )
             .item(
-                PopupMenuItem::new("New worktree")
+                PopupMenuItem::new(t("New worktree"))
                     .icon(Icon::new(IconName::FolderPlus))
                     .disabled(current || elsewhere)
                     .on_click(worktree),
@@ -855,22 +862,19 @@ impl RefsView {
         let toplevel = repo.toplevel.clone();
         let title = match (&head.branch, &head.sha) {
             (Some(branch), _) => branch.clone(),
-            (None, Some(sha)) => format!("Detached at {sha}"),
-            (None, None) => "No commits yet".to_string(),
+            (None, Some(sha)) => t("Detached at {sha}").replace("{sha}", sha),
+            (None, None) => t("No commits yet").to_string(),
         };
         let upstream = head
             .upstream
             .clone()
-            .unwrap_or_else(|| "No upstream".into());
-        let commits = format!(
-            "{} {}",
-            head.commits,
-            if head.commits == 1 {
-                "commit"
-            } else {
-                "commits"
-            }
-        );
+            .unwrap_or_else(|| t("No upstream").into());
+        let commits = t(if head.commits == 1 {
+            "{count} commit"
+        } else {
+            "{count} commits"
+        })
+        .replace("{count}", &head.commits.to_string());
         Some(
             v_flex()
                 .flex_none()
@@ -901,7 +905,7 @@ impl RefsView {
                                 .ghost()
                                 .xsmall()
                                 .icon(Icon::new(IconName::GitGraph))
-                                .tooltip("Open in the Git pane")
+                                .tooltip(t("Open in the Git pane"))
                                 .on_click(cx.listener(move |_, _, _, cx| {
                                     cx.emit(RefsEvent::OpenHistory(toplevel.clone()))
                                 })),
@@ -920,7 +924,14 @@ impl RefsView {
 }
 
 impl Render for RefsView {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        sync_placeholder(
+            &self.filter,
+            "Filter refs",
+            &mut self.filter_language,
+            window,
+            cx,
+        );
         v_flex()
             .size_full()
             .min_h_0()
@@ -947,7 +958,7 @@ impl Render for RefsView {
                         .mb_1()
                         .text_size(rems(11.5 / 16.))
                         .text_color(ui::danger())
-                        .child(error),
+                        .child(error.render()),
                 )
             })
             .children(self.render_footer(cx))

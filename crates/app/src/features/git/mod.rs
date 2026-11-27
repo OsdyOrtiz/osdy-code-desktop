@@ -10,6 +10,10 @@
 use std::path::{Path, PathBuf};
 use std::process::Stdio;
 
+use super::files::Text;
+
+type GitResult<T> = Result<T, Text>;
+
 mod changes;
 mod log;
 pub mod ops;
@@ -86,7 +90,7 @@ pub fn repository_path(root: &Path, toplevel: &Path) -> Option<String> {
 
 /// Run `git` for its effect. The error is git's own message; credentials
 /// are never prompted for (there is no terminal to answer).
-pub fn run(cwd: &Path, args: &[&str]) -> Result<String, String> {
+fn run(cwd: &Path, args: &[&str]) -> GitResult<String> {
     let mut command = crate::features::backend::git(cwd, &[("GIT_TERMINAL_PROMPT", "0")]);
     command.args(args).stdin(Stdio::null());
     let out = command.output().map_err(|e| format!("git: {e}"))?;
@@ -100,7 +104,7 @@ pub fn run(cwd: &Path, args: &[&str]) -> Result<String, String> {
         } else {
             stderr
         };
-        Err(message.trim().to_string())
+        Err(message.trim().to_string().into())
     }
 }
 
@@ -247,7 +251,7 @@ mod tests {
         assert!(refs.worktrees.is_empty());
         stash(&top, StashAction::Pop, &refs.stashes[0].name).unwrap();
         assert_eq!(work_tree(&top).unwrap().entries[0].path, "new.txt");
-        assert!(push(&top).unwrap_err().contains("no remote"));
+        assert!(push(&top).unwrap_err().render().contains("no remote"));
         stash_push(&top, "parked again").unwrap();
 
         // Worktrees: beside the repository, even when made from a linked one.

@@ -17,6 +17,7 @@ use gpui_kit::*;
 
 use gentle_core::explorer::{Entry, visible};
 
+use crate::shared::i18n::{language, sync_placeholder, t};
 use crate::shared::ui;
 
 #[cfg(test)]
@@ -45,6 +46,7 @@ pub struct ExplorerView {
     shown: Vec<Entry>,
     selected: usize,
     filter: Entity<InputState>,
+    filter_language: gentle_core::i18n::Language,
     /// Why `dir` couldn't be listed.
     error: Option<String>,
     scroll: UniformListScrollHandle,
@@ -56,7 +58,7 @@ pub struct ExplorerView {
 
 impl ExplorerView {
     pub fn new(dir: PathBuf, window: &mut Window, cx: &mut Context<Self>) -> Self {
-        let filter = cx.new(|cx| InputState::new(window, cx).placeholder("Filter…"));
+        let filter = cx.new(|cx| InputState::new(window, cx).placeholder(t("Filter…")));
         filter.update(cx, |state, cx| state.focus(window, cx));
         let subscription = cx.subscribe(&filter, |this, _, event: &InputEvent, cx| {
             if let InputEvent::Change = event {
@@ -70,6 +72,7 @@ impl ExplorerView {
             shown: Vec::new(),
             selected: 0,
             filter,
+            filter_language: language(),
             error: None,
             scroll: UniformListScrollHandle::new(),
             listing: Task::ready(()),
@@ -327,7 +330,7 @@ impl ExplorerView {
                     }),
             )
             .when(repo, |d| {
-                d.child(div().text_xs().text_color(ui::muted()).child("repo"))
+                d.child(div().text_xs().text_color(ui::muted()).child(t("repo")))
             })
     }
 }
@@ -359,13 +362,13 @@ fn hint(keys: impl IntoIterator<Item = impl IntoElement>, label: &'static str) -
 }
 
 impl Render for ExplorerView {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         // Only the rows in view are built.
         let list = if self.shown.is_empty() {
             let text = match &self.error {
-                Some(error) => format!("Can't read this folder: {error}"),
-                None if self.entries.is_empty() => "Empty folder".into(),
-                None => "No matches".into(),
+                Some(error) => t("Can't read this folder: {error}").replace("{error}", error),
+                None if self.entries.is_empty() => t("Empty folder").into(),
+                None => t("No matches").into(),
             };
             v_flex()
                 .id("explorer-list")
@@ -400,6 +403,13 @@ impl Render for ExplorerView {
             .track_scroll(&self.scroll)
             .into_any_element()
         };
+        sync_placeholder(
+            &self.filter,
+            "Filter…",
+            &mut self.filter_language,
+            window,
+            cx,
+        );
         let (secondary, alt) = if cfg!(target_os = "macos") {
             ("⌘", "⌥")
         } else {
@@ -431,7 +441,7 @@ impl Render for ExplorerView {
                             .ghost()
                             .xsmall()
                             .icon(Icon::new(IconName::ArrowUp))
-                            .tooltip("Parent folder (-)")
+                            .tooltip(t("Parent folder (-)"))
                             .on_click(cx.listener(|this, _, window, cx| this.go_up(window, cx))),
                     )
                     .child(self.render_crumbs(cx))
@@ -440,7 +450,7 @@ impl Render for ExplorerView {
                             .primary()
                             .small()
                             .icon(Icon::new(IconName::Bot))
-                            .label("Open Osdy Code Desktop here")
+                            .label(t("Open Osdy Code Desktop here"))
                             .on_click(cx.listener(|this, _, _, cx| {
                                 if !this.dir.as_os_str().is_empty() {
                                     cx.emit(ExplorerEvent::OpenAgent(this.dir.clone()))
@@ -473,9 +483,9 @@ impl Render for ExplorerView {
                     .gap_4()
                     .border_t_1()
                     .border_color(ui::border())
-                    .child(hint([ui::kbd("↵")], "enter"))
-                    .child(hint([ui::kbd("-")], "parent"))
-                    .child(hint([ui::kbd("~")], "home"))
+                    .child(hint([ui::kbd("↵")], t("enter")))
+                    .child(hint([ui::kbd("-")], t("parent")))
+                    .child(hint([ui::kbd("~")], t("home")))
                     .child(hint(
                         [ui::key_button("explorer-agent", format!("{secondary} ↵"))
                             .on_click(cx.listener(|this, _, _, cx| this.open_agent(cx)))],
@@ -484,13 +494,13 @@ impl Render for ExplorerView {
                     .child(hint(
                         [ui::key_button("explorer-terminal", format!("{alt} ↵"))
                             .on_click(cx.listener(|this, _, _, cx| this.open_terminal(cx)))],
-                        "terminal",
+                        t("terminal"),
                     ))
                     .child(div().flex_1())
                     .child(hint(
                         [ui::key_button("explorer-close", "esc")
                             .on_click(cx.listener(|_, _, _, cx| cx.emit(ExplorerEvent::Close)))],
-                        "close",
+                        t("close"),
                     )),
             );
 

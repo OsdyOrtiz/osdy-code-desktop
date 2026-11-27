@@ -7,7 +7,7 @@ use std::path::Path;
 use gentle_core::git::status::{EntryKind, StatusEntry, WorkTree, parse_status_v2};
 use gentle_core::git::truncate_diff;
 
-use super::{git, run};
+use super::{GitResult, git, run};
 
 /// The work tree of the repository at `toplevel`, with each entry's staged
 /// and unstaged line counts; `None` outside one.
@@ -41,7 +41,7 @@ pub fn work_tree(toplevel: &Path) -> Option<WorkTree> {
 
 /// Run `args` on `paths`, which are file names from `git status`: taken
 /// literally, so a name with `[`, `*` or `?` never matches other files.
-fn run_with(cwd: &Path, args: &[&str], paths: &[String]) -> Result<(), String> {
+fn run_with(cwd: &Path, args: &[&str], paths: &[String]) -> GitResult<()> {
     let mut all: Vec<&str> = vec!["--literal-pathspecs"];
     all.extend(args);
     all.push("--");
@@ -53,11 +53,11 @@ fn has_head(toplevel: &Path) -> bool {
     git(toplevel, &["rev-parse", "--verify", "-q", "HEAD"]).is_some()
 }
 
-pub fn stage(toplevel: &Path, paths: &[String]) -> Result<(), String> {
+pub fn stage(toplevel: &Path, paths: &[String]) -> GitResult<()> {
     run_with(toplevel, &["add", "-A"], paths)
 }
 
-pub fn unstage(toplevel: &Path, paths: &[String]) -> Result<(), String> {
+pub fn unstage(toplevel: &Path, paths: &[String]) -> GitResult<()> {
     if has_head(toplevel) {
         run_with(toplevel, &["restore", "--staged"], paths)
     } else {
@@ -66,11 +66,11 @@ pub fn unstage(toplevel: &Path, paths: &[String]) -> Result<(), String> {
 }
 
 /// Stage every tracked file's edits; untracked files stay out.
-pub fn stage_tracked(toplevel: &Path) -> Result<(), String> {
+pub fn stage_tracked(toplevel: &Path) -> GitResult<()> {
     run(toplevel, &["add", "-u"]).map(drop)
 }
 
-pub fn unstage_all(toplevel: &Path) -> Result<(), String> {
+pub fn unstage_all(toplevel: &Path) -> GitResult<()> {
     if has_head(toplevel) {
         run(toplevel, &["reset", "-q"]).map(drop)
     } else {
@@ -81,7 +81,7 @@ pub fn unstage_all(toplevel: &Path) -> Result<(), String> {
 /// Throw away one side of an entry. Unstaged: the worktree goes back to the
 /// index (untracked files are deleted). Staged: index and worktree go back
 /// to HEAD (a staged new file is deleted).
-pub fn discard(toplevel: &Path, entry: &StatusEntry, staged: bool) -> Result<(), String> {
+pub fn discard(toplevel: &Path, entry: &StatusEntry, staged: bool) -> GitResult<()> {
     let path = vec![entry.path.clone()];
     if !staged {
         return match entry.kind {
@@ -118,7 +118,7 @@ pub fn stash_count(toplevel: &Path) -> usize {
 }
 
 /// Stash every change, untracked files included.
-pub fn stash_push(toplevel: &Path, message: &str) -> Result<(), String> {
+pub fn stash_push(toplevel: &Path, message: &str) -> GitResult<()> {
     let mut args = vec!["stash", "push", "--include-untracked"];
     if !message.trim().is_empty() {
         args.extend(["-m", message.trim()]);
@@ -127,12 +127,7 @@ pub fn stash_push(toplevel: &Path, message: &str) -> Result<(), String> {
 }
 
 /// `git commit`; an amend with an empty summary keeps the old message.
-pub fn commit(
-    toplevel: &Path,
-    summary: &str,
-    description: &str,
-    amend: bool,
-) -> Result<(), String> {
+pub fn commit(toplevel: &Path, summary: &str, description: &str, amend: bool) -> GitResult<()> {
     let (summary, description) = (summary.trim(), description.trim());
     let mut args = vec!["commit"];
     if amend {
@@ -154,7 +149,7 @@ pub fn commit(
 
 /// `git push`, publishing the branch to a remote first when it has no
 /// upstream (`origin` if present, else the only/first remote).
-pub fn push(toplevel: &Path) -> Result<(), String> {
+pub fn push(toplevel: &Path) -> GitResult<()> {
     if git(toplevel, &["rev-parse", "--abbrev-ref", "@{upstream}"]).is_some() {
         return run(toplevel, &["push"]).map(drop);
     }
@@ -181,7 +176,7 @@ pub fn last_commit_message(toplevel: &Path) -> Option<(String, String)> {
 }
 
 /// The staged diff with a stat header, cut to `max` bytes on a line break.
-pub fn staged_diff(toplevel: &Path, max: usize) -> Result<String, String> {
+pub fn staged_diff(toplevel: &Path, max: usize) -> GitResult<String> {
     let diff = run(
         toplevel,
         &[

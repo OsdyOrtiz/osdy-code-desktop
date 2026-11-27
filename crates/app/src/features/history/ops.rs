@@ -11,7 +11,8 @@ use gpui_kit::component::input::{InputEvent, InputState};
 use gpui_kit::*;
 
 use super::{HistoryView, Outcome};
-use crate::features::git;
+use crate::features::{files::Text, git};
+use crate::shared::i18n::{language, sync_placeholder, t};
 use crate::shared::pane::{AskAgent, OpenCommitDiff, OpenTerminalAt};
 
 /// What the inline prompt asks for.
@@ -32,21 +33,21 @@ pub(super) enum Ask {
 impl Ask {
     pub(super) fn title(&self) -> String {
         match self {
-            Ask::Branch { label, .. } => format!("New branch at {label}"),
-            Ask::Tag { label, .. } => format!("New tag at {label}"),
-            Ask::Stash => "Stash changes".into(),
-            Ask::Remote => "Add remote".into(),
-            Ask::Reword => "Edit HEAD's message".into(),
+            Ask::Branch { label, .. } => t("New branch at {label}").replace("{label}", label),
+            Ask::Tag { label, .. } => t("New tag at {label}").replace("{label}", label),
+            Ask::Stash => t("Stash changes").into(),
+            Ask::Remote => t("Add remote").into(),
+            Ask::Reword => t("Edit HEAD's message").into(),
         }
     }
 
     pub(super) fn confirm(&self) -> &'static str {
-        match self {
+        t(match self {
             Ask::Branch { .. } | Ask::Tag { .. } => "Create",
             Ask::Stash => "Stash",
             Ask::Remote => "Add",
             Ask::Reword => "Save",
-        }
+        })
     }
 }
 
@@ -55,7 +56,26 @@ pub(super) struct Prompt {
     pub ask: Ask,
     pub first: Entity<InputState>,
     pub second: Option<Entity<InputState>>,
+    first_hint: &'static str,
+    second_hint: Option<&'static str>,
+    first_language: gentle_core::i18n::Language,
+    second_language: gentle_core::i18n::Language,
     _subscriptions: Vec<Subscription>,
+}
+
+impl Prompt {
+    pub(super) fn sync_language(&mut self, window: &mut Window, cx: &mut App) {
+        sync_placeholder(
+            &self.first,
+            self.first_hint,
+            &mut self.first_language,
+            window,
+            cx,
+        );
+        if let (Some(second), Some(hint)) = (&self.second, self.second_hint) {
+            sync_placeholder(second, hint, &mut self.second_language, window, cx);
+        }
+    }
 }
 
 impl HistoryView {
@@ -64,8 +84,8 @@ impl HistoryView {
     pub(super) fn run_op(
         &mut self,
         doing: &'static str,
-        done: impl Into<String>,
-        job: impl FnOnce(&Path) -> Result<(), String> + Send + 'static,
+        done: impl Into<Text>,
+        job: impl FnOnce(&Path) -> Result<(), Text> + Send + 'static,
         cx: &mut Context<Self>,
     ) {
         if self.busy.is_some() {
@@ -122,7 +142,7 @@ impl HistoryView {
     }
 
     pub(super) fn switch(&mut self, branch: String, cx: &mut Context<Self>) {
-        let done = format!("Switched to {branch}");
+        let done = Text::from("Switched to {branch}").with("{branch}", branch.clone());
         self.run_op(
             "Switching…",
             done,
@@ -132,7 +152,7 @@ impl HistoryView {
     }
 
     pub(super) fn checkout_detached(&mut self, hash: String, cx: &mut Context<Self>) {
-        let done = format!("Checked out {}", short(&hash));
+        let done = Text::from("Checked out {sha}").with("{sha}", short(&hash));
         self.run_op(
             "Checking out…",
             done,
@@ -142,7 +162,7 @@ impl HistoryView {
     }
 
     pub(super) fn cherry_pick(&mut self, hash: String, merge: bool, cx: &mut Context<Self>) {
-        let done = format!("Cherry-picked {}", short(&hash));
+        let done = Text::from("Cherry-picked {sha}").with("{sha}", short(&hash));
         self.run_op(
             "Cherry-picking…",
             done,
@@ -152,7 +172,7 @@ impl HistoryView {
     }
 
     pub(super) fn revert(&mut self, hash: String, merge: bool, cx: &mut Context<Self>) {
-        let done = format!("Reverted {}", short(&hash));
+        let done = Text::from("Reverted {sha}").with("{sha}", short(&hash));
         self.run_op(
             "Reverting…",
             done,
@@ -162,7 +182,7 @@ impl HistoryView {
     }
 
     pub(super) fn reset(&mut self, hash: String, mode: ResetMode, cx: &mut Context<Self>) {
-        let done = format!("Reset to {}", short(&hash));
+        let done = Text::from("Reset to {sha}").with("{sha}", short(&hash));
         self.run_op(
             "Resetting…",
             done,
@@ -186,12 +206,12 @@ impl HistoryView {
         window.open_alert_dialog(cx, move |alert, _, _| {
             let (this, hash) = (this.clone(), hash.clone());
             alert
-                .title(format!("Reset {branch} to {}?", short(&hash)))
+                .title(t("Reset {branch} to {sha}?").replace("{sha}", short(&hash)).replace("{branch}", &branch))
                 .description(
-                    "The commits after it leave the branch, and every uncommitted change is \
-                     discarded. Changes that were never committed can't be recovered.",
+                    t("The commits after it leave the branch, and every uncommitted change is discarded. Changes that were never committed can't be recovered."),
                 )
-                .ok_text("Reset and discard")
+                .ok_text(t("Reset and discard"))
+                .cancel_text(t("Cancel"))
                 .ok_variant(ButtonVariant::Danger)
                 .show_cancel(true)
                 .on_ok(move |_, _, cx| {
@@ -209,15 +229,18 @@ impl HistoryView {
         window.open_alert_dialog(cx, move |alert, _, _| {
             let (this, tag) = (this.clone(), tag.clone());
             alert
-                .title(format!("Delete tag {tag}?"))
-                .description("The tag is removed here; copies already pushed to a remote stay.")
-                .ok_text("Delete")
+                .title(t("Delete tag {tag}?").replace("{tag}", &tag))
+                .description(t(
+                    "The tag is removed here; copies already pushed to a remote stay.",
+                ))
+                .ok_text(t("Delete"))
+                .cancel_text(t("Cancel"))
                 .ok_variant(ButtonVariant::Danger)
                 .show_cancel(true)
                 .on_ok(move |_, _, cx| {
                     let tag = tag.clone();
                     let _ = this.update(cx, |this, cx| {
-                        let done = format!("Deleted tag {tag}");
+                        let done = Text::from("Deleted tag {tag}").with("{tag}", tag.clone());
                         this.run_op(
                             "Deleting tag…",
                             done,
@@ -236,7 +259,9 @@ impl HistoryView {
             cx.notify();
             return;
         };
-        let done = format!("Pushed tag {tag} to {remote}");
+        let done = Text::from("Pushed tag {tag} to {remote}")
+            .with("{tag}", tag.clone())
+            .with("{remote}", remote.clone());
         self.run_op(
             "Pushing tag…",
             done,
@@ -249,7 +274,7 @@ impl HistoryView {
         let remote = self.default_remote();
         self.run_op(
             "Running Git LFS…",
-            format!("{} done", op.label()),
+            Text::from("{operation} done").with_text("{operation}", op.label().into()),
             move |top| git::ops::lfs(top, op, remote.as_deref()),
             cx,
         );
@@ -269,14 +294,14 @@ impl HistoryView {
         if abort {
             self.run_op(
                 "Aborting…",
-                format!("{} aborted", op.label()),
+                Text::from("{operation} aborted").with_text("{operation}", op.label().into()),
                 move |top| git::ops::abort_in_progress(top, op),
                 cx,
             );
         } else {
             self.run_op(
                 "Continuing…",
-                format!("{} finished", op.label()),
+                Text::from("{operation} finished").with_text("{operation}", op.label().into()),
                 move |top| git::ops::continue_in_progress(top, op),
                 cx,
             );
@@ -293,12 +318,12 @@ impl HistoryView {
         window.open_alert_dialog(cx, move |alert, _, _| {
             let this = this.clone();
             alert
-                .title(format!("Abort the {}?", op.label().to_lowercase()))
+                .title(t("Abort the {operation}?").replace("{operation}", &t(op.label()).to_lowercase()))
                 .description(
-                    "Everything goes back to how it was before it started, including the \
-                     conflicts you resolved.",
+                    t("Everything goes back to how it was before it started, including the conflicts you resolved."),
                 )
-                .ok_text("Abort")
+                .ok_text(t("Abort"))
+                .cancel_text(t("Cancel"))
                 .ok_variant(ButtonVariant::Danger)
                 .show_cancel(true)
                 .on_ok(move |_, _, cx| {
@@ -384,11 +409,11 @@ impl HistoryView {
         };
         let first = cx.new(|cx| {
             InputState::new(window, cx)
-                .placeholder(first_hint)
+                .placeholder(t(first_hint))
                 .default_value(initial)
         });
         let second =
-            second_hint.map(|hint| cx.new(|cx| InputState::new(window, cx).placeholder(hint)));
+            second_hint.map(|hint| cx.new(|cx| InputState::new(window, cx).placeholder(t(hint))));
         let mut subscriptions = Vec::new();
         for input in std::iter::once(&first).chain(second.as_ref()) {
             subscriptions.push(cx.subscribe_in(
@@ -406,6 +431,10 @@ impl HistoryView {
             ask,
             first,
             second,
+            first_hint,
+            second_hint,
+            first_language: language(),
+            second_language: language(),
             _subscriptions: subscriptions,
         });
         cx.notify();
@@ -430,7 +459,8 @@ impl HistoryView {
         window.focus(&self.focus, cx);
         match prompt.ask {
             Ask::Branch { at, .. } => {
-                let done = format!("Created and switched to {}", first.trim());
+                let done =
+                    Text::from("Created and switched to {branch}").with("{branch}", first.trim());
                 self.run_op(
                     "Creating branch…",
                     done,
@@ -439,7 +469,7 @@ impl HistoryView {
                 )
             }
             Ask::Tag { at, .. } => {
-                let done = format!("Created tag {}", first.trim());
+                let done = Text::from("Created tag {tag}").with("{tag}", first.trim());
                 self.run_op(
                     "Creating tag…",
                     done,
@@ -454,7 +484,7 @@ impl HistoryView {
                 cx,
             ),
             Ask::Remote => {
-                let done = format!("Added remote {}", first.trim());
+                let done = Text::from("Added remote {remote}").with("{remote}", first.trim());
                 self.run_op(
                     "Adding remote…",
                     done,

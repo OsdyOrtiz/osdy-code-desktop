@@ -25,6 +25,7 @@ use super::refs::{RefsEvent, RefsView};
 use super::{FileDrag, file_icon, status_color};
 use crate::features::git::GitSnapshot;
 use crate::platform::ides;
+use crate::shared::i18n::{language, sync_placeholder, t};
 use crate::shared::{themes, ui};
 
 const CONTEXT: &str = "FileTree";
@@ -172,6 +173,8 @@ enum EditTarget {
 struct Editing {
     target: EditTarget,
     input: Entity<InputState>,
+    placeholder: &'static str,
+    placeholder_language: gentle_core::i18n::Language,
     _subscription: Subscription,
 }
 
@@ -731,9 +734,12 @@ impl FileTreeView {
             vec![parent],
             move || {
                 let dest = ops::copy_name(&path, is_dir, |p| p.symlink_metadata().is_ok());
-                ops::copy_all(&path, &dest)
-                    .map(|_| dest)
-                    .map_err(|e| format!("Couldn't duplicate “{}”: {e}", file_name(&path)))
+                ops::copy_all(&path, &dest).map(|_| dest).map_err(|e| {
+                    gentle_core::i18n::fill(
+                        t("Couldn't duplicate “{name}”: {error}"),
+                        &[("name", &file_name(&path)), ("error", &e.to_string())],
+                    )
+                })
             },
             |this, dest, _, cx| {
                 this.selected = Some(dest);
@@ -774,7 +780,9 @@ impl FileTreeView {
             move || {
                 let exists = |p: &Path| p.symlink_metadata().is_ok();
                 if !exists(&source) {
-                    return Err(format!("“{}” no longer exists", file_name(&source)));
+                    return Err(
+                        t("“{name}” no longer exists").replace("{name}", &file_name(&source))
+                    );
                 }
                 let Some(dest) =
                     ops::paste_destination(&source, source.is_dir(), &into, mode, exists)?
@@ -785,7 +793,12 @@ impl FileTreeView {
                     ClipMode::Copy => ops::copy_all(&source, &dest),
                     ClipMode::Cut => ops::move_entry(&source, &dest),
                 }
-                .map_err(|e| format!("Couldn't paste “{}”: {e}", file_name(&source)))?;
+                .map_err(|e| {
+                    gentle_core::i18n::fill(
+                        t("Couldn't paste “{name}”: {error}"),
+                        &[("name", &file_name(&source)), ("error", &e.to_string())],
+                    )
+                })?;
                 Ok(Some((source, dest)))
             },
             move |this, moved, _, cx| {
@@ -828,9 +841,12 @@ impl FileTreeView {
         self.run(
             vec![parent],
             move || {
-                ops::trash(&path)
-                    .map(|_| path.clone())
-                    .map_err(|e| format!("Couldn't move “{}” to the Trash: {e}", file_name(&path)))
+                ops::trash(&path).map(|_| path.clone()).map_err(|e| {
+                    gentle_core::i18n::fill(
+                        t("Couldn't move “{name}” to the Trash: {error}"),
+                        &[("name", &file_name(&path)), ("error", &e)],
+                    )
+                })
             },
             move |this, path, _, cx| {
                 this.forget(&path);
@@ -955,7 +971,7 @@ impl FileTreeView {
         let input = cx.new(|cx| {
             InputState::new(window, cx)
                 .default_value(value)
-                .placeholder(placeholder)
+                .placeholder(t(placeholder))
         });
         let subscription = cx.subscribe_in(
             &input,
@@ -972,6 +988,8 @@ impl FileTreeView {
         self.editing = Some(Editing {
             target,
             input,
+            placeholder,
+            placeholder_language: language(),
             _subscription: subscription,
         });
         self.rebuild_rows();
@@ -1015,7 +1033,12 @@ impl FileTreeView {
                     move || {
                         ops::rename(&from, &to)
                             .map(|_| (from.clone(), to))
-                            .map_err(|e| format!("Couldn't rename “{}”: {e}", file_name(&from)))
+                            .map_err(|e| {
+                                gentle_core::i18n::fill(
+                                    t("Couldn't rename “{name}”: {error}"),
+                                    &[("name", &file_name(&from)), ("error", &e.to_string())],
+                                )
+                            })
                     },
                     |this, (from, to), _, cx| {
                         this.moved(&from, &to);
@@ -1051,7 +1074,12 @@ impl FileTreeView {
                     move || {
                         ops::create(&created, is_dir)
                             .map(|_| created.clone())
-                            .map_err(|e| format!("Couldn't create “{}”: {e}", file_name(&created)))
+                            .map_err(|e| {
+                                gentle_core::i18n::fill(
+                                    t("Couldn't create “{name}”: {error}"),
+                                    &[("name", &file_name(&created)), ("error", &e.to_string())],
+                                )
+                            })
                     },
                     move |this, path, _, cx| {
                         // `a/b/c.rs` shows with its new folders open.
@@ -1230,9 +1258,9 @@ impl FileTreeView {
     fn render_files(&self, cx: &mut Context<Self>) -> AnyElement {
         let body = if self.rows.is_empty() {
             let text = if self.children.contains_key(&self.root) {
-                "This folder is empty"
+                t("This folder is empty")
             } else {
-                "Loading…"
+                t("Loading…")
             };
             empty_state(IconName::FolderOpen, text).into_any_element()
         } else {
@@ -1317,26 +1345,26 @@ impl FileTreeView {
             .action_context(self.focus.clone())
             .min_w(rems(250. / 16.).to_pixels(rem_size));
         let menu = if is_dir {
-            menu.item(item("New File…", IconName::FilePlus, Box::new(NewFile)))
+            menu.item(item(t("New File…"), IconName::FilePlus, Box::new(NewFile)))
                 .item(item(
-                    "New Folder…",
+                    t("New Folder…"),
                     IconName::FolderPlus,
                     Box::new(NewFolder),
                 ))
         } else {
-            menu.item(item("Open", IconName::File, Box::new(Open)))
+            menu.item(item(t("Open"), IconName::File, Box::new(Open)))
                 .item(item(
-                    "Open to the Side",
+                    t("Open to the Side"),
                     IconName::Columns2,
                     Box::new(OpenToSide),
                 ))
                 .item(item(
-                    "Open in New Tab",
+                    t("Open in New Tab"),
                     IconName::Plus,
                     Box::new(OpenInNewTab),
                 ))
                 .item(item(
-                    "Open with Default App",
+                    t("Open with Default App"),
                     IconName::ArrowUpRight,
                     Box::new(OpenWithDefaultApp),
                 ))
@@ -1344,38 +1372,42 @@ impl FileTreeView {
         let menu = menu
             .separator()
             .item(item(
-                "Insert Path",
+                t("Insert Path"),
                 IconName::Terminal,
                 Box::new(InsertPath),
             ))
-            .item(item("Copy Path", IconName::Copy, Box::new(CopyPath)))
+            .item(item(t("Copy Path"), IconName::Copy, Box::new(CopyPath)))
             .item(item(
-                "Copy Relative Path",
+                t("Copy Relative Path"),
                 IconName::Copy,
                 Box::new(CopyRelativePath),
             ))
             .separator()
             .item(item(
-                REVEAL,
+                t(REVEAL),
                 IconName::FolderInput,
                 Box::new(RevealInFinder),
             ))
             .separator();
         let menu = if entry {
-            menu.item(item("Rename…", IconName::Pencil, Box::new(Rename)))
-                .item(item("Duplicate", IconName::CopyPlus, Box::new(Duplicate)))
-                .item(item("Cut", IconName::Scissors, Box::new(CutEntry)))
-                .item(item("Copy", IconName::Copy, Box::new(CopyEntry)))
+            menu.item(item(t("Rename…"), IconName::Pencil, Box::new(Rename)))
+                .item(item(
+                    t("Duplicate"),
+                    IconName::CopyPlus,
+                    Box::new(Duplicate),
+                ))
+                .item(item(t("Cut"), IconName::Scissors, Box::new(CutEntry)))
+                .item(item(t("Copy"), IconName::Copy, Box::new(CopyEntry)))
         } else {
             menu
         };
         let menu = menu.item(
-            item("Paste", IconName::ClipboardPaste, Box::new(PasteEntry))
+            item(t("Paste"), IconName::ClipboardPaste, Box::new(PasteEntry))
                 .disabled(self.clipboard.is_none()),
         );
         if entry {
             menu.separator().item(item(
-                "Move to Trash",
+                t("Move to Trash"),
                 IconName::Trash,
                 Box::new(MoveToTrash),
             ))
@@ -1396,17 +1428,17 @@ impl FileTreeView {
         let menu = menu
             .min_w(rems(220. / 16.).to_pixels(rem_size))
             .item(
-                PopupMenuItem::new("Refresh")
+                PopupMenuItem::new(t("Refresh"))
                     .icon(Icon::new(IconName::RefreshCw))
                     .on_click(act(Self::refresh)),
             )
             .item(
-                PopupMenuItem::new("Collapse All")
+                PopupMenuItem::new(t("Collapse All"))
                     .icon(Icon::new(IconName::ChevronsDownUp))
                     .on_click(act(Self::collapse_all)),
             )
             .item(
-                PopupMenuItem::new(REVEAL)
+                PopupMenuItem::new(t(REVEAL))
                     .icon(Icon::new(IconName::FolderInput))
                     .on_click({
                         let root = root.clone();
@@ -1417,12 +1449,16 @@ impl FileTreeView {
         let menu = self.ides.iter().fold(menu, |menu, ide| {
             let (ide, root) = (ide.clone(), root.clone());
             menu.item(
-                PopupMenuItem::new(format!("Open in {}", ide.name))
+                PopupMenuItem::new(t("Open in {name}").replace("{name}", ide.name))
                     .icon(Icon::new(IconName::CodeXml))
                     .on_click(move |_, window, cx| {
                         if let Err(err) = ides::open(&ide, &root) {
                             window.push_notification(
-                                Notification::error(format!("Couldn't open {}: {err}", ide.name)),
+                                Notification::error(
+                                    t("Couldn't open {name}: {error}")
+                                        .replace("{name}", ide.name)
+                                        .replace("{error}", &err.to_string()),
+                                ),
                                 cx,
                             );
                         }
@@ -1435,7 +1471,7 @@ impl FileTreeView {
             menu.separator()
         };
         menu.item(
-            PopupMenuItem::new("Show Ignored Files")
+            PopupMenuItem::new(t("Show Ignored Files"))
                 .checked(self.show_ignored)
                 .on_click(act(Self::toggle_ignored)),
         )
@@ -1502,7 +1538,16 @@ impl FileTreeView {
 }
 
 impl Render for FileTreeView {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        if let Some(editing) = &mut self.editing {
+            sync_placeholder(
+                &editing.input,
+                editing.placeholder,
+                &mut editing.placeholder_language,
+                window,
+                cx,
+            );
+        }
         let files = self.tab == Tab::Files;
         let tree = cx.entity().downgrade();
         let header = h_flex()
@@ -1533,24 +1578,26 @@ impl Render for FileTreeView {
                             .text_color(ui::fg())
                             .child(self.name.clone()),
                     )
-                    .tooltip(|window, cx| Tooltip::new("Change folder").build(window, cx))
+                    .tooltip(|window, cx| Tooltip::new(t("Change folder")).build(window, cx))
                     .on_click(cx.listener(|_, _, _, cx| cx.emit(FileTreeEvent::ChooseFolder))),
             )
             .when(files, |d| {
                 d.child(
-                    Self::header_button("file-tree-new-file", IconName::FilePlus, "New File")
+                    Self::header_button("file-tree-new-file", IconName::FilePlus, t("New File"))
                         .on_click(
                             cx.listener(|this, _, window, cx| this.start_new(false, window, cx)),
                         ),
                 )
                 .child(
-                    Self::header_button("file-tree-new-folder", IconName::FolderPlus, "New Folder")
-                        .on_click(
-                            cx.listener(|this, _, window, cx| this.start_new(true, window, cx)),
-                        ),
+                    Self::header_button(
+                        "file-tree-new-folder",
+                        IconName::FolderPlus,
+                        t("New Folder"),
+                    )
+                    .on_click(cx.listener(|this, _, window, cx| this.start_new(true, window, cx))),
                 )
                 .child(
-                    Self::header_button("file-tree-more", IconName::Ellipsis, "More")
+                    Self::header_button("file-tree-more", IconName::Ellipsis, t("More"))
                         .dropdown_menu(move |menu, window, cx| match tree.upgrade() {
                             Some(view) => {
                                 view.read(cx)
@@ -1571,9 +1618,9 @@ impl Render for FileTreeView {
             .px_2()
             .pb_1p5()
             .gap_1()
-            .child(self.tab_button(Tab::Files, IconName::Files, "Files", 0, cx))
-            .child(self.tab_button(Tab::Changes, IconName::Diff, "Changes", change_count, cx))
-            .child(self.tab_button(Tab::Branches, IconName::GitBranch, "Branches", 0, cx));
+            .child(self.tab_button(Tab::Files, IconName::Files, t("Files"), 0, cx))
+            .child(self.tab_button(Tab::Changes, IconName::Diff, t("Changes"), change_count, cx))
+            .child(self.tab_button(Tab::Branches, IconName::GitBranch, t("Branches"), 0, cx));
         // Finding a file, under the tabs while the tree shows.
         let search = (self.tab == Tab::Files).then(|| {
             h_flex().flex_none().px_2().pb_1p5().child(
@@ -1590,7 +1637,7 @@ impl Render for FileTreeView {
                         div()
                             .text_size(rems(12.5 / 16.))
                             .text_color(ui::faint())
-                            .child("Search files"),
+                            .child(t("Search files")),
                     ),
             )
         });
@@ -1623,7 +1670,7 @@ impl Render for FileTreeView {
                             .cursor_pointer()
                             .text_color(ui::muted())
                             .hover(|s| s.text_color(ui::fg()))
-                            .tooltip(|window, cx| Tooltip::new("Branches").build(window, cx))
+                            .tooltip(|window, cx| Tooltip::new(t("Branches")).build(window, cx))
                             .on_click(cx.listener(|this, _, window, cx| {
                                 this.set_tab(Tab::Branches, window, cx)
                             }))
@@ -1655,7 +1702,7 @@ impl Render for FileTreeView {
                                 ui::faint()
                             })
                             .hover(|s| s.text_color(ui::fg()))
-                            .tooltip(|window, cx| Tooltip::new("Changes").build(window, cx))
+                            .tooltip(|window, cx| Tooltip::new(t("Changes")).build(window, cx))
                             .on_click(cx.listener(|this, _, window, cx| {
                                 this.set_tab(Tab::Changes, window, cx)
                             }))

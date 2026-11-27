@@ -24,8 +24,10 @@ use gpui_kit::component::{
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
 
+use super::Text;
 use super::status_color;
 use crate::features::git::{self, ChangeGroup, EntryKind, StatusEntry, WorkTree};
+use crate::shared::i18n::{language, sync_placeholder, t};
 use crate::shared::{themes, ui};
 
 const POLL: Duration = Duration::from_secs(3);
@@ -115,11 +117,13 @@ pub struct ChangesView {
     summary: Entity<InputState>,
     description: Entity<TextareaState>,
     stash_message: Entity<InputState>,
+    form_language: gentle_core::i18n::Language,
+    stash_language: gentle_core::i18n::Language,
     amend: bool,
     generating: bool,
     /// What a running commit/push is doing, for the status line.
     busy: Option<&'static str>,
-    error: Option<String>,
+    error: Option<Text>,
     visible: bool,
     /// [`Self::open_diff`] came before the first read: run it once it lands.
     open_pending: bool,
@@ -136,14 +140,14 @@ impl EventEmitter<ChangesEvent> for ChangesView {}
 
 impl ChangesView {
     pub fn new(root: PathBuf, window: &mut Window, cx: &mut Context<Self>) -> Self {
-        let summary = cx.new(|cx| InputState::new(window, cx).placeholder("Summary"));
+        let summary = cx.new(|cx| InputState::new(window, cx).placeholder(t("Summary")));
         let description = cx.new(|cx| {
             TextareaState::new(window, cx)
                 .auto_grow(2, 8)
-                .placeholder("Why this change…")
+                .placeholder(t("Why this change…"))
         });
         let stash_message =
-            cx.new(|cx| InputState::new(window, cx).placeholder("Message (optional)"));
+            cx.new(|cx| InputState::new(window, cx).placeholder(t("Message (optional)")));
         // The primary button reads "Generate" until a summary exists.
         let subscriptions = vec![cx.subscribe(&summary, |_, _, event: &InputEvent, cx| {
             if let InputEvent::Change = event {
@@ -164,6 +168,8 @@ impl ChangesView {
             summary,
             description,
             stash_message,
+            form_language: language(),
+            stash_language: language(),
             amend: false,
             generating: false,
             busy: None,
@@ -356,7 +362,7 @@ impl ChangesView {
     /// failure shows git's message under the commit box.
     fn git_op(
         &mut self,
-        job: impl FnOnce(&Path) -> Result<(), String> + Send + 'static,
+        job: impl FnOnce(&Path) -> Result<(), Text> + Send + 'static,
         cx: &mut Context<Self>,
     ) {
         let Some(toplevel) = self.toplevel() else {
@@ -415,8 +421,8 @@ impl ChangesView {
             .next()
             .unwrap_or(&entry.path)
             .to_string();
-        let title = format!("Discard changes to \u{201c}{name}\u{201d}?");
-        let description = match (group, entry.index) {
+        let title = Text::from("Discard changes to “{name}”?").with("{name}", name);
+        let description_key = match (group, entry.index) {
             (ChangeGroup::Untracked, _) => "The untracked file is deleted.",
             (ChangeGroup::Unstaged, _) => "Unstaged edits go back to the staged version.",
             (ChangeGroup::Staged, 'A' | 'C') => {
@@ -426,14 +432,16 @@ impl ChangesView {
                 "The file goes back to the last commit, staged edits included."
             }
         };
-        let description = format!("{description} This can't be undone.");
+        let description = Text::from("{description} This can't be undone.")
+            .with_text("{description}", description_key.into());
         let this = cx.entity().downgrade();
         window.open_alert_dialog(cx, move |alert, _, _| {
             let (this, entry) = (this.clone(), entry.clone());
             alert
-                .title(title.clone())
-                .description(description.clone())
-                .ok_text("Discard")
+                .title(title.render())
+                .description(description.render())
+                .ok_text(t("Discard"))
+                .cancel_text(t("Cancel"))
                 .ok_variant(ButtonVariant::Danger)
                 .show_cancel(true)
                 .on_ok(move |_, _, cx| {
@@ -459,12 +467,13 @@ impl ChangesView {
             }
             let (this, message) = (this.clone(), input.clone());
             alert
-                .title("Stash all changes")
+                .title(t("Stash all changes"))
                 .description(
-                    "Staged, unstaged and untracked changes move to a new stash and the working tree is left clean.",
+                    t("Staged, unstaged and untracked changes move to a new stash and the working tree is left clean."),
                 )
                 .child(div().pt_2().child(Input::new(&input).small()))
-                .ok_text("Stash")
+                .ok_text(t("Stash"))
+                .cancel_text(t("Cancel"))
                 .show_cancel(true)
                 .on_ok(move |_, _, cx| {
                     let message = message.read(cx).value().to_string();
@@ -523,8 +532,10 @@ impl ChangesView {
                         git::commit(&toplevel, &summary, &description, amend).and_then(|()| {
                             committed = true;
                             if push {
-                                git::push(&toplevel)
-                                    .map_err(|e| format!("Committed, but the push failed: {e}"))
+                                git::push(&toplevel).map_err(|e| {
+                                    Text::from("Committed, but the push failed: {error}")
+                                        .with_text("{error}", e)
+                                })
                             } else {
                                 Ok(())
                             }
@@ -668,7 +679,7 @@ impl ChangesView {
                     .text_size(rems(13.5 / 16.))
                     .font_weight(FontWeight::SEMIBOLD)
                     .text_color(ui::fg())
-                    .child("Working tree"),
+                    .child(t("Working tree")),
             )
             .child(
                 h_flex()
@@ -677,12 +688,12 @@ impl ChangesView {
                     .gap(px(2.))
                     .rounded_lg()
                     .bg(ui::well())
-                    .child(mode("changes-mode-list", IconName::List, false, "List"))
+                    .child(mode("changes-mode-list", IconName::List, false, t("List")))
                     .child(mode(
                         "changes-mode-tree",
                         IconName::ListTree,
                         true,
-                        "Group by folder",
+                        t("Group by folder"),
                     )),
             )
             .child(
@@ -690,7 +701,7 @@ impl ChangesView {
                     .ghost()
                     .xsmall()
                     .icon(Icon::new(IconName::Archive))
-                    .tooltip("Stash all changes")
+                    .tooltip(t("Stash all changes"))
                     .disabled(!has_changes)
                     .on_click(cx.listener(|this, _, window, cx| this.open_stash(window, cx))),
             )
@@ -704,9 +715,9 @@ impl ChangesView {
         cx: &mut Context<Self>,
     ) -> Div {
         let (label, action, id) = match group {
-            ChangeGroup::Staged => ("Staged", "Unstage all", "changes-unstage-all"),
-            ChangeGroup::Unstaged => ("Unstaged", "Stage all", "changes-stage-all"),
-            ChangeGroup::Untracked => ("Untracked", "Stage all", "changes-stage-untracked"),
+            ChangeGroup::Staged => (t("Staged"), t("Unstage all"), "changes-unstage-all"),
+            ChangeGroup::Unstaged => (t("Unstaged"), t("Stage all"), "changes-stage-all"),
+            ChangeGroup::Untracked => (t("Untracked"), t("Stage all"), "changes-stage-untracked"),
         };
         let all = move |this: &mut Self, cx: &mut Context<Self>| match group {
             ChangeGroup::Staged => this.git_op(git::unstage_all, cx),
@@ -1027,15 +1038,15 @@ impl ChangesView {
                     }
                 };
                 menu.item(
-                    PopupMenuItem::new("Open file")
+                    PopupMenuItem::new(t("Open file"))
                         .icon(Icon::new(IconName::File))
                         .disabled(deleted)
                         .on_click(open),
                 )
                 .item(
                     PopupMenuItem::new(match group {
-                        ChangeGroup::Staged => "Unstage",
-                        ChangeGroup::Unstaged | ChangeGroup::Untracked => "Stage",
+                        ChangeGroup::Staged => t("Unstage"),
+                        ChangeGroup::Unstaged | ChangeGroup::Untracked => t("Stage"),
                     })
                     .icon(Icon::new(match group {
                         ChangeGroup::Staged => IconName::Minus,
@@ -1045,7 +1056,7 @@ impl ChangesView {
                 )
                 .separator()
                 .item(
-                    PopupMenuItem::new("Discard changes…")
+                    PopupMenuItem::new(t("Discard changes…"))
                         .icon(Icon::new(IconName::Undo2))
                         .disabled(entry.kind == EntryKind::Conflict)
                         .on_click(discard),
@@ -1057,15 +1068,17 @@ impl ChangesView {
     fn render_list(&self, cx: &mut Context<Self>) -> AnyElement {
         let repo = match &self.repo {
             None => {
-                return empty_state(IconName::RefreshCw, "Reading git status…").into_any_element();
+                return empty_state(IconName::RefreshCw, t("Reading git status…"))
+                    .into_any_element();
             }
             Some(None) => {
-                return empty_state(IconName::GitBranch, "Not a git repository").into_any_element();
+                return empty_state(IconName::GitBranch, t("Not a git repository"))
+                    .into_any_element();
             }
             Some(Some(repo)) => repo,
         };
         if repo.tree.entries.is_empty() {
-            let clean = empty_state(IconName::CircleCheck, "Working tree clean");
+            let clean = empty_state(IconName::CircleCheck, t("Working tree clean"));
             if !self.offers_stashes || repo.stashes == 0 {
                 return clean.into_any_element();
             }
@@ -1075,8 +1088,8 @@ impl ChangesView {
                         .outline()
                         .small()
                         .icon(Icon::new(IconName::Archive))
-                        .label("Show stashes")
-                        .tooltip("Open the stashes in Branches")
+                        .label(t("Show stashes"))
+                        .tooltip(t("Open the stashes in Branches"))
                         .on_click(cx.listener(|_, _, _, cx| cx.emit(ChangesEvent::ShowStashes))),
                 )
                 .into_any_element();
@@ -1114,9 +1127,9 @@ impl ChangesView {
         // "Generate" alone keeps the footer inside the sidebar; the tooltip
         // and the menu spell out "Generate message".
         let (primary_label, primary_tip) = if writes {
-            ("Generate", "Generate message")
+            (t("Generate"), t("Generate message"))
         } else {
-            ("Commit", "Commit")
+            (t("Commit"), t("Commit"))
         };
         let working = self.busy.is_some() || self.generating;
         let weak = cx.entity().downgrade();
@@ -1168,9 +1181,9 @@ impl ChangesView {
                                     .icon(Icon::new(IconName::Sparkles))
                                     .loading(self.generating)
                                     .disabled(!ready || working || !staged)
-                                    .tooltip(
+                                    .tooltip(t(
                                         "Write the message from the staged diff with Gentle Shell",
-                                    )
+                                    ))
                                     .on_click(
                                         cx.listener(|this, _, window, cx| {
                                             this.generate(window, cx)
@@ -1181,10 +1194,12 @@ impl ChangesView {
                                 Button::new("changes-amend")
                                     .ghost()
                                     .xsmall()
-                                    .label("Amend")
+                                    .label(t("Amend"))
                                     .selected(self.amend)
                                     .disabled(!ready || working)
-                                    .tooltip("Rewrite the last commit instead of making a new one")
+                                    .tooltip(t(
+                                        "Rewrite the last commit instead of making a new one",
+                                    ))
                                     .on_click(cx.listener(|this, _, window, cx| {
                                         this.toggle_amend(window, cx)
                                     })),
@@ -1202,10 +1217,10 @@ impl ChangesView {
                                     .text_color(ui::muted())
                                     .when_some(self.busy, |d, busy| {
                                         d.child(Spinner::new().xsmall().color(ui::accent()))
-                                            .child(div().min_w_0().truncate().child(busy))
+                                            .child(div().min_w_0().truncate().child(t(busy)))
                                     })
                                     .when(self.generating, |d| {
-                                        d.child(div().min_w_0().truncate().child("Writing…"))
+                                        d.child(div().min_w_0().truncate().child(t("Writing…")))
                                     }),
                             ),
                     )
@@ -1243,14 +1258,14 @@ impl ChangesView {
                                         )
                                     };
                                 menu.item(item(
-                                    "Commit",
+                                    t("Commit"),
                                     IconName::GitCommitHorizontal,
                                     Some(false),
                                 ))
-                                .item(item("Commit & Push", IconName::Upload, Some(true)))
+                                .item(item(t("Commit & Push"), IconName::Upload, Some(true)))
                                 .separator()
                                 .item(item(
-                                    "Generate message",
+                                    t("Generate message"),
                                     IconName::Sparkles,
                                     None,
                                 ))
@@ -1265,21 +1280,40 @@ impl ChangesView {
                         .overflow_y_scroll()
                         .text_size(rems(11.5 / 16.))
                         .text_color(ui::danger())
-                        .child(error),
+                        .child(error.render()),
                 )
             })
     }
 }
 
 impl Render for ChangesView {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        if self.form_language != language() {
+            sync_placeholder(
+                &self.summary,
+                "Summary",
+                &mut self.form_language,
+                window,
+                cx,
+            );
+            self.description.update(cx, |state, cx| {
+                state.set_placeholder(t("Why this change…"), window, cx)
+            });
+        }
+        sync_placeholder(
+            &self.stash_message,
+            "Message (optional)",
+            &mut self.stash_language,
+            window,
+            cx,
+        );
         // The sidebar slot paints the glass; no fill here.
         v_flex()
             .size_full()
             .min_h_0()
             .child(self.render_header(cx))
             .when_some(self.repository_path(), |d, path| {
-                let line = format!("Repository: {path}");
+                let line = t("Repository: {path}").replace("{path}", &path);
                 // The tail (the repository's own name) is what a narrow
                 // sidebar cuts, so the tooltip carries the whole line.
                 let tip = line.clone();
@@ -1373,7 +1407,7 @@ fn commit_prompt(diff: &str) -> String {
 
 /// Run the user's Gentle Shell once, in print mode without a session or
 /// tools, on the staged diff. Blocking; call off the UI thread.
-fn generate_message(toplevel: &Path) -> Result<(String, String), String> {
+fn generate_message(toplevel: &Path) -> Result<(String, String), Text> {
     let diff = git::staged_diff(toplevel, DIFF_LIMIT)?;
     if diff.trim().is_empty() {
         return Err("Stage some changes first; the message is written from the staged diff".into());
@@ -1383,9 +1417,9 @@ fn generate_message(toplevel: &Path) -> Result<(String, String), String> {
     // interactive-host dialogs make no sense for a one-shot print run.
     let mut command = spec.print_command(["--print", "--no-session", "--no-tools"]);
     command.arg(commit_prompt(&diff)).stdin(Stdio::null());
-    let out = command
-        .output()
-        .map_err(|e| format!("Could not start gentle-shell: {e}"))?;
+    let out = command.output().map_err(|e| {
+        Text::from("Could not start gentle-shell: {error}").with("{error}", e.to_string())
+    })?;
     let stdout = String::from_utf8_lossy(&out.stdout);
     if !out.status.success() {
         let stderr = String::from_utf8_lossy(&out.stderr);
@@ -1395,7 +1429,7 @@ fn generate_message(toplevel: &Path) -> Result<(String, String), String> {
             stderr
         };
         let (tail, _) = ui::tail(detail.trim(), 6);
-        return Err(format!("gentle-shell failed: {tail}"));
+        return Err(Text::from("gentle-shell failed: {error}").with("{error}", tail));
     }
     parse_commit_message(&stdout).ok_or_else(|| "gentle-shell returned no message".into())
 }

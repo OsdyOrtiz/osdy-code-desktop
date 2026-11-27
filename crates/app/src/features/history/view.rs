@@ -9,7 +9,7 @@ use std::sync::Arc;
 
 use gentle_core::git::log::{Commit, RefLabel, initials};
 use gentle_core::git::ops::{CommitFile, PullMode, ResetMode};
-use gentle_core::sessions::relative_time;
+use gentle_core::sessions::{relative_time, relative_time_in};
 use gpui_kit::assets::IconName;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::input::Input;
@@ -26,7 +26,10 @@ use super::ops::Ask;
 use super::{HistoryView, Line, Outcome};
 use crate::features::git::{Scope, ops::Lfs};
 use crate::platform::ides;
-use crate::shared::ui;
+use crate::shared::{
+    i18n::{language, sync_placeholder, t},
+    ui,
+};
 
 const ROW_HEIGHT: f32 = 30.;
 const AUTHOR_WIDTH: f32 = 150.;
@@ -72,10 +75,20 @@ fn clip(text: &str, max: usize) -> String {
 fn short_time(now_ms: i64, secs: i64) -> String {
     let text = relative_time(now_ms, secs * 1000);
     text.strip_suffix(" ago")
-        .map(str::to_string)
+        .map(|short| {
+            let suffix = short.trim_start_matches(|c: char| c.is_ascii_digit());
+            let number = &short[..short.len() - suffix.len()];
+            let unit = match suffix {
+                "w" => t("{count}w"),
+                "mo" => t("{count}mo"),
+                "y" => t("{count}y"),
+                _ => return short.to_string(),
+            };
+            unit.replace("{count}", number)
+        })
         .unwrap_or_else(|| {
             if text == "just now" {
-                "now".into()
+                t("now").into()
             } else {
                 text
             }
@@ -214,7 +227,7 @@ impl HistoryView {
                     .xsmall()
                     .icon(Icon::new(IconName::RefreshCw))
                     .loading(self.loading)
-                    .tooltip("Refresh")
+                    .tooltip(t("Refresh"))
                     .on_click(cx.listener(|this, _, _, cx| this.reload(cx))),
             )
     }
@@ -229,11 +242,11 @@ impl HistoryView {
         let current = history.current.clone();
         let scope = history.scope.clone();
         let label = match &scope {
-            Scope::All => "All branches".to_string(),
+            Scope::All => t("All branches").to_string(),
             _ => history
                 .branch()
                 .map(str::to_string)
-                .unwrap_or_else(|| "Detached HEAD".into()),
+                .unwrap_or_else(|| t("Detached HEAD").into()),
         };
         let branches = history.branches.clone();
         let picker = {
@@ -260,19 +273,23 @@ impl HistoryView {
                     };
                     let head = match &current {
                         Some(branch) => format!("HEAD · {branch}"),
-                        None => "HEAD (detached)".into(),
+                        None => t("HEAD (detached)").into(),
                     };
                     let mut menu = menu
                         .max_h(rems(380. / 16.).to_pixels(window.rem_size()))
                         .scrollable(true)
                         .item(show(head, Scope::Head, scope == Scope::Head))
-                        .item(show("All branches".into(), Scope::All, scope == Scope::All));
+                        .item(show(
+                            t("All branches").into(),
+                            Scope::All,
+                            scope == Scope::All,
+                        ));
                     let others: Vec<&String> = branches
                         .iter()
                         .filter(|b| Some(*b) != current.as_ref())
                         .collect();
                     if !others.is_empty() {
-                        menu = menu.separator().label("Show branch");
+                        menu = menu.separator().label(t("Show branch"));
                         for branch in others {
                             menu = menu.item(show(
                                 branch.clone(),
@@ -325,16 +342,16 @@ impl HistoryView {
         let fetch = tool(
             "git-fetch",
             IconName::CloudDownload,
-            "Fetch".into(),
-            "Fetch all remotes".into(),
+            t("Fetch").into(),
+            t("Fetch all remotes").into(),
         )
         .disabled(busy || !has_remote)
         .on_click(cx.listener(|this, _, _, cx| this.fetch(cx)));
         let pull = tool(
             "git-pull",
             IconName::ArrowDownToLine,
-            format!("Pull{}", count(behind, "↓")),
-            format!("Pull · {}", self.pull_mode.label()),
+            format!("{}{}", t("Pull"), count(behind, "↓")),
+            format!("{} · {}", t("Pull"), t(self.pull_mode.label())),
         )
         .disabled(busy || history.upstream.is_none())
         .on_click(cx.listener(|this, _, _, cx| this.pull(cx)));
@@ -345,14 +362,14 @@ impl HistoryView {
                 .ghost()
                 .xsmall()
                 .icon(Icon::new(IconName::ChevronDown))
-                .tooltip("Pull options")
+                .tooltip(t("Pull options"))
                 .disabled(busy)
                 .dropdown_menu(move |menu, _, _| {
-                    let mut menu = menu.label("Pull integration");
+                    let mut menu = menu.label(t("Pull integration"));
                     for mode in PullMode::ALL {
                         let weak = weak.clone();
                         menu = menu.item(
-                            PopupMenuItem::new(mode.label())
+                            PopupMenuItem::new(t(mode.label()))
                                 .checked(mode == chosen)
                                 .on_click(move |_, _, cx| {
                                     let _ =
@@ -362,7 +379,7 @@ impl HistoryView {
                     }
                     let weak = weak.clone();
                     menu.separator().item(
-                        PopupMenuItem::new("Fetch all remotes")
+                        PopupMenuItem::new(t("Fetch all remotes"))
                             .icon(Icon::new(IconName::CloudDownload))
                             .on_click(move |_, _, cx| {
                                 let _ = weak.update(cx, |this, cx| this.fetch(cx));
@@ -373,10 +390,10 @@ impl HistoryView {
         let push = tool(
             "git-push",
             IconName::ArrowUpFromLine,
-            format!("Push{}", count(ahead, "↑")),
+            format!("{}{}", t("Push"), count(ahead, "↑")),
             match &history.upstream {
-                Some((upstream, ..)) => format!("Push to {upstream}"),
-                None => "Push (publishes the branch)".into(),
+                Some((upstream, ..)) => t("Push to {upstream}").replace("{upstream}", upstream),
+                None => t("Push (publishes the branch)").into(),
             },
         )
         .disabled(busy || !has_remote)
@@ -388,7 +405,7 @@ impl HistoryView {
                 "git-new-branch",
                 IconName::GitBranchPlus,
                 String::new(),
-                "New branch at HEAD".into(),
+                t("New branch at HEAD").into(),
             )
             .on_click(cx.listener(move |this, _, window, cx| {
                 let ask = Ask::Branch {
@@ -402,7 +419,7 @@ impl HistoryView {
             "git-stash",
             IconName::Archive,
             String::new(),
-            "Stash changes".into(),
+            t("Stash changes").into(),
         )
         .disabled(busy || !history.dirty)
         .on_click(
@@ -412,7 +429,7 @@ impl HistoryView {
             "git-jump-head",
             IconName::LocateFixed,
             String::new(),
-            "Jump to HEAD".into(),
+            t("Jump to HEAD").into(),
         )
         .disabled(false)
         .on_click(cx.listener(|this, _, _, cx| this.jump_to_head(cx)));
@@ -425,7 +442,7 @@ impl HistoryView {
                 .ghost()
                 .xsmall()
                 .icon(Icon::new(IconName::Ellipsis))
-                .tooltip("More actions")
+                .tooltip(t("More actions"))
                 .dropdown_menu_with_anchor(Anchor::TopRight, move |menu, _, _| {
                     let item = |label: &'static str,
                                 icon: IconName,
@@ -445,13 +462,13 @@ impl HistoryView {
                     };
                     let mut menu = menu
                         .item(item(
-                            "Fetch all remotes",
+                            t("Fetch all remotes"),
                             IconName::CloudDownload,
                             !busy && has_remote,
                             |this, _, cx| this.fetch(cx),
                         ))
                         .item(item(
-                            "Add remote…",
+                            t("Add remote…"),
                             IconName::Globe,
                             !busy,
                             |this, window, cx| this.ask(Ask::Remote, String::new(), window, cx),
@@ -461,7 +478,7 @@ impl HistoryView {
                         for op in Lfs::ALL {
                             let weak = weak.clone();
                             menu = menu.item(
-                                PopupMenuItem::new(op.label())
+                                PopupMenuItem::new(t(op.label()))
                                     .icon(Icon::new(IconName::Database))
                                     .disabled(busy || (op == Lfs::Push && !has_remote))
                                     .on_click(move |_, _, cx| {
@@ -471,7 +488,7 @@ impl HistoryView {
                         }
                     }
                     menu = menu.separator().item(item(
-                        "Open terminal here",
+                        t("Open terminal here"),
                         IconName::SquareTerminal,
                         true,
                         |this, window, cx| this.open_terminal(window, cx),
@@ -479,15 +496,16 @@ impl HistoryView {
                     for ide in ides.iter() {
                         let (ide, root) = (ide.clone(), root.clone());
                         menu = menu.item(
-                            PopupMenuItem::new(format!("Open in {}", ide.name))
+                            PopupMenuItem::new(t("Open in {name}").replace("{name}", ide.name))
                                 .icon(Icon::new(IconName::CodeXml))
                                 .on_click(move |_, window, cx| {
                                     if let Err(err) = ides::open(&ide, &root) {
                                         window.push_notification(
-                                            Notification::error(format!(
-                                                "Couldn't open {}: {err}",
-                                                ide.name
-                                            )),
+                                            Notification::error(
+                                                t("Couldn't open {name}: {error}")
+                                                    .replace("{name}", ide.name)
+                                                    .replace("{error}", &err.to_string()),
+                                            ),
                                             cx,
                                         );
                                     }
@@ -570,7 +588,7 @@ impl HistoryView {
                     Button::new("git-prompt-cancel")
                         .ghost()
                         .xsmall()
-                        .label("Cancel")
+                        .label(t("Cancel"))
                         .on_click(
                             cx.listener(|this, _, window, cx| this.cancel_prompt(window, cx)),
                         ),
@@ -604,17 +622,13 @@ impl HistoryView {
                                 .min_w_0()
                                 .text_xs()
                                 .text_color(ui::fg())
-                                .child(format!(
-                                    "{} in progress. Resolve the conflicts and stage them in \
-                                     Changes, then continue.",
-                                    op.label()
-                                )),
+                                .child(t("{operation} in progress. Resolve the conflicts and stage them in Changes, then continue.").replace("{operation}", t(op.label()))),
                         )
                         .child(
                             Button::new("git-continue")
                                 .outline()
                                 .xsmall()
-                                .label("Continue")
+                                .label(t("Continue"))
                                 .disabled(busy)
                                 .on_click(
                                     cx.listener(move |this, _, _, cx| this.finish(op, false, cx)),
@@ -624,7 +638,7 @@ impl HistoryView {
                             Button::new("git-abort")
                                 .ghost()
                                 .xsmall()
-                                .label("Abort…")
+                                .label(t("Abort…"))
                                 .disabled(busy)
                                 .on_click(cx.listener(move |this, _, window, cx| {
                                     this.confirm_abort(op, window, cx)
@@ -682,12 +696,12 @@ impl HistoryView {
                             .truncate()
                             .text_sm()
                             .text_color(ui::faint())
-                            .child("Uncommitted changes"),
+                            .child(t("Uncommitted changes")),
                     )
                     .context_menu(move |menu, _, _| {
                         let weak = weak.clone();
                         menu.item(
-                            PopupMenuItem::new("Stash changes…")
+                            PopupMenuItem::new(t("Stash changes…"))
                                 .icon(Icon::new(IconName::Archive))
                                 .on_click(move |_, window, cx| {
                                     let _ = weak.update(cx, |this, cx| {
@@ -737,7 +751,7 @@ impl HistoryView {
                         .truncate()
                         .text_sm()
                         .text_color(ui::faint())
-                        .child("Earlier history"),
+                        .child(t("Earlier history")),
                 )
                 .when(self.loading, |d| {
                     d.child(Spinner::new().xsmall().color(ui::muted()))
@@ -1014,14 +1028,14 @@ impl HistoryView {
             };
             let h = hash.clone();
             let mut menu = menu.item(row(
-                "Copy commit SHA".into(),
+                t("Copy commit SHA").into(),
                 IconName::Copy,
                 true,
                 Rc::new(move |this, _, cx| this.copy_hash(&h, cx)),
             ));
             let h = hash.clone();
             menu = menu.item(row(
-                "Copy commit message".into(),
+                t("Copy commit message").into(),
                 IconName::Copy,
                 true,
                 Rc::new(move |this, _, cx| this.copy_message(h.clone(), cx)),
@@ -1030,7 +1044,7 @@ impl HistoryView {
             for branch in &branches {
                 let b = branch.clone();
                 menu = menu.item(row(
-                    format!("Switch to {branch}"),
+                    t("Switch to {branch}").replace("{branch}", branch),
                     IconName::GitBranch,
                     !busy,
                     Rc::new(move |this, _, cx| this.switch(b.clone(), cx)),
@@ -1038,14 +1052,14 @@ impl HistoryView {
             }
             let h = hash.clone();
             menu = menu.item(row(
-                "Check out this commit".into(),
+                t("Check out this commit").into(),
                 IconName::GitCommitHorizontal,
                 !busy,
                 Rc::new(move |this, _, cx| this.checkout_detached(h.clone(), cx)),
             ));
             let (h, s) = (hash.clone(), short.clone());
             menu = menu.item(row(
-                "New branch here…".into(),
+                t("New branch here…").into(),
                 IconName::GitBranchPlus,
                 !busy,
                 Rc::new(move |this, window, cx| {
@@ -1058,7 +1072,7 @@ impl HistoryView {
             ));
             let (h, s) = (hash.clone(), short.clone());
             menu = menu.item(row(
-                "New tag here…".into(),
+                t("New tag here…").into(),
                 IconName::Tag,
                 !busy,
                 Rc::new(move |this, window, cx| {
@@ -1072,35 +1086,35 @@ impl HistoryView {
             menu = menu.separator();
             let h = hash.clone();
             menu = menu.item(row(
-                "Cherry-pick".into(),
+                t("Cherry-pick").into(),
                 IconName::Cherry,
                 !busy && !head,
                 Rc::new(move |this, _, cx| this.cherry_pick(h.clone(), merge, cx)),
             ));
             let h = hash.clone();
             menu = menu.item(row(
-                "Revert".into(),
+                t("Revert").into(),
                 IconName::Undo2,
                 !busy,
                 Rc::new(move |this, _, cx| this.revert(h.clone(), merge, cx)),
             ));
             let h = hash.clone();
             menu = menu.item(row(
-                format!("Reset {target} here, keep changes"),
+                t("Reset {target} here, keep changes").replace("{target}", &target),
                 IconName::RefreshCw,
                 !busy && !head,
                 Rc::new(move |this, _, cx| this.reset(h.clone(), ResetMode::KeepChanges, cx)),
             ));
             let h = hash.clone();
             menu = menu.item(row(
-                format!("Reset {target} here, discard changes…"),
+                t("Reset {target} here, discard changes…").replace("{target}", &target),
                 IconName::TriangleAlert,
                 !busy,
                 Rc::new(move |this, window, cx| this.confirm_reset_discard(h.clone(), window, cx)),
             ));
             if head {
                 menu = menu.item(row(
-                    "Edit message…".into(),
+                    t("Edit message…").into(),
                     IconName::Pencil,
                     !busy,
                     Rc::new(|this, window, cx| this.reword(window, cx)),
@@ -1109,25 +1123,27 @@ impl HistoryView {
             if !tags.is_empty() {
                 menu = menu.separator();
                 for tag in &tags {
-                    let t = tag.clone();
+                    let push_tag = tag.clone();
                     menu = menu.item(row(
-                        format!("Push tag {tag}"),
+                        t("Push tag {tag}").replace("{tag}", tag),
                         IconName::ArrowUpFromLine,
                         !busy && has_remote,
-                        Rc::new(move |this, _, cx| this.push_tag(t.clone(), cx)),
+                        Rc::new(move |this, _, cx| this.push_tag(push_tag.clone(), cx)),
                     ));
-                    let t = tag.clone();
+                    let delete_tag = tag.clone();
                     menu = menu.item(row(
-                        format!("Delete tag {tag}…"),
+                        t("Delete tag {tag}…").replace("{tag}", tag),
                         IconName::Trash,
                         !busy,
-                        Rc::new(move |this, window, cx| this.delete_tag(t.clone(), window, cx)),
+                        Rc::new(move |this, window, cx| {
+                            this.delete_tag(delete_tag.clone(), window, cx)
+                        }),
                     ));
                 }
             }
             let (s, subj) = (short.clone(), subject.clone());
             menu.separator().item(row(
-                "Explain with the agent".into(),
+                t("Explain with the agent").into(),
                 IconName::Sparkles,
                 true,
                 Rc::new(move |this, window, cx| this.explain(&s, &subj, window, cx)),
@@ -1148,7 +1164,7 @@ impl HistoryView {
                     div()
                         .text_sm()
                         .text_color(ui::muted())
-                        .child("No loaded commit matches the filter."),
+                        .child(t("No loaded commit matches the filter.")),
                 )
                 .into_any_element();
         }
@@ -1196,14 +1212,14 @@ impl HistoryView {
                 .text_sm()
                 .text_color(ui::muted())
                 .child(Spinner::new().small().color(ui::muted()))
-                .child("Reading history…")
+                .child(t("Reading history…"))
                 .into_any_element(),
             Some(None) => state(
                 IconName::FolderGit,
-                "This folder isn't in a Git repository.",
+                t("This folder isn't in a Git repository."),
             ),
             Some(Some(_)) if self.commits.is_empty() => {
-                state(IconName::GitCommitHorizontal, "No commits here yet.")
+                state(IconName::GitCommitHorizontal, t("No commits here yet."))
             }
             Some(Some(_)) => v_flex()
                 .flex_1()
@@ -1248,7 +1264,11 @@ impl HistoryView {
                     .flex_none()
                     .text_xs()
                     .text_color(ui::faint())
-                    .child(relative_time(self.now_ms, commit.time * 1000)),
+                    .child(relative_time_in(
+                        language(),
+                        self.now_ms,
+                        commit.time * 1000,
+                    )),
             )
             .child(div().flex_1())
             .child(
@@ -1264,7 +1284,7 @@ impl HistoryView {
                     .ghost()
                     .xsmall()
                     .icon(Icon::new(IconName::Copy))
-                    .tooltip("Copy commit SHA")
+                    .tooltip(t("Copy commit SHA"))
                     .on_click(cx.listener(move |this, _, _, cx| this.copy_hash(&hash, cx))),
             )
             .child(
@@ -1272,7 +1292,7 @@ impl HistoryView {
                     .ghost()
                     .xsmall()
                     .icon(Icon::new(IconName::Close))
-                    .tooltip("Close")
+                    .tooltip(t("Close"))
                     .on_click(cx.listener(|this, _, _, cx| {
                         this.selected = None;
                         this.detail = None;
@@ -1285,24 +1305,27 @@ impl HistoryView {
                 .text_xs()
                 .text_color(ui::muted())
                 .child(Spinner::new().xsmall().color(ui::muted()))
-                .child("Reading the changes…")
+                .child(t("Reading the changes…"))
                 .into_any_element(),
             Some(files) if files.is_empty() => div()
                 .text_xs()
                 .text_color(ui::faint())
                 .child(if commit.is_merge() {
-                    "No changes against the first parent."
+                    t("No changes against the first parent.")
                 } else {
-                    "No file changes."
+                    t("No file changes.")
                 })
                 .into_any_element(),
             Some(files) => v_flex()
                 .gap_0p5()
-                .child(ui::section_label(format!(
-                    "{} {} changed",
-                    files.len(),
-                    if files.len() == 1 { "file" } else { "files" }
-                )))
+                .child(ui::section_label(
+                    t(if files.len() == 1 {
+                        "{count} file changed"
+                    } else {
+                        "{count} files changed"
+                    })
+                    .replace("{count}", &files.len().to_string()),
+                ))
                 .children(
                     files
                         .iter()
@@ -1374,7 +1397,7 @@ impl HistoryView {
             )
             .when_some(file.old_path.clone(), |d, old| {
                 d.tooltip(move |window, cx| {
-                    ui::tooltip(format!("Renamed from {old}")).build(window, cx)
+                    ui::tooltip(t("Renamed from {old}").replace("{old}", &old)).build(window, cx)
                 })
             })
             .child(
@@ -1425,7 +1448,7 @@ impl HistoryView {
                                     .text_color(ui::danger())
                                     .child(format!("\u{2212}{removed}")),
                             ),
-                        _ => d.child(div().text_color(ui::faint()).child("binary")),
+                        _ => d.child(div().text_color(ui::faint()).child(t("binary"))),
                     }),
             )
             .into_any_element()
@@ -1471,7 +1494,7 @@ impl HistoryView {
         let grid: AnyElement = match shown {
             Some(shown) => {
                 let months = div().relative().h(px(14.)).children(
-                    activity::month_labels(shown)
+                    activity::month_labels(language(), shown)
                         .into_iter()
                         .map(|(column, name)| {
                             div()
@@ -1490,7 +1513,7 @@ impl HistoryView {
                                 if day.future {
                                     return div().size(px(cell)).into_any_element();
                                 }
-                                let summary = activity::day_summary(day, unit);
+                                let summary = activity::day_summary(language(), day, unit);
                                 swatch(day.level)
                                     .id(("git-activity-day", w * 7 + d))
                                     .hover(|s| s.border_1().border_color(ui::fg().opacity(0.6)))
@@ -1505,8 +1528,8 @@ impl HistoryView {
             }
             None => {
                 let (busy, text) = match &self.github {
-                    Some(Err(why)) if !self.github_loading => (false, why.clone()),
-                    _ => (true, "Reading your GitHub contributions…".to_string()),
+                    Some(Err(why)) if !self.github_loading => (false, why.render()),
+                    _ => (true, t("Reading your GitHub contributions…").to_string()),
                 };
                 h_flex()
                     .h(px(14. + 7. * cell + 6. * ACTIVITY_GAP))
@@ -1534,7 +1557,7 @@ impl HistoryView {
             .pt(px(14.))
             .gap(px(ACTIVITY_GAP))
             .children(
-                ["", "Mon", "", "Wed", "", "Fri", ""]
+                ["", t("Mon"), "", t("Wed"), "", t("Fri"), ""]
                     .into_iter()
                     .map(|label| {
                         div()
@@ -1548,12 +1571,14 @@ impl HistoryView {
             );
         let view = cx.entity().downgrade();
         let login = match (&self.github, source) {
-            (Some(Ok(calendar)), Source::GitHub) => Some(format!("@{} on GitHub", calendar.login)),
+            (Some(Ok(calendar)), Source::GitHub) => {
+                Some(t("@{login} on GitHub").replace("{login}", &calendar.login))
+            }
             _ => None,
         };
         let heading = match shown {
-            Some(shown) => activity::heading(activity::total(shown), shown.len(), unit),
-            None => "Your GitHub contributions".to_string(),
+            Some(shown) => activity::heading(language(), activity::total(shown), shown.len(), unit),
+            None => t("Your GitHub contributions").to_string(),
         };
         let header = h_flex()
             .gap_2()
@@ -1569,7 +1594,7 @@ impl HistoryView {
             )
             .child(ui::segmented(
                 "git-activity-source",
-                &["This repo", "GitHub"],
+                &[t("This repo"), "GitHub"],
                 Some(usize::from(source == Source::GitHub)),
                 move |choice, _, cx| {
                     let source = if *choice == 1 {
@@ -1591,9 +1616,9 @@ impl HistoryView {
                     .truncate()
                     .when_some(login, |d, login| d.child(login)),
             )
-            .child(div().mr_1().child("Less"))
+            .child(div().mr_1().child(t("Less")))
             .children((0..=4).map(swatch))
-            .child(div().ml_1().child("More"));
+            .child(div().ml_1().child(t("More")));
         Some(
             v_flex()
                 .flex_none()
@@ -1637,30 +1662,30 @@ impl HistoryView {
                 .text_xs()
                 .text_color(ui::muted())
                 .child(Spinner::new().xsmall().color(ui::muted()))
-                .child(*doing),
+                .child(t(doing)),
             (None, Some(Outcome::Done(text)), _) => line(
                 Some((IconName::CircleCheck, ui::success())),
-                text.clone(),
+                text.render(),
                 ui::muted(),
             ),
             (None, Some(Outcome::Failed(text)), _) => line(
                 Some((IconName::CircleAlert, ui::danger())),
-                text.lines()
+                text.render()
+                    .lines()
                     .find(|l| !l.trim().is_empty())
-                    .unwrap_or(text)
-                    .to_string(),
+                    .map_or_else(|| text.render(), str::to_string),
                 ui::danger(),
             ),
             (None, None, Some(history)) if !self.commits.is_empty() => {
                 let shown = self.matched;
                 let text = if self.filtering() {
-                    format!("{shown} of {} loaded commits match", self.commits.len())
+                    t("{shown} of {total} loaded commits match")
+                        .replace("{shown}", &shown.to_string())
+                        .replace("{total}", &self.commits.len().to_string())
                 } else {
-                    format!(
-                        "Showing {} of {} commits",
-                        self.commits.len(),
-                        history.total
-                    )
+                    t("Showing {shown} of {total} commits")
+                        .replace("{shown}", &self.commits.len().to_string())
+                        .replace("{total}", &history.total.to_string())
                 };
                 line(None, text, ui::muted())
             }
@@ -1678,6 +1703,16 @@ impl HistoryView {
 
 impl Render for HistoryView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        sync_placeholder(
+            &self.filter,
+            "Filter commits",
+            &mut self.filter_language,
+            window,
+            cx,
+        );
+        if let Some(prompt) = &mut self.prompt {
+            prompt.sync_language(window, cx);
+        }
         let width = self.width.clone();
         let view = cx.entity_id();
         v_flex()
@@ -1744,7 +1779,11 @@ impl Render for CommitCard {
                 .child(div().text_color(ui::fg()).child(format!(
                     "{} {}",
                     stat.files,
-                    if stat.files == 1 { "file" } else { "files" }
+                    if stat.files == 1 {
+                        t("file")
+                    } else {
+                        t("files")
+                    }
                 )))
                 .child(
                     div()
@@ -1761,11 +1800,14 @@ impl Render for CommitCard {
                         .child(format!("\u{2212}{}", stat.deletions)),
                 )
                 .into_any_element(),
-            None if commit.is_merge() => text(format!("Merge of {} parents", commit.parents.len())),
-            None => text("Nothing".into()),
+            None if commit.is_merge() => text(
+                t("Merge of {count} parents").replace("{count}", &commit.parents.len().to_string()),
+            ),
+            None => text(t("Nothing").into()),
         };
-        let coauthors = (!commit.coauthors.is_empty())
-            .then(|| format!("Co-authored with {}", commit.coauthors.join(", ")));
+        let coauthors = (!commit.coauthors.is_empty()).then(|| {
+            t("Co-authored with {authors}").replace("{authors}", &commit.coauthors.join(", "))
+        });
         ui::island(cx).w(rems(320. / 16.)).child(
             v_flex()
                 .p_3()
@@ -1815,7 +1857,7 @@ impl Render for CommitCard {
                         .rounded_lg()
                         .bg(ui::well())
                         .child(detail(
-                            "Commit",
+                            t("Commit"),
                             div()
                                 .font_family(ui::mono())
                                 .text_size(ui::code_rems(12.))
@@ -1823,13 +1865,17 @@ impl Render for CommitCard {
                                 .child(commit.short().to_string())
                                 .into_any_element(),
                         ))
-                        .child(detail("Changed", changed))
+                        .child(detail(t("Changed"), changed))
                         .child(detail(
-                            "Committed",
-                            text(relative_time(self.now_ms, commit.time * 1000)),
+                            t("Committed"),
+                            text(relative_time_in(
+                                language(),
+                                self.now_ms,
+                                commit.time * 1000,
+                            )),
                         ))
                         .when_some(self.branch.clone(), |d, branch| {
-                            d.child(detail("Branch", text(branch)))
+                            d.child(detail(t("Branch"), text(branch)))
                         }),
                 ),
         )

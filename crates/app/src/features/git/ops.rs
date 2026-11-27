@@ -9,19 +9,19 @@ use gentle_core::git::ops::{
     CommitFile, InProgress, PullMode, ResetMode, diff_tree_args, parse_commit_files,
 };
 
-use super::{git, run};
+use super::{GitResult, Text, git, run};
 
 /// Fetch every remote, dropping remote branches deleted there.
-pub fn fetch_all(toplevel: &Path) -> Result<(), String> {
+pub fn fetch_all(toplevel: &Path) -> GitResult<()> {
     run(toplevel, &["fetch", "--all", "--prune"]).map(drop)
 }
 
-pub fn pull(toplevel: &Path, mode: PullMode) -> Result<(), String> {
+pub fn pull(toplevel: &Path, mode: PullMode) -> GitResult<()> {
     run(toplevel, mode.args()).map(drop)
 }
 
 /// A new branch at `at`; `checkout` switches to it as well.
-pub fn create_branch(toplevel: &Path, name: &str, at: &str, checkout: bool) -> Result<(), String> {
+pub fn create_branch(toplevel: &Path, name: &str, at: &str, checkout: bool) -> GitResult<()> {
     let name = valid_name(toplevel, name, true)?;
     if checkout {
         run(toplevel, &["switch", "-c", &name, at]).map(drop)
@@ -31,7 +31,7 @@ pub fn create_branch(toplevel: &Path, name: &str, at: &str, checkout: bool) -> R
 }
 
 /// A lightweight tag at `at`, or an annotated one when `message` isn't blank.
-pub fn create_tag(toplevel: &Path, name: &str, at: &str, message: &str) -> Result<(), String> {
+pub fn create_tag(toplevel: &Path, name: &str, at: &str, message: &str) -> GitResult<()> {
     let name = valid_name(toplevel, name, false)?;
     let message = message.trim();
     if message.is_empty() {
@@ -42,7 +42,7 @@ pub fn create_tag(toplevel: &Path, name: &str, at: &str, message: &str) -> Resul
 }
 
 /// `name` trimmed, once git accepts it as a branch (or tag) name.
-fn valid_name(toplevel: &Path, name: &str, branch: bool) -> Result<String, String> {
+fn valid_name(toplevel: &Path, name: &str, branch: bool) -> GitResult<String> {
     let name = name.trim();
     if name.is_empty() {
         return Err("Write a name first".into());
@@ -59,23 +59,23 @@ fn valid_name(toplevel: &Path, name: &str, branch: bool) -> Result<String, Strin
     if ok {
         Ok(name.to_string())
     } else {
-        Err(format!("“{name}” isn't a valid name"))
+        Err(Text::from("“{name}” isn't a valid name").with("{name}", name))
     }
 }
 
 /// Switch to a local branch.
-pub fn switch(toplevel: &Path, branch: &str) -> Result<(), String> {
+pub fn switch(toplevel: &Path, branch: &str) -> GitResult<()> {
     run(toplevel, &["switch", branch]).map(drop)
 }
 
 /// Check out a commit on a detached HEAD.
-pub fn checkout_detached(toplevel: &Path, hash: &str) -> Result<(), String> {
+pub fn checkout_detached(toplevel: &Path, hash: &str) -> GitResult<()> {
     run(toplevel, &["switch", "--detach", hash]).map(drop)
 }
 
 /// Apply `hash`'s changes as a new commit on HEAD; a merge takes its first
 /// parent's side.
-pub fn cherry_pick(toplevel: &Path, hash: &str, merge: bool) -> Result<(), String> {
+pub fn cherry_pick(toplevel: &Path, hash: &str, merge: bool) -> GitResult<()> {
     let mut args = vec!["cherry-pick"];
     if merge {
         args.extend(["-m", "1"]);
@@ -85,7 +85,7 @@ pub fn cherry_pick(toplevel: &Path, hash: &str, merge: bool) -> Result<(), Strin
 }
 
 /// A new commit undoing `hash`; a merge is undone against its first parent.
-pub fn revert(toplevel: &Path, hash: &str, merge: bool) -> Result<(), String> {
+pub fn revert(toplevel: &Path, hash: &str, merge: bool) -> GitResult<()> {
     let mut args = vec!["revert", "--no-edit"];
     if merge {
         args.extend(["-m", "1"]);
@@ -95,12 +95,12 @@ pub fn revert(toplevel: &Path, hash: &str, merge: bool) -> Result<(), String> {
 }
 
 /// Move the current branch to `hash`.
-pub fn reset(toplevel: &Path, hash: &str, mode: ResetMode) -> Result<(), String> {
+pub fn reset(toplevel: &Path, hash: &str, mode: ResetMode) -> GitResult<()> {
     run(toplevel, &["reset", mode.flag(), hash]).map(drop)
 }
 
 /// Replace HEAD's message, leaving its changes (and the index) alone.
-pub fn reword_head(toplevel: &Path, message: &str) -> Result<(), String> {
+pub fn reword_head(toplevel: &Path, message: &str) -> GitResult<()> {
     let message = message.trim();
     if message.is_empty() {
         return Err("Write a message first".into());
@@ -119,7 +119,7 @@ pub fn commit_files(toplevel: &Path, hash: &str, parent: Option<&str>) -> Vec<Co
     parse_commit_files(&read("--name-status"), &read("--numstat"))
 }
 
-pub fn add_remote(toplevel: &Path, name: &str, url: &str) -> Result<(), String> {
+pub fn add_remote(toplevel: &Path, name: &str, url: &str) -> GitResult<()> {
     let (name, url) = (name.trim(), url.trim());
     if name.is_empty() || url.is_empty() {
         return Err("Write the remote's name and URL".into());
@@ -128,11 +128,11 @@ pub fn add_remote(toplevel: &Path, name: &str, url: &str) -> Result<(), String> 
 }
 
 /// Push one tag to `remote`.
-pub fn push_tag(toplevel: &Path, remote: &str, tag: &str) -> Result<(), String> {
+pub fn push_tag(toplevel: &Path, remote: &str, tag: &str) -> GitResult<()> {
     run(toplevel, &["push", remote, &format!("refs/tags/{tag}")]).map(drop)
 }
 
-pub fn delete_tag(toplevel: &Path, tag: &str) -> Result<(), String> {
+pub fn delete_tag(toplevel: &Path, tag: &str) -> GitResult<()> {
     run(toplevel, &["tag", "-d", "--", tag]).map(drop)
 }
 
@@ -163,7 +163,7 @@ impl Lfs {
     }
 }
 
-pub fn lfs(toplevel: &Path, op: Lfs, remote: Option<&str>) -> Result<(), String> {
+pub fn lfs(toplevel: &Path, op: Lfs, remote: Option<&str>) -> GitResult<()> {
     match op {
         Lfs::Checkout => run(toplevel, &["lfs", "checkout"]),
         Lfs::Pull => run(toplevel, &["lfs", "pull"]),
@@ -176,11 +176,11 @@ pub fn lfs(toplevel: &Path, op: Lfs, remote: Option<&str>) -> Result<(), String>
     .map(drop)
 }
 
-pub fn continue_in_progress(toplevel: &Path, op: InProgress) -> Result<(), String> {
+pub fn continue_in_progress(toplevel: &Path, op: InProgress) -> GitResult<()> {
     run(toplevel, &op.continue_args()).map(drop)
 }
 
-pub fn abort_in_progress(toplevel: &Path, op: InProgress) -> Result<(), String> {
+pub fn abort_in_progress(toplevel: &Path, op: InProgress) -> GitResult<()> {
     run(toplevel, &op.abort_args()).map(drop)
 }
 
