@@ -2,13 +2,27 @@
 //! A duplicated key within a table is an unreachable pattern, which the
 //! build's lints reject; the first table that knows a text wins.
 
+mod agent_session;
+mod files_git;
+mod genui;
+mod profiles_usage;
 mod settings_a;
 mod settings_b;
+mod setup_signin;
+mod shell_tools;
+mod workspace_tabs;
 
 pub(super) fn lookup(en: &str) -> Option<&'static str> {
     common(en)
         .or_else(|| settings_a::lookup(en))
         .or_else(|| settings_b::lookup(en))
+        .or_else(|| workspace_tabs::lookup(en))
+        .or_else(|| agent_session::lookup(en))
+        .or_else(|| shell_tools::lookup(en))
+        .or_else(|| genui::lookup(en))
+        .or_else(|| files_git::lookup(en))
+        .or_else(|| profiles_usage::lookup(en))
+        .or_else(|| setup_signin::lookup(en))
 }
 
 fn common(en: &str) -> Option<&'static str> {
