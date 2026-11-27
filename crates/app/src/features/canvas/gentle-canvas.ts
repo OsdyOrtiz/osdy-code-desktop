@@ -1,4 +1,4 @@
-// Gentle Shell GPUI: canvas tools. An agent opened beside a canvas tab (its
+// Osdy Code Desktop: canvas tools. An agent opened beside a canvas tab (its
 // "Agent" button) gets GENTLE_CANVAS_FILE and, through these tools, reads,
 // edits and looks at that canvas while the user draws on it, after Tern's
 // canvas_read / canvas_edit / canvas_shot. Each call drops a request in the
@@ -35,7 +35,7 @@ const OPS =
 
 // A section of every turn's system prompt: the canvas is where this agent
 // answers, so "make a class diagram" means drawing it, not writing a file.
-const ROLE = `You were opened from a canvas (a whiteboard) in the Gentle Shell app and float over it; the user sees your answers there. The canvas is your output:
+const ROLE = `You were opened from a canvas (a whiteboard) in Osdy Code Desktop and float over it; the user sees your answers there. The canvas is your output:
 - Whatever the user asks you to create, draw, diagram, sketch, map, plan, list, compare, explain or solve goes ON THE CANVAS with canvas_edit, even when they don't say "on the canvas". "Make a class diagram" means drawing it with canvas_edit.
 - Do not write files (Mermaid, Markdown, SVG, images, docs) for it unless the user explicitly asks for a file. Reading code or running commands to gather what you draw is fine.
 - Start a turn about the canvas with canvas_read (and canvas_shot when there is ink: handwriting, sketches, math); answer questions about what they drew by reading it.
@@ -44,7 +44,7 @@ const ROLE = `You were opened from a canvas (a whiteboard) in the Gentle Shell a
 
 // Next to each prompt, unseen by the user: where the answer goes.
 const NUDGE =
-	"[From the Gentle Shell app, not the user] The user wrote this from the canvas you float over. " +
+	"[From Osdy Code Desktop, not the user] The user wrote this from the canvas you float over. " +
 	"If it asks you to make, draw, diagram, plan, explain or solve anything, the result goes on the canvas with canvas_edit (read it first with canvas_read), not in a file or only in chat, unless they explicitly ask for a file.";
 
 export default function gentleCanvas(pi: ExtensionAPI) {
@@ -83,7 +83,7 @@ export default function gentleCanvas(pi: ExtensionAPI) {
 			}
 		}
 		await fs.rm(req, { force: true });
-		throw new Error("The canvas didn't answer: its tab must be open in the Gentle Shell app (a closed tab can be reopened with ⌥⌘T).");
+		throw new Error("The canvas didn't answer: its tab must be open in Osdy Code Desktop (a closed tab can be reopened with ⌥⌘T).");
 	}
 
 	const answer = (json: Json) => {

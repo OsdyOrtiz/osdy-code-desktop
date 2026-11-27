@@ -339,7 +339,7 @@ pub fn report(recording: &str) -> String {
     };
     if let Some(h) = &header {
         line(format!(
-            "Gentle Shell GPUI {} on {} {}, {} cores, {:.0} MB",
+            "Osdy Code Desktop {} on {} {}, {} cores, {:.0} MB",
             h.version, h.os, h.arch, h.cores, h.memory_mb
         ));
     }
@@ -579,7 +579,7 @@ mod tests {
         let report = report(&recording);
         assert!(
             report.starts_with(
-                "Gentle Shell GPUI 0.1.23 on linux x86_64, 8 cores, 16384 MB\n\
+                "Osdy Code Desktop 0.1.23 on linux x86_64, 8 cores, 16384 MB\n\
                  2 samples over 1m00s (1 unreadable lines skipped)"
             ),
             "{report}"

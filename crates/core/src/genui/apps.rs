@@ -559,7 +559,7 @@ pub fn host_context(
         "deviceCapabilities": { "touch": false, "hover": true },
         "toolInfo": { "tool": {
             "name": super::TOOL,
-            "description": "Agent-written HTML shown in the Gentle Shell app",
+            "description": "Agent-written HTML shown in Osdy Code Desktop",
             "inputSchema": { "type": "object" },
         }},
     });
@@ -859,6 +859,10 @@ mod tests {
         );
         assert_eq!(context["locale"], "es-AR");
         assert_eq!(context["toolInfo"]["tool"]["name"], "gentle_ui");
+        assert_eq!(
+            context["toolInfo"]["tool"]["description"],
+            "Agent-written HTML shown in Osdy Code Desktop"
+        );
         // Every standard variable is filled.
         assert_eq!(vars.as_object().unwrap().len(), 54 + 22);
     }

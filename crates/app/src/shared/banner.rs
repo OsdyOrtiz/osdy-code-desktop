@@ -1,8 +1,7 @@
-//! Gentle Shell's startup banner: the braille rose and the pixel "Gentle Shell"
-//! wordmark, drawn as real pixels instead of terminal glyphs. The art comes
-//! from the brand assets `gentle_rose.txt` and `gentle_shell_combo.txt` (and
-//! their `_color` versions for the rose's shading and the wordmark's two
-//! tones); palettes and `banner.json` semantics from gentle-pi
+//! Osdy Code Desktop's startup banner: the braille rose from Gentle Shell
+//! and the pixel "OSDY CODE" wordmark, drawn as real pixels instead of terminal
+//! glyphs. The rose comes from `gentle_rose.txt` and `gentle_rose_color.txt`;
+//! palettes and `banner.json` semantics come from gentle-pi's
 //! `extensions/startup-banner.ts`.
 
 use std::path::Path;
@@ -14,17 +13,17 @@ use gpui_kit::*;
 use crate::shared::themes;
 
 const TEXT_LOGO: &[&str] = &[
-    "              ▄▄▄▀▀▀▀▀██                              ▄▄▀▄▄          ▄▄█▀▀▀██         ▄▄▀▄▄           ▄▄▀▄▄    ▄▄▀▄▄",
-    "          ▄▄█▀▀▒▒▒▒▒▄▄█▀▒                 ▄██     ▄▄█▀█▄█▀▒▒       ▄█▀▀▒▒▒▄█▀▒    ▄▄█▀█▄█▀▒▒      ▄▄█▀█▄█▀▒▄▄█▀█▄█▀▒▒",
-    "      ▄▄██▀▒▒▒▒▒▄▄▄▀▀▒▒▒▒           ▀▀▀▀██▀▀▀▀▀███▀█▄▀▀▒▒▒▒      ██▄▄▒▒▒▒▒▒▒   ▄██▀█▄▀▀▒▒▒▒    ▄██▀█▄▀▀▒▄██▀█▄▀▀▒▒▒▒",
-    "    ▄██▀▒▒▒▒     ▒▒▄▄█ ▄▄▄▀██ █▄▀█▄  ▄██▀▒▒▒▒▄██▀▀▀▄▄▄▀██          ▀▀▀██▄▄   ▄███▀▀▒▒▄▄▄▀██  ▄██▀▀▀▒▒ ▄██▀▀▀▒▒",
-    "   ██▀▒▒▒     ▄▄▄███▀▄██▄▄█▀ ██▒▄█▀▄██▀▒▒▒▄▄██▀▒▒▄██▄▄█▀▒       ▄▄     ▀██ ▄██▀▒██▒▄██▄▄█▀▄▄██▀▒▒▒ ▄▄██▀▒▒▄▄▄",
-    "    ▀█▄▄▄▄▄▀▀▀█▄▄███▄█▀▀▄▄▄▀██▒▒█▄▀▒██▄▄▀▀▀▒▀█▄▄██▀▀▄▄▄▀▀        ▀█▄▄▄▄█▀▀█▀▀▒▒██▄▄█▀▀▄▄▄▀▀▒▀█▄▄▀▀▀▒▀█▄▄▀▀▀▒",
-    "     ▒▄▄▄█▀▀▀█▄█▀▀▒▒▒▒▒  ▒▒▒▒▒ ▒▒▒▒▒ ▒▒ ▒▒▒▒▒▒▒ ▒▒▒▒▒▒ ▒▒▒▒        ▒▀▀▀▀▒▒▒▒  ▒▒▒▒▒▒ ▒▒▒▒▒ ▒▒▒▒▒▒  ▒▒▒▒▒▒▒▒",
-    "  ▄▄▀▀ ▒▒▒▒▄██▀▒▒▒▒",
-    "▄█ ▒▒▒▄▄██▀▀▒▒▒▒",
-    " ▀▀▀▀▀▀▒▒▒▒▒▒",
-    "  ▒▒▒▒▒▒",
+    "               ▄▄▄▄▄▄       ▄▄▄▄▄▄▄▄   ▄▄▄▄▄▄▄▄     ▄▄▄▄  ▄▄▄▄              ▄▄▄▄▄▄▄▄     ▄▄▄▄▄▄     ▄▄▄▄▄▄▄▄     ▄▄▄▄▄▄▄▄▄▄",
+    "            ▄▄██▀▀██▄▄▒  ▄▄██▀▀▀▀▀▀▒▒▒████▀▀██▄▄▒  ████▒▒████▒▒▒         ▄▄██▀▀▀▀▀▀▒▒▒▄▄██▀▀██▄▄▒  ████▀▀██▄▄▒  ████▀▀▀▀▀▀▒▒▒",
+    "          ▄███▀▒▄███▀▒▒▄███▀▒▒▒▒▒▒▒▒▄███▀▒▄███▀▒▒▄███▀▒▄███▀▒▒▒        ▄███▀▒▒▒▒▒▒▒▒▄███▀▒▄███▀▒▒▄███▀▒▄███▀▒▒▄███▀▒▒▒▒▒▒▒▒▒",
+    "        ▄███▀▒▄███▀▒▒▄███▀▒▒▒▒    ▄███▀▒▄███▀▒▒▒▀███▄▄█▀▀▀▒▒▒▒       ▄███▀▒▒▒▒    ▄███▀▒▄███▀▒▒▄███▀▒▄███▀▒▒▄███▀▒▒▒▒",
+    "       ▄███▀▒▄███▀▒▒▒▀███▄▄▄     ▄███▀▒▄███▀▒▒▒  ▀██▀▀▀▒▒▒▒▒        ▄███▀▒▒▒     ▄███▀▒▄███▀▒▒▄███▀▒▄███▀▒▒▄████▄▄▄",
+    "     ▄███▀▒▄███▀▒▒▒▒ ▀▀▀███▄▒▒ ▄███▀▒▄███▀▒▒▒▒  ▄█▀▒▒▒▒▒▒         ▄███▀▒▒▒▒    ▄███▀▒▄███▀▒▒▄███▀▒▄███▀▒▒▄███▀▀▀▀▀▒▒▒",
+    "    ████▒▒████▒▒▒▒     ████▒▒▒████▒▒████▒▒▒▒   ██ ▒▒▒            ████▒▒▒▒     ████▒▒████▒▒▒████▒▒████▒▒▒████▒▒▒▒▒▒▒▒",
+    "  ▄███▀▒▄███▀▒▒▒     ▄███▀▒▒▄███▀▒▄███▀▒▒▒   ▄█▀ ▒▒            ▄███▀▒▒▒     ▄███▀▒▄███▀▒▒▄███▀▒▄███▀▒▒▄███▀▒▒▒",
+    " ▀███▄▄█▀▀▀▒▒▄▄▄▄▄▄▄█▀▀▀▒▒▄████▄▄█▀▀▀▒▒▒▒  ▄█▀ ▒▒▒            ▀███▄▄▄▄▄    ▀███▄▄█▀▀▀▒▒▄████▄▄█▀▀▀▒▒▄████▄▄▄▄▄",
+    "  ▀▀▀▀▀▀▒▒▒▒▒▀▀▀▀▀▀▀▀▒▒▒▒▒▀▀▀▀▀▀▀▀▒▒▒▒▒    ▀▀▒▒▒               ▀▀▀▀▀▀▀▀▒▒   ▀▀▀▀▀▀▒▒▒▒▒▀▀▀▀▀▀▀▀▒▒▒▒▒▀▀▀▀▀▀▀▀▀▀▒▒",
+    "    ▒▒▒▒▒▒     ▒▒▒▒▒▒▒▒     ▒▒▒▒▒▒▒▒         ▒▒                  ▒▒▒▒▒▒▒▒     ▒▒▒▒▒▒     ▒▒▒▒▒▒▒▒     ▒▒▒▒▒▒▒▒▒▒",
 ];
 
 const ROSE: &[&str] = &[
@@ -182,8 +181,8 @@ const SLANT: f32 = 0.8;
 
 /// When a pen writing the wordmark reaches each of `pixels`, 0..=1. It sweeps
 /// along the italic's slant at a steady ink rate: it takes its time over the
-/// letters' dense strokes, glides through thin joins, and lifts for a breath
-/// over blank columns (the space between the words). `ink` sets the pace.
+/// letters' dense strokes and lifts for a breath over blank columns (the
+/// space between the words). `ink` sets the pace.
 fn pen_times(ink: &[(u16, u16)], pixels: &[(u16, u16)]) -> Vec<f32> {
     /// Time for a column the pen only passes through.
     const TRAVEL: f32 = 2.0;
@@ -368,7 +367,7 @@ fn lighten(color: Hsla, by: f32) -> Hsla {
 
 /// The banner at `scale` px per wordmark pixel. With `reveal` going 0 → 1
 /// over [`WRITE`], the rose blooms from its heart outward while a pen writes
-/// the wordmark in cursive, each stroke glowing like wet ink before it dries
+/// the wordmark, each stroke glowing like wet ink before it dries
 /// and its shadow settles. Meanwhile the rose floats (it rises, sways, and a
 /// glint crosses its petals) and comes to rest as the writing ends. Every
 /// motion follows `reveal`, so a finished banner is still and asks for no
@@ -520,12 +519,12 @@ mod tests {
         // Crossing the blank takes longer than writing a pixel.
         assert!(at[3] - at[2] > 3.0 * (at[2] - at[1]), "{at:?}");
 
-        // The real wordmark: "Gentle" is done before "Shell" starts.
-        let gentle = ART.logo.iter().filter(|p| !p.shadow && p.x < 50);
-        let shell = ART.logo.iter().filter(|p| !p.shadow && p.x > 70);
-        let gentle_end = gentle.map(|p| p.at).fold(0f32, f32::max);
-        let shell_start = shell.map(|p| p.at).fold(1f32, f32::min);
-        assert!(gentle_end < shell_start, "{gentle_end} vs {shell_start}");
+        // The real wordmark: "OSDY" is done before "CODE" starts.
+        let osdy = ART.logo.iter().filter(|p| !p.shadow && p.x < 62);
+        let code = ART.logo.iter().filter(|p| !p.shadow && p.x >= 62);
+        let osdy_end = osdy.map(|p| p.at).fold(0f32, f32::max);
+        let code_start = code.map(|p| p.at).fold(1f32, f32::min);
+        assert!(osdy_end < code_start, "{osdy_end} vs {code_start}");
     }
 
     #[test]

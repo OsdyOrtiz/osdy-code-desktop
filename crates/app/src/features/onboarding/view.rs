@@ -23,20 +23,20 @@ impl OnboardingView {
         let done = checks.is_some_and(all_set);
         let (title, line) = match checks {
             None => (
-                "Welcome to Gentle Shell",
+                "Welcome to Osdy Code Desktop",
                 "Looking at what this machine already has…",
             ),
             Some(checks) if !required_ok(checks) => (
                 "Let's get you set up",
-                "A few things Gentle Shell needs are missing. Install them here; anything \
+                "A few things Osdy Code Desktop needs are missing. Install them here; anything \
                  that needs your password opens in a terminal for you to run.",
             ),
             Some(_) if done => (
                 "You're all set",
-                "Everything Gentle Shell needs is here. Optional extras are below.",
+                "Everything Osdy Code Desktop needs is here. Optional extras are below.",
             ),
             Some(_) if self.first_run => (
-                "Welcome to Gentle Shell",
+                "Welcome to Osdy Code Desktop",
                 "Everything required is ready. The recommended extras below make it better.",
             ),
             Some(_) => (

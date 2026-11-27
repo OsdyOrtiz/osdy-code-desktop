@@ -11,9 +11,9 @@ use std::path::{Path, PathBuf};
 use crate::features::setup::devices::Prefs;
 
 const PAGES: &str = "\
-## Gentle Shell app: pages and devices
+## Osdy Code Desktop: pages and devices
 
-You run inside the Gentle Shell desktop app, where the user watches what you open.
+You run inside Osdy Code Desktop, where the user watches what you open.
 
 - Web pages (a dev server, a preview, docs): run `gentle-open <url>`; the page opens where the user \
 chose (the app's browser unless they picked their own). Never use `open`, `xdg-open`, `start` or \

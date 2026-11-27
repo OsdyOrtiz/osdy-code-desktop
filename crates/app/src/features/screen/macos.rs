@@ -3,7 +3,7 @@
 //! Quartz events posted at the window's place after bringing its app
 //! forward. Coordinates are points. Window titles and pictures need Screen
 //! Recording permission, input needs Accessibility; both are granted to the
-//! app the agent runs in (Gentle Shell), which macOS asks about once.
+//! app the agent runs in (Osdy Code Desktop), which macOS asks about once.
 
 use core_foundation::array::CFArray;
 use core_foundation::base::{CFType, TCFType};
@@ -121,7 +121,7 @@ fn screencapture(args: &[&str]) -> Result<Vec<u8>, String> {
     let _ = std::fs::remove_file(&path);
     match png {
         Some(png) if status.success() => Ok(png),
-        _ => Err("macOS gave no picture: allow Gentle Shell in System Settings › Privacy & Security › Screen & System Audio Recording".into()),
+        _ => Err("macOS gave no picture: allow Osdy Code Desktop in System Settings › Privacy & Security › Screen & System Audio Recording".into()),
     }
 }
 
@@ -151,7 +151,7 @@ pub fn input_ready() -> Result<(), String> {
     if unsafe { AXIsProcessTrustedWithOptions(options.as_concrete_TypeRef()) } {
         Ok(())
     } else {
-        Err("allow Gentle Shell in System Settings › Privacy & Security › Accessibility, then try again".into())
+        Err("allow Osdy Code Desktop in System Settings › Privacy & Security › Accessibility, then try again".into())
     }
 }
 

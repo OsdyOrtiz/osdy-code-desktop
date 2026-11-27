@@ -1,4 +1,4 @@
-// Gentle Shell GPUI: generative UI. The `gentle_ui` tool shows an interactive
+// Osdy Code Desktop: generative UI. The `gentle_ui` tool shows an interactive
 // surface in the desktop app's conversation: a diagram, table, form, checklist,
 // kanban board or chart the user edits natively, or an html page (an MCP App)
 // run in an isolated web view. The app sends what the user does back with
@@ -2194,7 +2194,7 @@ const OFF_ERROR = "gentle_ui is off: the user turned it off in the app (Configur
 // How to use the tool, in every mode it is on.
 const GUIDELINES = [
 	"Pick the gentle_ui kind by what the user will do: diagram for architecture, data flow and dependencies; sequence for calls between components over time; erd for data models (read from the migrations or ORM models); state for state machines and lifecycles (current: the live state); timeline for dated plans with dependencies; table for rows to compare, select or correct; form to ask several structured questions at once; checklist for plans and TODOs; kanban for work items across stages; chart for numbers (read-only); review for file changes you propose.",
-	"The user is in the Gentle Shell desktop app, where gentle_ui surfaces appear right in the conversation and they can move, connect and correct them. When they ask to see, map, draw or plan an architecture, system or flow, use gentle_ui, not gentle_design: gentle_design is for HTML design canvases (screens, mockups, visual directions) opened in a browser.",
+	"The user is in Osdy Code Desktop, where gentle_ui surfaces appear right in the conversation and they can move, connect and correct them. When they ask to see, map, draw or plan an architecture, system or flow, use gentle_ui, not gentle_design: gentle_design is for HTML design canvases (screens, mockups, visual directions) opened in a browser.",
 	"To change a UI already shown, call gentle_ui with action update and a small patch instead of a new show; ids are stable slugs (api, orders-db) reused across updates.",
 	`Attach ref { path (repo-relative), line?, endLine? } to every gentle_ui item that corresponds to code (a diagram node, erd table, table row, checklist item or kanban card) so the user can open it, e.g. "ref":{"path":"src/auth/mod.rs","line":42}; paths outside the workspace are rejected.`,
 	`The user's edits to a gentle_ui UI arrive as "${EVENT_MESSAGE}" messages with the full current spec; they are authoritative, so build on them and don't undo them. Such a message may also insert a saved UI (treat it like your own, update it by id) or ask you to add one to the project's docs.`,
@@ -2348,7 +2348,7 @@ export default function gentleUi(pi: ExtensionAPI) {
 		name: TOOL,
 		label: "Gentle UI",
 		description:
-			"Show an interactive UI in the user's Gentle Shell app conversation (a diagram, sequence diagram, data model, state machine, timeline, table, form, checklist, kanban board, chart, change review or html page), " +
+			"Show an interactive UI in the user's Osdy Code Desktop conversation (a diagram, sequence diagram, data model, state machine, timeline, table, form, checklist, kanban board, chart, change review or html page), " +
 			"update it (spec replaces, patch merges) or close it. The user can edit or use it (charts are read-only); the result summarizes its current state.",
 		promptSnippet: "Show, update or close an interactive diagram, sequence, data model, state machine, timeline, table, form, checklist, board, chart, change review or html page the user can edit in the app",
 		promptGuidelines: guidelines(mode),
@@ -2440,7 +2440,7 @@ export default function gentleUi(pi: ExtensionAPI) {
 	});
 
 	pi.registerCommand(EVENT_COMMAND, {
-		description: "Gentle Shell app: what the user did in a gentle_ui UI (sent by the app)",
+		description: "Osdy Code Desktop: what the user did in a gentle_ui UI (sent by the app)",
 		handler: async (args, ctx) => {
 			let event: Json;
 			try {

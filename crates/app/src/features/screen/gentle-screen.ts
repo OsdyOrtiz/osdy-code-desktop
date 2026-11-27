@@ -1,4 +1,4 @@
-// Gentle Shell GPUI: the `screen` tool. Agents launch desktop apps, look at
+// Osdy Code Desktop: the `screen` tool. Agents launch desktop apps, look at
 // their windows and use them, through `gentle-screen` (the app's command);
 // a screenshot comes back as an image the conversation shows. Input only
 // reaches apps this tool launched. Written by the app; edits here are

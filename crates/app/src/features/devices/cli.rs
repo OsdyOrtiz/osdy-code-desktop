@@ -13,7 +13,7 @@ use crate::features::setup::devices as setup;
 use crate::platform::instance;
 
 const USAGE: &str = "\
-gentle-device: simulators and emulators in Gentle Shell's device panel
+gentle-device: simulators and emulators in the Osdy Code Desktop device panel
 
   gentle-device list               every iOS simulator and Android emulator
   gentle-device open <name|id>     boot it (if needed) and show it in the app
@@ -69,7 +69,7 @@ pub fn run(args: Vec<String>) -> i32 {
         ..Default::default()
     });
     if !sent {
-        eprintln!("gentle-device: the Gentle Shell app isn't running. Open it, then try again.");
+        eprintln!("gentle-device: Osdy Code Desktop isn't running. Open it, then try again.");
         return 1;
     }
     match request {

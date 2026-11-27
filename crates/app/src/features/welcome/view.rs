@@ -48,19 +48,19 @@ impl WelcomeView {
         let setup = self.setup.read(cx);
         let (title, line) = if setup.looking() {
             (
-                "Welcome to Gentle Shell.",
+                "Welcome to Osdy Code Desktop.",
                 "Looking at what this machine already has…",
             )
         } else if setup.ready() && setup.needs_sign_in() {
             (
                 "You're ready.",
-                "Everything Gentle Shell needs is installed. Sign in to a model \
+                "Everything Osdy Code Desktop needs is installed. Sign in to a model \
                  provider now, or later from the chat.",
             )
         } else if setup.ready() {
             (
                 "You're ready.",
-                "Everything Gentle Shell needs is here. Open your first agent whenever \
+                "Everything Osdy Code Desktop needs is here. Open your first agent whenever \
                  you like; the extras below make it better.",
             )
         } else {

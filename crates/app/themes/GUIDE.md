@@ -1,4 +1,4 @@
-# Making a Gentle Shell app theme
+# Making an Osdy Code Desktop app theme
 
 An app theme changes the desktop app's colors and can put an animated scene
 behind the panes (the panes are glass, so it shows through them). Themes live
