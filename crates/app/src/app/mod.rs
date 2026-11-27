@@ -35,6 +35,7 @@ pub fn run(
             gpui_kit::init(cx);
             Theme::change(ThemeMode::Dark, None, cx);
             themes::init(cx);
+            crate::shared::i18n::init(cx);
             crate::features::browser::init(cx);
             #[cfg(target_os = "macos")]
             crate::platform::icons::set_dock_icon();

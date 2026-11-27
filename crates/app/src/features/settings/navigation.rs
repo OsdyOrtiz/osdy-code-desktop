@@ -108,7 +108,7 @@ impl SettingsPage {
                 "home setup requirements agent directory configuration launcher path environment initial diagnostics performance cpu memory slow record recording report backend wsl linux distro remote vm orbstack lima docker container where agents run status doctor dev binary assets routing"
             }
             Self::Appearance => {
-                "theme color dark light import share transparency window opacity blur glass contrast readable readability accessibility interface zoom size font fonts family typeface nerd monospace code scene motion background picture animated library terminal banner rose text tabs vertical horizontal placement sidebar panels icon rail files expand compact hidden show hide visibility typing paws notes music particles composer input style card bar prompt pill soft"
+                "language idioma english spanish español theme color dark light import share transparency window opacity blur glass contrast readable readability accessibility interface zoom size font fonts family typeface nerd monospace code scene motion background picture animated library terminal banner rose text tabs vertical horizontal placement sidebar panels icon rail files expand compact hidden show hide visibility typing paws notes music particles composer input style card bar prompt pill soft"
             }
             Self::Agents => {
                 "background subagents gentle ai persona permissions helpers agent ui generative proactive when asked"
@@ -422,6 +422,9 @@ mod tests {
             assert!(SettingsPage::Appearance.matches_query(term));
         }
         assert!(SettingsPage::Appearance.matches_query("THEME"));
+        for term in ["language", "idioma", "spanish", "español"] {
+            assert!(SettingsPage::Appearance.matches_query(term));
+        }
         assert!(SettingsPage::Models.matches_query("claude bridge"));
         assert!(SettingsPage::Extensions.matches_query("install npm"));
         assert!(SettingsPage::Updates.matches_query("engram version"));

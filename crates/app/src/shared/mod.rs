@@ -7,6 +7,7 @@ pub mod data_dir;
 pub mod diagnostics;
 pub mod floating;
 pub mod gentle_state;
+pub mod i18n;
 pub mod kisses;
 pub mod overlay;
 pub mod pane;

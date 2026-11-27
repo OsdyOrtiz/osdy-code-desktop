@@ -21,6 +21,7 @@ mod fonts;
 mod hydration;
 mod input_style;
 mod interface;
+mod language;
 mod layout;
 mod maestro;
 mod models;

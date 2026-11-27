@@ -18,6 +18,7 @@ pub(super) fn render(
 ) -> Div {
     v_flex()
         .gap_3()
+        .child(view.language_section(cx))
         .child(view.interface_section(cx))
         .child(view.input_style_section(cx))
         .child(
