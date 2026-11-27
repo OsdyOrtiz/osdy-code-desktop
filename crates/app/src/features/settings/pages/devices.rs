@@ -7,6 +7,7 @@ use gpui_kit::component::{Icon, Sizable as _, h_flex, v_flex};
 use gpui_kit::*;
 
 use super::super::{SettingsView, navigation::SettingsPage};
+use crate::shared::i18n::t;
 
 pub(super) fn render(view: &SettingsView, cx: &mut Context<SettingsView>) -> Div {
     v_flex()
@@ -18,7 +19,7 @@ pub(super) fn render(view: &SettingsView, cx: &mut Context<SettingsView>) -> Div
                     .ghost()
                     .small()
                     .icon(Icon::new(IconName::ArrowUpRight))
-                    .label("Configure Maestro UI testing")
+                    .label(t("Configure Maestro UI testing"))
                     .on_click(cx.listener(|this, _, _, cx| {
                         this.navigate_to(SettingsPage::Integrations, cx)
                     })),

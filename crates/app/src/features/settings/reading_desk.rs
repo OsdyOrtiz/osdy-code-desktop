@@ -10,6 +10,7 @@ use gpui_kit::*;
 
 use super::SettingsView;
 use super::fonts::effective_family;
+use crate::shared::i18n::t;
 use crate::shared::themes::{self, FontSlot, Fonts, Themes};
 use crate::shared::ui;
 
@@ -65,7 +66,7 @@ impl SettingsView {
                 .xsmall()
                 .text_color(ui::faint()),
             )
-            .child(ui::section_label("Reading desk"))
+            .child(ui::section_label(t("Reading desk")))
             .child(
                 div()
                     .ml_auto()
@@ -76,9 +77,9 @@ impl SettingsView {
                         ui::faint()
                     })
                     .child(if previewing {
-                        "Previewing · click or Enter to apply"
+                        t("Previewing · click or Enter to apply")
                     } else {
-                        "Live preview"
+                        t("Live preview")
                     }),
             )
             .on_click(cx.listener(|this, _, _, cx| {
@@ -118,11 +119,11 @@ fn tile(spec: &Spec, glyphs: &'static str, accessory: Option<Div>, preview: Div,
         .gap_1()
         .px(px(2.))
         .text_xs()
-        .child(div().text_color(ui::muted()).child(match spec.slot {
+        .child(div().text_color(ui::muted()).child(t(match spec.slot {
             FontSlot::Interface => "Interface",
             FontSlot::Code => "Code",
             FontSlot::Terminal => "Terminal",
-        }))
+        })))
         .child(
             div()
                 .flex_1()
@@ -204,9 +205,9 @@ fn trim(size: f32) -> String {
 
 fn interface_tile(spec: Spec) -> Div {
     let preview = v_flex()
-        .child(line([run("Review the latest changes", ui::fg())]))
+        .child(line([run(t("Review the latest changes"), ui::fg())]))
         .child(line([run(
-            "Résumé ready · 3 files · café, acción, 0123",
+            t("Résumé ready · 3 files · café, acción, 0123"),
             ui::muted(),
         )]))
         .child(
@@ -216,7 +217,7 @@ fn interface_tile(spec: Spec) -> Div {
                     .rounded_md()
                     .bg(ui::accent().opacity(0.16))
                     .text_color(ui::accent())
-                    .child("View changes"),
+                    .child(t("View changes")),
             ),
         );
     tile(&spec, "Aa Éé Ññ", None, preview, ui::raised())

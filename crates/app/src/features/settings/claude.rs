@@ -14,6 +14,7 @@ use serde_json::Value;
 use super::layout::{or_dash, row, section};
 use super::snapshot::{Snapshot, read_json};
 use super::{SettingsEvent, SettingsView};
+use crate::shared::i18n::t;
 use crate::shared::ui;
 
 /// One probe result and what it was valid for.
@@ -117,12 +118,18 @@ impl SettingsView {
         forget_claude_auth();
         match save_bridge_plan(&agent, plan) {
             Ok(()) => {
-                self.package.log = vec![format!(
-                    "Claude bridge plan set to {plan}. New sessions use it."
-                )];
+                self.package.log = vec![
+                    t("Claude bridge plan set to {plan}. New sessions use it.")
+                        .replace("{plan}", plan),
+                ];
                 cx.emit(SettingsEvent::Changed);
             }
-            Err(e) => self.package.log = vec![format!("Could not write claude-bridge.json: {e}")],
+            Err(e) => {
+                self.package.log = vec![
+                    t("Could not write claude-bridge.json: {error}")
+                        .replace("{error}", &e.to_string()),
+                ]
+            }
         }
         self.reload(cx);
     }
@@ -139,12 +146,12 @@ impl SettingsView {
             Some(_) => None,
         };
         Some(
-            section(IconName::Bot, "Claude bridge")
-                .child(row("Package", "pi-claude-bridge installed".to_string()))
-                .child(row("Claude Code", or_dash(&s.claude_code, "checking…")))
+            section(IconName::Bot, t("Claude bridge"))
+                .child(row(t("Package"), t("pi-claude-bridge installed")))
+                .child(row("Claude Code", or_dash(&s.claude_code, t("checking…"))))
                 .child(row(
                     "Plan",
-                    or_dash(&s.bridge_plan, "pro (default; set max for Opus 1M)"),
+                    or_dash(&s.bridge_plan, t("pro (default; set max for Opus 1M)")),
                 ))
                 .child(
                     h_flex()

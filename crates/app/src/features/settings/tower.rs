@@ -11,6 +11,7 @@ use gpui_kit::*;
 use super::SettingsView;
 use super::layout::{row, section};
 use crate::features::setup::tower::{self, TowerStatus};
+use crate::shared::i18n::t;
 use crate::shared::ui;
 
 /// Build output lines kept on screen.
@@ -80,8 +81,8 @@ impl SettingsView {
                 this.tower.status = Some(status);
                 this.tower.note = Some(match result {
                     Ok(()) => (
-                        "Gentle Tower is ready: open it from the tab bar's + or with /gentle:tower \
-                         (a Tower tab showing the error: Try again)."
+                        t("Gentle Tower is ready: open it from the tab bar's + or with /gentle:tower \
+                         (a Tower tab showing the error: Try again).")
                             .into(),
                         true,
                     ),
@@ -95,12 +96,12 @@ impl SettingsView {
 
     pub(super) fn tower_section(&self, cx: &mut Context<Self>) -> Div {
         let section = section(IconName::Building2, "Gentle Tower").child(
-            div().pb_2().text_xs().text_color(ui::muted()).child(
+            div().pb_2().text_xs().text_color(ui::muted()).child(t(
                 "Every open session as a floor of its project's building: tasks, talk, \
                  artifacts, cost and permissions. Gentle Shell 4.9.0 was published without \
                  Tower's web app; Enable downloads that version's source from GitHub and builds \
                  it into your install (needs a few minutes and an internet connection).",
-            ),
+            )),
         );
         let Some(status) = &self.tower.status else {
             return section.child(
@@ -109,14 +110,14 @@ impl SettingsView {
                     .text_xs()
                     .text_color(ui::muted())
                     .child(Spinner::new().xsmall().color(ui::accent()))
-                    .child("Looking for Gentle Shell…"),
+                    .child(t("Looking for Gentle Shell…")),
             );
         };
         let busy = self.tower.busy;
         let (state, color) = match (&status.package, status.built) {
-            (None, _) => ("Gentle Shell not found", ui::faint()),
-            (Some(_), true) => ("Ready", ui::success()),
-            (Some(_), false) => ("Web app missing in this Gentle Shell", ui::warning()),
+            (None, _) => (t("Gentle Shell not found"), ui::faint()),
+            (Some(_), true) => (t("Ready"), ui::success()),
+            (Some(_), false) => (t("Web app missing in this Gentle Shell"), ui::warning()),
         };
         section
             .child(h_flex().pb_2().child(ui::chip(state, color)))
@@ -125,7 +126,7 @@ impl SettingsView {
                 status.version.clone().unwrap_or_else(|| "—".into()),
             ))
             .when_some(status.package.as_ref(), |d, package| {
-                d.child(row("Package", package.display().to_string()))
+                d.child(row(t("Package"), package.display().to_string()))
             })
             .child(
                 h_flex()
@@ -138,7 +139,7 @@ impl SettingsView {
                                 .small()
                                 .primary()
                                 .icon(Icon::new(IconName::ArrowDown))
-                                .label("Enable Gentle Tower")
+                                .label(t("Enable Gentle Tower"))
                                 .disabled(busy)
                                 .on_click(cx.listener(|this, _, _, cx| this.enable_tower(cx))),
                         )
@@ -148,7 +149,7 @@ impl SettingsView {
                             .small()
                             .ghost()
                             .icon(Icon::new(IconName::RefreshCw))
-                            .label("Check again")
+                            .label(t("Check again"))
                             .disabled(busy)
                             .on_click(cx.listener(|this, _, _, cx| this.refresh_tower(cx))),
                     ),
@@ -161,7 +162,7 @@ impl SettingsView {
                         .text_xs()
                         .text_color(ui::muted())
                         .child(Spinner::new().xsmall().color(ui::accent()))
-                        .child("Building Gentle Tower…"),
+                        .child(t("Building Gentle Tower…")),
                 )
             })
             .when(!self.tower.log.is_empty(), |d| {

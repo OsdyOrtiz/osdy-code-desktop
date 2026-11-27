@@ -14,6 +14,7 @@ use super::layout::{row, section};
 use super::{SettingsEvent, SettingsView};
 use crate::features::onboarding::OnboardingEvent;
 use crate::features::setup::devices::{self as setup, DevicesStatus, Prefs};
+use crate::shared::i18n::t;
 use crate::shared::ui;
 
 /// Install output lines kept on screen.
@@ -123,7 +124,7 @@ impl SettingsView {
                 self.devices.prefs = prefs;
                 self.devices.note = agents_changed.then(|| {
                     (
-                        "New agent sessions use it; open tabs pick it up after /reload."
+                        t("New agent sessions use it; open tabs pick it up after /reload.")
                             .to_string(),
                         true,
                     )
@@ -160,7 +161,7 @@ impl SettingsView {
                     )
                     .child(ui::segmented(
                         id,
-                        &["Off", "On"],
+                        &[t("Off"), t("On")],
                         Some(usize::from(on)),
                         cx.listener(move |this, index: &usize, _, cx| {
                             this.set_device_switch(switch, *index == 1, cx)
@@ -171,12 +172,12 @@ impl SettingsView {
     }
 
     pub(super) fn devices_section(&self, cx: &mut Context<Self>) -> Div {
-        let section = section(IconName::Smartphone, "Devices").child(
-            div().pb_1().text_xs().text_color(ui::muted()).child(
+        let section = section(IconName::Smartphone, t("Devices")).child(
+            div().pb_1().text_xs().text_color(ui::muted()).child(t(
                 "iOS simulators and Android emulators inside the app: live, touchable, docked \
                  at the right or floating. Agents open them here too, never in a separate \
                  Simulator or emulator window.",
-            ),
+            )),
         );
         let Some(status) = &self.devices.status else {
             return section.child(
@@ -185,7 +186,7 @@ impl SettingsView {
                     .text_xs()
                     .text_color(ui::muted())
                     .child(Spinner::new().xsmall().color(ui::accent()))
-                    .child("Looking at this machine…"),
+                    .child(t("Looking at this machine…")),
             );
         };
         let prefs = self.devices.prefs;
@@ -193,58 +194,55 @@ impl SettingsView {
             if found {
                 format!("{} {}", package.name, package.version)
             } else {
-                format!(
-                    "{} {} (installs when you turn this on)",
-                    package.name, package.version
+                t("{package} (installs when you turn this on)").replace(
+                    "{package}",
+                    &format!("{} {}", package.name, package.version),
                 )
             }
         };
         let node = match &status.node {
             Some((_, (a, b, c))) if status.node_ok() => format!("Node.js {a}.{b}.{c}"),
-            Some((_, (a, b, c))) => format!("Node.js {a}.{b}.{c}: 22.12 or newer is needed"),
-            None => "Not found: Setup & requirements installs Node.js".into(),
+            Some((_, (a, b, c))) => t("Node.js {version}: 22.12 or newer is needed")
+                .replace("{version}", &format!("{a}.{b}.{c}")),
+            None => t("Not found: Setup & requirements installs Node.js").into(),
         };
         let ios = match &status.ios {
-            Ok(()) => "Ready (Xcode)".to_string(),
+            Ok(()) => t("Ready (Xcode)").to_string(),
             Err(why) => why.clone(),
         };
         let android = match &status.android_sdk {
             Some(sdk) => sdk.display().to_string(),
-            None => "Not found: install Android Studio and create a virtual device".into(),
+            None => t("Not found: install Android Studio and create a virtual device").into(),
         };
         let ffmpeg_missing = status.ffmpeg.is_none() && status.android_sdk.is_some();
         section
             .child(self.device_switch(
                 "devices-use",
-                "Use devices",
-                format!(
-                    "Open simulators and emulators in the device panel. {}",
-                    installed(status.hub.is_some(), &setup::HUB)
-                ),
+                t("Use devices"),
+                t("Open simulators and emulators in the device panel. {package}")
+                    .replace("{package}", &installed(status.hub.is_some(), &setup::HUB)),
                 Switch::Use,
                 prefs.enabled,
                 cx,
             ))
             .child(self.device_switch(
                 "devices-agents",
-                "Agents can use devices",
-                format!(
-                    "New agent sessions can open and drive these devices (gentle-device, agent-device). {}",
-                    installed(status.agent.is_some(), &setup::AGENT)
-                ),
+                t("Agents can use devices"),
+                t("New agent sessions can open and drive these devices (gentle-device, agent-device). {package}")
+                    .replace("{package}", &installed(status.agent.is_some(), &setup::AGENT)),
                 Switch::Agents,
                 prefs.agents,
                 cx,
             ))
             .child(div().h_2())
             .child(row("Node.js", node))
-            .child(row("iOS simulators", ios))
-            .child(row("Android SDK", android))
+            .child(row(t("iOS simulators"), ios))
+            .child(row(t("Android SDK"), android))
             .child(row(
                 "ffmpeg",
                 match &status.ffmpeg {
                     Some(path) => path.display().to_string(),
-                    None => "Not found: Android emulator video needs it".into(),
+                    None => t("Not found: Android emulator video needs it").into(),
                 },
             ))
             .when(ffmpeg_missing, |d| {
@@ -254,7 +252,7 @@ impl SettingsView {
                             .small()
                             .ghost()
                             .icon(Icon::new(IconName::SquareTerminal))
-                            .label(format!("Install ffmpeg ({})", setup::ffmpeg_command()))
+                            .label(t("Install ffmpeg ({command})").replace("{command}", setup::ffmpeg_command()))
                             .on_click(cx.listener(|_, _, _, cx| {
                                 cx.emit(SettingsEvent::Setup(OnboardingEvent::Terminal(
                                     setup::ffmpeg_command().to_string(),
@@ -271,7 +269,7 @@ impl SettingsView {
                         .text_xs()
                         .text_color(ui::muted())
                         .child(Spinner::new().xsmall().color(ui::accent()))
-                        .child(format!("{job}…")),
+                        .child(format!("{}…", t(job))),
                 )
             })
             .when(!self.devices.log.is_empty(), |d| {

@@ -11,14 +11,15 @@ use gpui_kit::*;
 use super::layout::{control, section};
 use super::{SettingsEvent, SettingsView};
 use crate::features::workspaces::TabLayout;
+use crate::shared::i18n::t;
 use crate::shared::ui;
 
 impl SettingsView {
     pub(super) fn interface_section(&self, cx: &mut Context<Self>) -> Div {
         let vertical = self.tab_layout == TabLayout::Vertical;
-        section(IconName::PanelLeft, "Panels & tabs")
+        section(IconName::PanelLeft, t("Panels & tabs"))
             .child(control(
-                "Tabs",
+                t("Tabs"),
                 false,
                 h_flex()
                     .gap_1()
@@ -28,7 +29,7 @@ impl SettingsView {
                             .small()
                             .selected(self.tab_layout == TabLayout::Horizontal)
                             .icon(Icon::new(IconName::List))
-                            .label("Horizontal")
+                            .label(t("Horizontal"))
                             .on_click(cx.listener(|this, _, _, cx| {
                                 this.select_tab_layout(TabLayout::Horizontal, cx)
                             })),
@@ -39,7 +40,7 @@ impl SettingsView {
                             .small()
                             .selected(vertical)
                             .icon(Icon::new(IconName::PanelLeft))
-                            .label("Vertical")
+                            .label(t("Vertical"))
                             .on_click(cx.listener(|this, _, _, cx| {
                                 this.select_tab_layout(TabLayout::Vertical, cx)
                             })),
@@ -47,11 +48,11 @@ impl SettingsView {
             ))
             .when(vertical, |card| {
                 card.child(control(
-                    "Navigator",
+                    t("Navigator"),
                     false,
                     ui::segmented(
                         "settings-tabs-sidebar-hidden",
-                        &["Show", "Hide"],
+                        &[t("Show"), t("Hide")],
                         Some(usize::from(self.tabs_sidebar_hidden)),
                         cx.listener(move |this, index: &usize, _, cx| {
                             this.select_tabs_sidebar_hidden(*index == 1, cx)
@@ -59,11 +60,11 @@ impl SettingsView {
                     ),
                 ))
                 .child(control(
-                    "Navigator style",
+                    t("Navigator style"),
                     self.tabs_sidebar_hidden,
                     ui::segmented(
                         "settings-sidebar-compact",
-                        &["Expanded", "Icon rail"],
+                        &[t("Expanded"), t("Icon rail")],
                         Some(usize::from(self.sidebar_compact)),
                         cx.listener(move |this, index: &usize, _, cx| {
                             this.select_sidebar_compact(*index == 1, cx)
@@ -72,22 +73,20 @@ impl SettingsView {
                 ))
             })
             .child(control(
-                "Files",
+                t("Files"),
                 false,
                 ui::segmented(
                     "settings-files-sidebar",
-                    &["Show", "Hide"],
+                    &[t("Show"), t("Hide")],
                     Some(usize::from(!self.files_sidebar)),
                     cx.listener(move |this, index: &usize, _, cx| {
                         this.select_files_sidebar(*index == 0, cx)
                     }),
                 ),
             ))
-            .child(
-                div().pt_2().text_xs().text_color(ui::faint()).child(
-                    "Tabs appear at the top or on the left. Files always opens on the right.",
-                ),
-            )
+            .child(div().pt_2().text_xs().text_color(ui::faint()).child(t(
+                "Tabs appear at the top or on the left. Files always opens on the right.",
+            )))
     }
 
     fn select_tab_layout(&mut self, layout: TabLayout, cx: &mut Context<Self>) {

@@ -14,6 +14,7 @@ use super::claude::forget_claude_auth;
 use super::layout::{row, section};
 use super::snapshot::Snapshot;
 use super::{SettingsEvent, SettingsView};
+use crate::shared::i18n::t;
 use crate::shared::ui;
 
 /// The Advanced / Packages page's input, status and event subscription.
@@ -112,7 +113,7 @@ impl SettingsView {
             || updates.is_some_and(|status| {
                 status.gentle_shell.channel == pi_rpc::desktop_rpc::ShellChannel::GentleAiManaged
             });
-        section(IconName::Layers, "Packages")
+        section(IconName::Layers, t("Packages"))
             .when(available > 0, |d| {
                 d.child(
                     h_flex()
@@ -126,9 +127,10 @@ impl SettingsView {
                                 .text_xs()
                                 .text_color(ui::accent())
                                 .child(if available == 1 {
-                                    "1 package has an update".to_string()
+                                    t("1 package has an update").to_string()
                                 } else {
-                                    format!("{available} packages have updates")
+                                    t("{count} packages have updates")
+                                        .replace("{count}", &available.to_string())
                                 }),
                         )
                         .when(!managed, |d| {
@@ -137,7 +139,7 @@ impl SettingsView {
                                     .xsmall()
                                     .ghost()
                                     .icon(Icon::new(IconName::ArrowUp))
-                                    .label("Update packages")
+                                    .label(t("Update packages"))
                                     .tooltip("gentle-shell update --extensions")
                                     .disabled(self.package.running.is_some() || updating_shell)
                                     .on_click(cx.listener(|this, _, _, cx| {
@@ -158,7 +160,7 @@ impl SettingsView {
                             .pb_1()
                             .text_xs()
                             .text_color(ui::muted())
-                            .child(note)
+                            .child(t(note))
                     }),
             )
             .children(s.packages.iter().enumerate().map(|(i, p)| {
@@ -212,7 +214,7 @@ impl SettingsView {
                     )
             }))
             .when(!s.extensions.is_empty(), |d| {
-                d.child(row("Extension filters", s.extensions.join(", ")))
+                d.child(row(t("Extension filters"), s.extensions.join(", ")))
             })
             .child(
                 h_flex()
@@ -229,7 +231,7 @@ impl SettingsView {
                         Button::new("install-package")
                             .primary()
                             .icon(Icon::new(IconName::ArrowDown))
-                            .label("Install")
+                            .label(t("Install"))
                             .disabled(self.package.running.is_some() || updating_shell)
                             .on_click(cx.listener(|this, _, window, cx| {
                                 let source = this.package.input.read(cx).value().trim().to_string();

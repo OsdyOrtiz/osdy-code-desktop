@@ -9,17 +9,18 @@ use gpui_kit::*;
 
 use super::SettingsView;
 use super::layout::{row, section};
+use crate::shared::i18n::t;
 use crate::{features::alerts, shared::ui};
 
 /// Copy for each alert's switch.
 fn alert_hint(alert: notifications::Alert) -> &'static str {
-    match alert {
+    t(match alert {
         notifications::Alert::TurnEnded => "When a turn finishes (agent.completed).",
         notifications::Alert::NeedsYou => "When el Gentleman asks you something (agent.attention).",
         notifications::Alert::ContextHigh => {
             "When the context reaches the threshold (context.high)."
         }
-    }
+    })
 }
 
 /// One Off/On row of the Notifications section.
@@ -48,7 +49,7 @@ fn alert_switch(
                 )
                 .child(ui::segmented(
                     id,
-                    &["Off", "On"],
+                    &[t("Off"), t("On")],
                     Some(usize::from(on)),
                     cx.listener(move |this, index: &usize, _, cx| {
                         this.set_notification(change(*index == 1), cx)
@@ -69,20 +70,18 @@ impl SettingsView {
     pub(super) fn notifications_section(&self, cx: &mut Context<Self>) -> Div {
         let policy = self.notification_policy();
         let enabled = policy.enabled();
-        let mut card = section(IconName::Bell, "Notifications")
-            .child(row("File", policy.file.display().to_string()))
+        let mut card = section(IconName::Bell, t("Notifications"))
+            .child(row(t("File"), policy.file.display().to_string()))
             .child(row(
-                "Context threshold",
-                format!(
-                    "{:.0} % (fixed by Gentle Shell)",
-                    alerts::context_threshold(cx)
-                ),
+                t("Context threshold"),
+                t("{percent} % (fixed by Gentle Shell)")
+                    .replace("{percent}", &format!("{:.0}", alerts::context_threshold(cx))),
             ))
             .child(alert_switch(
                 "alerts-enabled",
-                "Sounds",
+                t("Sounds"),
                 enabled,
-                "Master switch, off by default. Off also stops the Dock bounce / taskbar flash while the app is in the background.",
+                t("Master switch, off by default. Off also stops the Dock bounce / taskbar flash while the app is in the background."),
                 false,
                 notifications::Change::Enabled,
                 cx,
@@ -95,7 +94,7 @@ impl SettingsView {
             };
             card = card.child(alert_switch(
                 id,
-                alert.label(),
+                t(alert.label()),
                 policy.sound(alert).is_some(),
                 alert_hint(alert),
                 !enabled,
@@ -104,18 +103,18 @@ impl SettingsView {
             ));
         }
         let warning = match policy.state {
-            notifications::FileState::Invalid => Some(
+            notifications::FileState::Invalid => Some(t(
                 "notifications.json isn't valid for Gentle Shell, so sounds are off. A change here replaces it with the default preset.",
-            ),
-            notifications::FileState::Unreadable => Some(
+            )),
+            notifications::FileState::Unreadable => Some(t(
                 "notifications.json can't be read, so sounds are off. A change here rewrites it with the default preset.",
-            ),
+            )),
             notifications::FileState::Missing | notifications::FileState::Valid => None,
         };
         card.child(
-            div().pt_2().text_xs().text_color(ui::faint()).child(
+            div().pt_2().text_xs().text_color(ui::faint()).child(t(
                 "Same file as /gentle:customize in the terminal. Gentle Shell plays nothing for app tabs (RPC), so the app plays the same tones itself; other events (failures, subagents) keep their terminal settings.",
-            ),
+            )),
         )
         .when_some(warning, |d, text| {
             d.child(div().text_xs().text_color(ui::warning()).child(text))

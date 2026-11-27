@@ -12,6 +12,7 @@ use gpui_kit::*;
 use super::layout::{row, section};
 use super::{SettingsEvent, SettingsView};
 use crate::features::setup::maestro::{self, MaestroStatus};
+use crate::shared::i18n::t;
 use crate::shared::ui;
 
 /// Install output lines kept on screen.
@@ -98,7 +99,7 @@ impl SettingsView {
                 this.maestro.job = None;
                 this.maestro.status = Some(status);
                 this.maestro.note = Some(match result {
-                    Ok(()) => (format!("{label} done."), true),
+                    Ok(()) => (t("{action} done.").replace("{action}", t(label)), true),
                     Err(error) => (error, false),
                 });
                 if changes_agent {
@@ -137,12 +138,12 @@ impl SettingsView {
     }
 
     pub(super) fn maestro_section(&self, cx: &mut Context<Self>) -> Div {
-        let section = section(IconName::Smartphone, "UI testing · Maestro").child(
-            div().pb_2().text_xs().text_color(ui::muted()).child(
+        let section = section(IconName::Smartphone, t("UI testing · Maestro")).child(
+            div().pb_2().text_xs().text_color(ui::muted()).child(t(
                 "Lets the agent tap, type, swipe, check and take screenshots on Android \
                      emulators, iOS simulators and web pages (Chromium, beta), and run Maestro \
                      flows. Everything installs into this app's own folder, without your password.",
-            ),
+            )),
         );
         let Some(status) = &self.maestro.status else {
             return section.child(
@@ -151,33 +152,33 @@ impl SettingsView {
                     .text_xs()
                     .text_color(ui::muted())
                     .child(Spinner::new().xsmall().color(ui::accent()))
-                    .child("Looking for Maestro and Java…"),
+                    .child(t("Looking for Maestro and Java…")),
             );
         };
         let busy = self.maestro.job.is_some();
         let (state, color) = match (status.cli.is_some(), status.connected) {
-            (true, true) => ("Ready: the agent has the maestro tools", ui::success()),
-            (true, false) => ("Installed, not connected to the agent", ui::warning()),
-            (false, true) => ("Connected, but the CLI is missing", ui::danger()),
-            (false, false) => ("Not installed", ui::faint()),
+            (true, true) => (t("Ready: the agent has the maestro tools"), ui::success()),
+            (true, false) => (t("Installed, not connected to the agent"), ui::warning()),
+            (false, true) => (t("Connected, but the CLI is missing"), ui::danger()),
+            (false, false) => (t("Not installed"), ui::faint()),
         };
         let action = |id: &'static str, icon: IconName, label: &'static str| {
             Button::new(id)
                 .small()
                 .ghost()
                 .icon(Icon::new(icon))
-                .label(label)
+                .label(t(label))
                 .disabled(busy)
         };
         section
             .child(h_flex().pb_2().child(ui::chip(state, color)))
             .child(row(
-                "Maestro CLI",
+                t("Maestro CLI"),
                 status
                     .cli
                     .as_ref()
                     .map(|path| path.display().to_string())
-                    .unwrap_or_else(|| "Not installed (about 350 MB)".into()),
+                    .unwrap_or_else(|| t("Not installed (about 350 MB)").into()),
             ))
             .child(row(
                 "Java",
@@ -186,15 +187,15 @@ impl SettingsView {
                     .as_ref()
                     .map(|(home, major)| format!("Java {major} · {}", home.display()))
                     .unwrap_or_else(|| {
-                        "Not found: installs Temurin 21 (about 45 MB) with Maestro".into()
+                        t("Not found: installs Temurin 21 (about 45 MB) with Maestro").into()
                     }),
             ))
             .child(row(
-                "Agent tools",
+                t("Agent tools"),
                 if status.connected {
-                    "Connected (open tabs reload when idle)"
+                    t("Connected (open tabs reload when idle)")
                 } else {
-                    "Not connected"
+                    t("Not connected")
                 },
             ))
             .child(
@@ -209,9 +210,9 @@ impl SettingsView {
                                 .primary()
                                 .icon(Icon::new(IconName::ArrowDown))
                                 .label(if status.cli.is_some() {
-                                    "Connect to the agent"
+                                    t("Connect to the agent")
                                 } else {
-                                    "Install Maestro"
+                                    t("Install Maestro")
                                 })
                                 .disabled(busy)
                                 .on_click(cx.listener(|this, _, _, cx| {
@@ -235,9 +236,9 @@ impl SettingsView {
                     .when(status.app_owned, |d| {
                         d.child(
                             action("maestro-remove", IconName::Trash, "Remove")
-                                .tooltip(
+                                .tooltip(t(
                                     "Disconnect and delete the Maestro and Java this app installed",
-                                )
+                                ))
                                 .on_click(cx.listener(|this, _, _, cx| {
                                     this.run_maestro(
                                         "Remove",
@@ -265,7 +266,7 @@ impl SettingsView {
                         .text_xs()
                         .text_color(ui::muted())
                         .child(Spinner::new().xsmall().color(ui::accent()))
-                        .child(format!("{job}…")),
+                        .child(format!("{}…", t(job))),
                 )
             })
             .when(!self.maestro.log.is_empty(), |d| {

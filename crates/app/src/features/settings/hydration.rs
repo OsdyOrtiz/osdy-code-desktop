@@ -8,6 +8,7 @@ use gpui_kit::*;
 
 use super::SettingsView;
 use super::layout::{control, section};
+use crate::shared::i18n::t;
 use crate::{features::hydration, shared::ui};
 
 impl SettingsView {
@@ -19,13 +20,13 @@ impl SettingsView {
                 cx.notify();
             }
         };
-        section(IconName::Droplets, "Water reminder")
+        section(IconName::Droplets, t("Water reminder"))
             .child(control(
-                "Reminder",
+                t("Reminder"),
                 false,
                 ui::segmented(
                     "hydration-enabled",
-                    &["Off", "On"],
+                    &[t("Off"), t("On")],
                     Some(usize::from(reminder.enabled)),
                     cx.listener(set(|r, index| Reminder {
                         enabled: index == 1,
@@ -34,11 +35,11 @@ impl SettingsView {
                 ),
             ))
             .child(control(
-                "Every",
+                t("Every"),
                 !reminder.enabled,
                 ui::segmented(
                     "hydration-every",
-                    &hydration::LABELS,
+                    &hydration::LABELS.map(t),
                     INTERVALS.iter().position(|m| *m == reminder.every_minutes),
                     cx.listener(set(|r, index| Reminder {
                         every_minutes: INTERVALS[index],
@@ -51,8 +52,7 @@ impl SettingsView {
                     .pt_2()
                     .gap_2()
                     .child(div().text_xs().text_color(ui::faint()).child(
-                        "Drops fall over the window and fill a glass. The clock starts when \
-                             the app opens; changing how often keeps counting from then.",
+                        t("Drops fall over the window and fill a glass. The clock starts when the app opens; changing how often keeps counting from then."),
                     ))
                     .child(
                         h_flex().child(
@@ -60,7 +60,7 @@ impl SettingsView {
                                 .ghost()
                                 .small()
                                 .icon(Icon::new(IconName::Droplets))
-                                .label("Show it now")
+                                .label(t("Show it now"))
                                 .on_click(|_, _, cx| hydration::show(cx)),
                         ),
                     ),

@@ -9,13 +9,14 @@ use gpui_kit::*;
 use super::SettingsView;
 use super::layout::section;
 use crate::features::session::input_style;
+use crate::shared::i18n::t;
 use crate::shared::ui;
 
 impl SettingsView {
     pub(super) fn input_style_section(&self, cx: &mut Context<Self>) -> Div {
         let current = input_style::style(cx);
-        let labels = InputStyle::ALL.map(InputStyle::label);
-        section(IconName::MessageSquare, "Composer")
+        let labels = InputStyle::ALL.map(|style| t(style.label()));
+        section(IconName::MessageSquare, t("Composer"))
             .child(
                 h_flex()
                     .pt_2()
@@ -27,7 +28,7 @@ impl SettingsView {
                             .flex_shrink_0()
                             .text_xs()
                             .text_color(ui::muted())
-                            .child("Input style"),
+                            .child(t("Input style")),
                     )
                     .child(ui::segmented(
                         "input-style",
@@ -44,7 +45,7 @@ impl SettingsView {
                     .pt_2()
                     .text_xs()
                     .text_color(ui::faint())
-                    .child(current.summary()),
+                    .child(t(current.summary())),
             )
     }
 }

@@ -7,6 +7,7 @@ use std::path::PathBuf;
 use gpui_kit::component::input::{InputEvent, InputState};
 use gpui_kit::*;
 
+use crate::shared::i18n::t;
 use crate::{features::app_update, features::workspaces::TabLayout};
 
 mod agent_ui;
@@ -141,7 +142,7 @@ impl SettingsView {
         );
         let package = packages::PackageUiState::new(window, cx);
         let settings_search =
-            cx.new(|cx| InputState::new(window, cx).placeholder("Find a setting…"));
+            cx.new(|cx| InputState::new(window, cx).placeholder(t("Find a setting…")));
         let settings_search_subscription = cx.subscribe(
             &settings_search,
             |this, input, event: &InputEvent, cx| match event {

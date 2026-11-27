@@ -9,6 +9,7 @@ use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
 
 use super::SettingsView;
+use crate::shared::i18n::t;
 use crate::shared::ui;
 
 #[derive(Clone, Copy, Debug, Default, Eq, PartialEq)]
@@ -56,6 +57,10 @@ impl SettingsPage {
     }
 
     pub fn label(self) -> &'static str {
+        t(self.english_label())
+    }
+
+    fn english_label(self) -> &'static str {
         match self {
             Self::General => "General",
             Self::Appearance => "Appearance",
@@ -71,6 +76,10 @@ impl SettingsPage {
     }
 
     pub fn description(self) -> &'static str {
+        t(self.english_description())
+    }
+
+    fn english_description(self) -> &'static str {
         match self {
             Self::General => "Environment and setup",
             Self::Appearance => "Theme and window appearance",
@@ -139,9 +148,11 @@ impl SettingsPage {
 
     pub fn matches_query(self, query: &str) -> bool {
         let searchable = format!(
-            "{} {} {}",
+            "{} {} {} {} {}",
             self.label(),
             self.description(),
+            self.english_label(),
+            self.english_description(),
             self.keywords()
         )
         .to_lowercase();
@@ -168,7 +179,7 @@ fn search_field(filter: &Entity<InputState>, query: &str, cx: &mut Context<Setti
                     .ghost()
                     .xsmall()
                     .icon(Icon::new(IconName::X))
-                    .tooltip("Clear settings search")
+                    .tooltip(t("Clear settings search"))
                     .on_click(cx.listener(|this, _, window, cx| {
                         this.settings_search.update(cx, |state, cx| {
                             state.set_value("", window, cx);
@@ -193,7 +204,7 @@ fn navigation_items(selected: SettingsPage, query: &str, cx: &mut Context<Settin
                     .p_3()
                     .text_xs()
                     .text_color(ui::muted())
-                    .child("No matching settings. Try another term."),
+                    .child(t("No matching settings. Try another term.")),
             )
         })
         .children(matches.into_iter().map(|page| {
@@ -262,7 +273,7 @@ pub(super) fn sidebar(
                 .pt_4()
                 .pb_3()
                 .gap_2()
-                .child(ui::section_label("Categories"))
+                .child(ui::section_label(t("Categories")))
                 .child(search_field(filter, &query, cx)),
         )
         .child(
@@ -297,8 +308,8 @@ pub(super) fn compact(
                 .ghost()
                 .small()
                 .icon(Icon::new(IconName::ChevronDown))
-                .label(format!("Category: {}", selected.label()))
-                .tooltip("Choose a configuration category")
+                .label(t("Category: {category}").replace("{category}", selected.label()))
+                .tooltip(t("Choose a configuration category"))
                 .on_click(cx.listener(|this, _, _, cx| {
                     this.compact_categories_open = !this.compact_categories_open;
                     cx.notify();

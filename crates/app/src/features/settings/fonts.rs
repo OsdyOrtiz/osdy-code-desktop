@@ -18,6 +18,7 @@ use gpui_kit::*;
 
 use super::SettingsView;
 use crate::platform::font_metadata;
+use crate::shared::i18n::t;
 use crate::shared::themes::{self, FontSlot, Fonts};
 use crate::shared::ui;
 
@@ -122,19 +123,19 @@ impl Change {
     pub(super) fn message(&self, applied: &Fonts) -> String {
         match *self {
             Change::Family(slot, _) => match (applied.get(slot), slot) {
-                (Some(family), _) => {
-                    format!("{} changed to {family}. Click to undo.", slot_label(slot))
-                }
+                (Some(family), _) => t("{slot} changed to {family}. Click to undo.")
+                    .replace("{slot}", slot_label(slot))
+                    .replace("{family}", family),
                 (None, FontSlot::Terminal) => {
-                    "Terminal font now follows the code font. Click to undo.".to_string()
+                    t("Terminal font now follows the code font. Click to undo.").to_string()
                 }
-                (None, _) => format!("{} reset to default. Click to undo.", slot_label(slot)),
+                (None, _) => {
+                    t("{slot} reset to default. Click to undo.").replace("{slot}", slot_label(slot))
+                }
             },
-            Change::Size(slot, _) => format!(
-                "{} size changed to {} px. Click to undo.",
-                slot_label(slot),
-                format_size(applied.size(slot))
-            ),
+            Change::Size(slot, _) => t("{slot} size changed to {size} px. Click to undo.")
+                .replace("{slot}", slot_label(slot))
+                .replace("{size}", &format_size(applied.size(slot))),
         }
     }
 }
@@ -208,7 +209,7 @@ pub(super) struct FontsUi {
 
 impl FontsUi {
     pub(super) fn new(window: &mut Window, cx: &mut Context<SettingsView>) -> Self {
-        let search = cx.new(|cx| InputState::new(window, cx).placeholder("Search fonts…"));
+        let search = cx.new(|cx| InputState::new(window, cx).placeholder(t("Search fonts…")));
         let weak = cx.entity().downgrade();
         let applied = cx.global::<themes::Themes>().fonts.clone();
         let texts = FontSlot::ALL.map(|slot| format_size(applied.size(slot)));
@@ -307,17 +308,17 @@ fn fit_rows(list: UniformList, max: Rems) -> Div {
 
 fn slot_label(slot: FontSlot) -> &'static str {
     match slot {
-        FontSlot::Interface => "Interface font",
-        FontSlot::Code => "Code font",
-        FontSlot::Terminal => "Terminal font",
+        FontSlot::Interface => t("Interface font"),
+        FontSlot::Code => t("Code font"),
+        FontSlot::Terminal => t("Terminal font"),
     }
 }
 
 /// What the Default entry says for `slot`.
 fn default_label(slot: FontSlot) -> &'static str {
     match slot {
-        FontSlot::Terminal => "Same as code font",
-        _ => "Default",
+        FontSlot::Terminal => t("Same as code font"),
+        _ => t("Default"),
     }
 }
 
@@ -730,7 +731,7 @@ impl SettingsView {
                                 .py_1p5()
                                 .text_xs()
                                 .text_color(ui::faint())
-                                .child("No installed font matches."),
+                                .child(t("No installed font matches.")),
                         )
                         .into_any_element()
                 } else {

@@ -23,6 +23,7 @@ use super::layout::{or_dash, row, section};
 use super::snapshot::Snapshot;
 use super::{SettingsEvent, SettingsView};
 use crate::features::session::{ReadOutcome, ReadRequest, ReadSupport, ReadTicket};
+use crate::shared::i18n::t;
 use crate::shared::ui;
 
 /// Which source decided the background-subagents policy, in Gentle Shell's
@@ -104,17 +105,17 @@ pub fn resolve_background_policy(cwd: &Path, config: &Path, env: Option<&str>) -
 }
 
 impl BackgroundPolicy {
-    /// `on · global file`, `off · default`, `off · project file (malformed)`.
+    /// A display summary of the policy and the source that determined it.
     pub fn describe(&self) -> String {
         let source = match self.source {
-            PolicySource::ProjectFile => "project file",
-            PolicySource::GlobalFile => "global file",
+            PolicySource::ProjectFile => t("project file"),
+            PolicySource::GlobalFile => t("global file"),
             PolicySource::Environment => "GENTLE_PI_BACKGROUND_SUBAGENTS",
-            PolicySource::Default => "default",
+            PolicySource::Default => t("default"),
         };
-        let state = if self.on { "on" } else { "off" };
+        let state = if self.on { t("on") } else { t("off") };
         if self.malformed {
-            format!("{state} · {source} (malformed)")
+            format!("{state} · {source} {}", t("(malformed)"))
         } else {
             format!("{state} · {source}")
         }
@@ -240,9 +241,9 @@ impl SettingsView {
                     SetBackgroundSubagentsOutcome::Applied { changed } => {
                         self.background.note = Some((
                             if changed {
-                                "Gentle Shell applied it. Helpers launched from now on use it."
+                                t("Gentle Shell applied it. Helpers launched from now on use it.")
                             } else {
-                                "Gentle Shell applied it; what decides here did not change."
+                                t("Gentle Shell applied it; what decides here did not change.")
                             }
                             .into(),
                             false,
@@ -254,7 +255,10 @@ impl SettingsView {
             (Asked::Read, _) => {}
             (Asked::Set(_), ReadOutcome::Failed(failure)) => {
                 self.background.pending = false;
-                self.background.note = Some((format!("Not changed: {}", failure.message()), true));
+                self.background.note = Some((
+                    t("Not changed: {error}").replace("{error}", &failure.message()),
+                    true,
+                ));
                 self.ask_background(cx);
             }
             (Asked::Set(_), _) => self.background.pending = false,
@@ -325,7 +329,7 @@ impl SettingsView {
         self.background.pending = false;
         self.background.note = Some(match result {
             Ok(()) => (
-                "Gentle Shell applied it; its report is in 🔔. Helpers launched from now on use it."
+                t("Gentle Shell applied it; its report is in 🔔. Helpers launched from now on use it.")
                     .into(),
                 false,
             ),
@@ -347,8 +351,8 @@ impl SettingsView {
         cx: &mut Context<Self>,
     ) -> Div {
         let action = match policy {
-            ShellPolicy::On => "Turn on",
-            ShellPolicy::Off => "Turn off",
+            ShellPolicy::On => t("Turn on"),
+            ShellPolicy::Off => t("Turn off"),
         };
         v_flex()
             .gap_2()
@@ -388,7 +392,7 @@ impl SettingsView {
                         Button::new("background-cancel")
                             .ghost()
                             .small()
-                            .label("Cancel")
+                            .label(t("Cancel"))
                             .on_click(
                                 cx.listener(|this, _, _, cx| this.answer_background(false, cx)),
                             ),
@@ -401,12 +405,12 @@ impl SettingsView {
     pub(super) fn gentle_ai_section(&self, s: &Snapshot, cx: &mut Context<Self>) -> Div {
         section(IconName::ShieldCheck, "Gentle AI")
             .child(row(
-                "Permissions (new sessions)",
+                t("Permissions (new sessions)"),
                 or_dash(&s.permission_mode, "normal"),
             ))
             .child(row("Persona", or_dash(&s.persona, "gentleman")))
             .child(row(
-                "Background subagents",
+                t("Background subagents"),
                 s.background_subagents.describe(),
             ))
             .child(
@@ -421,11 +425,11 @@ impl SettingsView {
                                 div()
                                     .text_xs()
                                     .text_color(ui::muted())
-                                    .child("Send helpers to the background"),
+                                    .child(t("Send helpers to the background")),
                             )
                             .child(ui::segmented(
                                 "background-subagents",
-                                &["Off", "On"],
+                                &[t("Off"), t("On")],
                                 Some(usize::from(s.background_subagents.on)),
                                 cx.listener(|this, index: &usize, _, cx| {
                                     this.set_background(*index == 1, cx)
@@ -436,9 +440,9 @@ impl SettingsView {
                             }),
                     )
                     .child(
-                        div().text_xs().text_color(ui::faint()).child(
+                        div().text_xs().text_color(ui::faint()).child(t(
                             "On: el Gentleman launches helpers in the background and keeps working; each answer arrives when it finishes. Applied by Gentle Shell (/gentle:background-subagents), so the terminal sees the same setting.",
-                        ),
+                        )),
                     )
                     // The switch writes the global file; a project file wins over it.
                     .when(
@@ -446,12 +450,8 @@ impl SettingsView {
                         |d| {
                             d.child(
                                 div().text_xs().text_color(ui::warning()).child(
-                                    format!(
-                                        "{} decides for this project, so the switch (global) won't change it here.",
-                                        s.background_subagents
-                                            .project_file
-                                            .display()
-                                    ),
+                                    t("{file} decides for this project, so the switch (global) won't change it here.")
+                                        .replace("{file}", &s.background_subagents.project_file.display().to_string()),
                                 ),
                             )
                         },

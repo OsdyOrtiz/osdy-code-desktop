@@ -13,6 +13,7 @@ use super::SettingsView;
 use super::layout::{control, section};
 use crate::features::browser::external;
 use crate::platform::browsers;
+use crate::shared::i18n::t;
 use crate::shared::ui;
 
 /// The browsers found on this machine, once looked for.
@@ -38,14 +39,14 @@ impl SettingsView {
 
     pub(super) fn browser_section(&self, cx: &mut Context<Self>) -> Div {
         let pages = external::agent_pages(cx);
-        let labels = AgentPages::ALL.map(AgentPages::label);
-        let section = section(IconName::Globe, "Browser")
-            .child(div().pb_1().text_xs().text_color(ui::muted()).child(
+        let labels = AgentPages::ALL.map(|pages| t(pages.label()));
+        let section = section(IconName::Globe, t("Browser"))
+            .child(div().pb_1().text_xs().text_color(ui::muted()).child(t(
                 "Where the pages agents open go: a dev server, a preview, the design canvas. \
                      Pages agents drive (gentle-browser) always stay inside the app.",
-            ))
+            )))
             .child(control(
-                "Open pages",
+                t("Open pages"),
                 false,
                 ui::segmented(
                     "agent-pages",
@@ -58,20 +59,18 @@ impl SettingsView {
                 ),
             ));
         if pages != AgentPages::Browser {
-            return section.child(div().pt_2().text_xs().text_color(ui::faint()).child(
+            return section.child(div().pt_2().text_xs().text_color(ui::faint()).child(t(
                 "Choose In my browser to pick which browser opens them; ↗ on a page opens your \
                      system's default browser.",
-            ));
+            )));
         }
         section.child(
             v_flex()
                 .pt_2()
                 .gap_0p5()
-                .child(
-                    div().text_xs().text_color(ui::muted()).child(
-                        "Which browser · it comes to the front with each page; ↗ uses it too",
-                    ),
-                )
+                .child(div().text_xs().text_color(ui::muted()).child(t(
+                    "Which browser · it comes to the front with each page; ↗ uses it too",
+                )))
                 .child(self.browser_list(cx)),
         )
     }
@@ -86,7 +85,7 @@ impl SettingsView {
                 .text_xs()
                 .text_color(ui::muted())
                 .child(Spinner::new().xsmall().color(ui::accent()))
-                .child("Looking for browsers…")
+                .child(t("Looking for browsers…"))
                 .into_any_element();
         };
         let chosen = external::browser(cx);
@@ -106,8 +105,10 @@ impl SettingsView {
             .children(choices.into_iter().enumerate().map(|(ix, choice)| {
                 let selected = choice.map(|b| b.id) == chosen.map(|b| b.id);
                 let label = match choice {
-                    None => SYSTEM_DEFAULT.to_string(),
-                    Some(browser) if missing(browser) => format!("{} (not found)", browser.name),
+                    None => t(SYSTEM_DEFAULT).to_string(),
+                    Some(browser) if missing(browser) => {
+                        t("{browser} (not found)").replace("{browser}", browser.name)
+                    }
                     Some(browser) => browser.name.to_string(),
                 };
                 ui::picker_row(

@@ -7,6 +7,7 @@
 use std::path::Path;
 
 use super::super::snapshot::{Snapshot, probe, read_snapshot};
+use crate::shared::i18n::t;
 
 pub(in crate::features::settings) fn load(cwd: &Path, shell_updates: bool) -> Snapshot {
     // Where agents run in WSL, its homes; never this computer's by mistake
@@ -27,7 +28,10 @@ pub(in crate::features::settings) fn load(cwd: &Path, shell_updates: bool) -> Sn
         let label = choice.label();
         snapshot.launcher = crate::features::backend::gentle_shell_path(&choice).map(|path| {
             if gentle_core::backend::is_windows_file(&path) {
-                format!("not found in {label} (only Windows' {path})").into()
+                t("not found in {label} (only Windows' {path})")
+                    .replace("{label}", &label)
+                    .replace("{path}", &path)
+                    .into()
             } else {
                 format!("{path} ({label})").into()
             }

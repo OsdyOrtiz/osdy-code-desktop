@@ -11,6 +11,7 @@ use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
 
 use super::{SettingsEvent, SettingsView, navigation};
+use crate::shared::i18n::t;
 use crate::shared::ui;
 
 impl Render for SettingsView {
@@ -28,7 +29,7 @@ impl Render for SettingsView {
                 .text_sm()
                 .text_color(ui::muted())
                 .child(Spinner::new().small().color(ui::accent()))
-                .child("Reading your Gentle Shell configuration…")
+                .child(t("Reading your Gentle Shell configuration…"))
                 .into_any_element(),
         };
         let (backdrop, panel) = ui::screen(Some(960.));
@@ -55,7 +56,7 @@ impl Render for SettingsView {
                                 .text_base()
                                 .font_weight(FontWeight::SEMIBOLD)
                                 .text_color(ui::fg())
-                                .child("Configuration"),
+                                .child(t("Configuration")),
                         )
                         .child(
                             div()
@@ -64,14 +65,14 @@ impl Render for SettingsView {
                                 .truncate()
                                 .text_xs()
                                 .text_color(ui::muted())
-                                .child("Manage Gentle Shell and the desktop experience"),
+                                .child(t("Manage Gentle Shell and the desktop experience")),
                         )
                         .child(
                             Button::new("settings-refresh")
                                 .ghost()
                                 .xsmall()
                                 .icon(Icon::new(IconName::RefreshCw))
-                                .tooltip("Reload and check for updates")
+                                .tooltip(t("Reload and check for updates"))
                                 .on_click(cx.listener(|this, _, _, cx| this.reload_with(true, cx))),
                         )
                         .child(

@@ -16,6 +16,7 @@ use pi_rpc::desktop_rpc::{
 
 use super::SettingsView;
 use crate::features::profiles::{ConfigFailure, ConfigOutcome, ConfigSupport, ConfigTicket};
+use crate::shared::i18n::t;
 
 /// The stores this screen reads and writes.
 pub(super) const SETTINGS_STORES: [ConfigStore; 3] = [
@@ -113,7 +114,9 @@ fn land(shell: &mut ShellConfig, ticket: ConfigTicket, outcome: ConfigOutcome) -
             }),
         ) => Landed::Conflict(store),
         (Asked::Write(_), ConfigOutcome::Failed(failure)) => Landed::WriteFailed(failure.message()),
-        (Asked::Write(_), _) => Landed::WriteFailed("Gentle Shell answered something else.".into()),
+        (Asked::Write(_), _) => {
+            Landed::WriteFailed(t("Gentle Shell answered something else.").into())
+        }
         (Asked::Read(_), _) => Landed::ReadFailed,
     }
 }
@@ -250,13 +253,14 @@ impl SettingsView {
                 Landed::Files(_) => adopted = true,
                 Landed::Conflict(store) => {
                     self.notifications.note = Some(
-                        "Not saved: notifications changed in Gentle Shell meanwhile. Showing the latest; choose again."
+                        t("Not saved: notifications changed in Gentle Shell meanwhile. Showing the latest; choose again.")
                             .into(),
                     );
                     reread.push(store);
                 }
                 Landed::WriteFailed(message) => {
-                    self.notifications.note = Some(format!("Not saved: {message}"));
+                    self.notifications.note =
+                        Some(t("Not saved: {message}").replace("{message}", &message));
                 }
             }
         }
@@ -298,9 +302,9 @@ impl SettingsView {
         let store = ConfigStore::Notifications;
         let (Some(session), Some(state)) = (self.session.clone(), self.shell_config.state(store))
         else {
-            self.notifications.note = crate::features::alerts::apply(change)
-                .err()
-                .map(|e| format!("Could not write notifications.json: {e}"));
+            self.notifications.note = crate::features::alerts::apply(change).err().map(|e| {
+                t("Could not write notifications.json: {error}").replace("{error}", &e.to_string())
+            });
             cx.notify();
             return;
         };
@@ -308,7 +312,7 @@ impl SettingsView {
             return;
         }
         let Some(revision) = state.write_revision(ConfigWriteTarget::Global) else {
-            self.notifications.note = Some("Gentle Shell offered no way to save this.".into());
+            self.notifications.note = Some(t("Gentle Shell offered no way to save this.").into());
             cx.notify();
             return;
         };
@@ -330,7 +334,10 @@ impl SettingsView {
                     .insert(ticket, Asked::Write(store));
                 self.notifications.note = None;
             }
-            Err(message) => self.notifications.note = Some(format!("Not saved: {message}")),
+            Err(message) => {
+                self.notifications.note =
+                    Some(t("Not saved: {message}").replace("{message}", &message))
+            }
         }
         cx.notify();
     }
