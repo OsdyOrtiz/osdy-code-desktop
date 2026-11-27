@@ -116,7 +116,7 @@ objc2-quartz-core = { version = "0.3", default-features = false, features = ["st
 block2 = "0.6"
 # `gentle-screen`: the window list and input events (Quartz). The version
 # GPUI already locks; `highsierra` adds pixel scroll events.
-core-graphics = { version = "0.24", features = ["highsierra"] }
+core-graphics = { version = "0.25", features = ["highsierra"] }
 
 # Embeds the exe icon and version info (see build.rs).
 [target.'cfg(windows)'.build-dependencies]
