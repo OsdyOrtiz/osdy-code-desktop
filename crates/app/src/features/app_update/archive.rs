@@ -144,7 +144,11 @@ pub(super) fn find_payload(os: &str, root: &Path, version: &str) -> io::Result<P
             app.clone()
         }
         "windows" => root.join(format!("{BINARY}.exe")),
-        _ => root.join(format!("{BINARY}-{version}")).join(BINARY),
+        // The fork's own folder, so it never extracts over an official
+        // `gentle-shell-gpui-<version>/` of the same version.
+        _ => root
+            .join(format!("osdy-code-desktop-{version}"))
+            .join(BINARY),
     };
     if payload.exists() {
         Ok(payload)
@@ -322,7 +326,7 @@ mod tests {
             header.set_cksum();
             tar.append_data(
                 &mut header,
-                "gentle-shell-gpui-0.2.0/gentle-shell-gpui",
+                "osdy-code-desktop-0.2.0/gentle-shell-gpui",
                 &b"binary"[..],
             )
             .unwrap();

@@ -299,7 +299,7 @@ Assets produced by `release.yml` (the updater consumes these names):
 Workflow steps:
 
 1. `version`: reads `[workspace.package] version` from `Cargo.toml`. On a tag, it fails if `GITHUB_REF_NAME != v<version>`; on `workflow_dispatch`, the optional `version` input must match.
-2. `build`: restores the `dist-<target>` cache (`save-if: false`), installs libraries on Linux and packages: `packaging/macos/bundle.sh <target> <v>` (with `MACOSX_DEPLOYMENT_TARGET=11.0`, ad hoc signing `codesign --sign -`, zip with `ditto` without `._*`, DMG with a shortcut to `/Applications`), `packaging/linux/package.sh <target> <v>` (binary, `osdy-code-desktop.desktop`, `osdy-code-desktop.png`), and on Windows `cargo build --profile dist`, `Compress-Archive` and `ISCC` on `packaging/windows/installer.iss` (installs Inno Setup with `choco` if missing).
+2. `build`: restores the `dist-<target>` cache (`save-if: false`), installs libraries on Linux and packages: `packaging/macos/bundle.sh <target> <v>` (with `MACOSX_DEPLOYMENT_TARGET=11.0`, ad hoc signing `codesign --sign -`, zip with `ditto` without `._*`, DMG with a shortcut to `/Applications`), `packaging/linux/package.sh <target> <v>` (binary, `io.github.osdyortiz.osdy-code-desktop.desktop`, `osdy-code-desktop.png`), and on Windows `cargo build --profile dist`, `Compress-Archive` and `ISCC` on `packaging/windows/installer.iss` (installs Inno Setup with `choco` if missing).
 3. `release`: checks that all seven assets are present, writes `SHA256SUMS` and, only on `push`, publishes with `gh release create --verify-tag --generate-notes`, title `Osdy Code Desktop <v>`. A version with `-` (`0.2.0-rc.1`) is published as `--prerelease`. On `workflow_dispatch` it uploads everything as a `release-dry-run-<v>` artifact without publishing.
 
 ### Cutting a release
@@ -344,7 +344,7 @@ Therefore: renaming an asset, changing the `SHA256SUMS` format or the binary nam
 
 ### Linux
 
-- GPUI only applies the window icon on X11: `platform/icons.rs` (`window_icon`) scales it down to 128 px because of `_NET_WM_ICON` limits. `app_id` is `io.github.osdyortiz.osdy-code-desktop`, the same as `StartupWMClass` in `packaging/linux/osdy-code-desktop.desktop`.
+- GPUI only applies the window icon on X11: `platform/icons.rs` (`window_icon`) scales it down to 128 px because of `_NET_WM_ICON` limits. `app_id` is `io.github.osdyortiz.osdy-code-desktop`, the same as `StartupWMClass` in `packaging/linux/io.github.osdyortiz.osdy-code-desktop.desktop`.
 - The built-in browser uses WebKitGTK as a child of the X11 window (`wry` with `x11`, `gtk`); Wayland has no child windows.
 - At runtime `libwebkit2gtk-4.1-0` is required.
 

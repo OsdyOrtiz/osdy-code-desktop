@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Builds dist/gentle-shell-gpui-<version>-linux-<arch>.tar.gz containing
-# gentle-shell-gpui-<version>/{gentle-shell-gpui,osdy-code-desktop.desktop,osdy-code-desktop.png}.
+# osdy-code-desktop-<version>/{gentle-shell-gpui,io.github.osdyortiz.osdy-code-desktop.desktop,osdy-code-desktop.png}.
 #
 #   packaging/linux/package.sh x86_64-unknown-linux-gnu 0.1.0
 #
@@ -31,15 +31,15 @@ else
 fi
 [[ -x "$binary" ]] || { echo "missing binary: $binary" >&2; exit 1; }
 
-name="gentle-shell-gpui-$version"
+name="osdy-code-desktop-$version"
 stage="dist/$name"
 rm -rf "$stage"
 mkdir -p "$stage"
 install -m 755 "$binary" "$stage/gentle-shell-gpui"
-install -m 644 packaging/linux/osdy-code-desktop.desktop "$stage/osdy-code-desktop.desktop"
+install -m 644 packaging/linux/io.github.osdyortiz.osdy-code-desktop.desktop "$stage/io.github.osdyortiz.osdy-code-desktop.desktop"
 install -m 644 packaging/icons/icon-512.png "$stage/osdy-code-desktop.png"
 
-tarball="dist/$name-linux-$arch.tar.gz"
+tarball="dist/gentle-shell-gpui-$version-linux-$arch.tar.gz"
 rm -f "$tarball"
 tar -C dist -czf "$tarball" "$name"
 echo "$tarball"

@@ -658,7 +658,7 @@ App paths: `dirs::data_dir()/osdy-code-desktop/` (on macOS, `~/Library/Applicati
 
 ### Provider sign-in (`crates/pi-rpc/src/login.rs`)
 
-Pi has no RPC login command. `LoginHelper::spawn(spec, homes)` writes `login-helper.mjs` (embedded with `include_str!`) to the temp directory as `gentle-shell-gpui-login-<version>.mjs` and runs it with Node: the one from the self-contained or managed install (`spec.bundled`) or `resolve_node`. Arguments: the script and the Pi package (`pi_package`); environment: `PI_CODING_AGENT_DIR=<agent>` and the combined PATH. The helper uses Pi's `ModelRuntime.login` and writes `auth.json` itself.
+Pi has no RPC login command. `LoginHelper::spawn(spec, homes)` writes `login-helper.mjs` (embedded with `include_str!`) to the temp directory as `osdy-code-desktop-login-<version>.mjs` and runs it with Node: the one from the self-contained or managed install (`spec.bundled`) or `resolve_node`. Arguments: the script and the Pi package (`pi_package`); environment: `PI_CODING_AGENT_DIR=<agent>` and the combined PATH. The helper uses Pi's `ModelRuntime.login` and writes `auth.json` itself.
 
 Its own JSONL protocol: the app sends `list`, `login` (`provider`, `authType: oauth|api_key`), `logout`, `response` (`id`, `value`), `cancel_prompt`, `cancel`; it receives `ready`, `providers`, `prompt` (`text`, `secret`, `select`, `manual_code`), `prompt_dismissed`, `event` (`info`, `auth_url`, `device_code`, `progress`), `done`, `error`. The UI is in `features/providers/`. After a change, the window calls `reload_models` on every tab: a backend only reads credentials at startup.
 
