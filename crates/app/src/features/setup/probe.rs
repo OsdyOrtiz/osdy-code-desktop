@@ -8,6 +8,7 @@ use std::sync::LazyLock;
 use std::time::Duration;
 
 use super::Log;
+use crate::shared::i18n::t;
 
 /// `(major, minor, patch)`.
 pub type Version = (u64, u64, u64);
@@ -102,9 +103,12 @@ pub fn run_logged(mut command: Command, what: &str, log: &Log) -> Result<(), Str
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped());
-    let mut child = command
-        .spawn()
-        .map_err(|e| format!("Couldn't start {what}: {e}"))?;
+    let mut child = command.spawn().map_err(|e| {
+        gentle_core::i18n::fill(
+            t("Couldn't start {command}: {error}"),
+            &[("command", what), ("error", &e.to_string())],
+        )
+    })?;
     let (stdout, stderr) = (child.stdout.take(), child.stderr.take());
     std::thread::scope(|scope| {
         if let Some(out) = stdout {
@@ -114,15 +118,21 @@ pub fn run_logged(mut command: Command, what: &str, log: &Log) -> Result<(), Str
             scope.spawn(move || pump(err, log));
         }
     });
-    let status = child
-        .wait()
-        .map_err(|e| format!("{what} didn't finish: {e}"))?;
+    let status = child.wait().map_err(|e| {
+        gentle_core::i18n::fill(
+            t("{command} didn't finish: {error}"),
+            &[("command", what), ("error", &e.to_string())],
+        )
+    })?;
     if status.success() {
         Ok(())
     } else {
         Err(match status.code() {
-            Some(code) => format!("{what} failed (exit code {code})."),
-            None => format!("{what} was stopped."),
+            Some(code) => gentle_core::i18n::fill(
+                t("{command} failed (exit code {code})."),
+                &[("command", what), ("code", &code.to_string())],
+            ),
+            None => t("{command} was stopped.").replace("{command}", what),
         })
     }
 }

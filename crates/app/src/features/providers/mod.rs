@@ -7,6 +7,8 @@ use gpui_kit::component::input::{InputEvent, InputState};
 use gpui_kit::*;
 use pi_rpc::{AuthPrompt, LoginHelper, ProviderInfo};
 
+use crate::shared::i18n::{language, t};
+
 mod flow_view;
 mod list;
 mod login;
@@ -30,11 +32,17 @@ struct Flow {
     finished: Option<Result<(), String>>,
 }
 
+enum SignInError {
+    HelperStopped,
+    Detail(String),
+}
+
 pub struct ProvidersView {
     helper: Option<LoginHelper>,
-    error: Option<String>,
+    error: Option<SignInError>,
     providers: Vec<ProviderInfo>,
     filter: Entity<InputState>,
+    filter_language: gentle_core::i18n::Language,
     answer: Entity<InputState>,
     secret: Entity<InputState>,
     flow: Option<Flow>,
@@ -49,7 +57,7 @@ impl EventEmitter<ProvidersEvent> for ProvidersView {}
 
 impl ProvidersView {
     pub fn new(cwd: PathBuf, window: &mut Window, cx: &mut Context<Self>) -> Self {
-        let filter = cx.new(|cx| InputState::new(window, cx).placeholder("Search providers"));
+        let filter = cx.new(|cx| InputState::new(window, cx).placeholder(t("Search providers")));
         let answer = cx.new(|cx| InputState::new(window, cx));
         let secret = cx.new(|cx| InputState::new(window, cx).masked(true));
         let submit_on_enter = |this: &mut Self,
@@ -71,6 +79,7 @@ impl ProvidersView {
             error: None,
             providers: Vec::new(),
             filter,
+            filter_language: language(),
             answer,
             secret,
             flow: None,

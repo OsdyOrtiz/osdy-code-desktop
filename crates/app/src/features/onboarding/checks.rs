@@ -3,7 +3,8 @@
 
 use std::collections::VecDeque;
 
-use crate::features::setup::{Check, CheckId, Fix, Need, Status};
+use crate::features::setup::{Check, CheckId, Detail, Fix, Need, Status};
+use crate::shared::i18n::language;
 
 /// Install output kept per run (the failure view shows the tail).
 const LOG_KEEP: usize = 200;
@@ -69,9 +70,11 @@ pub(super) fn tone(check: &Check) -> Tone {
     }
 }
 
-pub(super) fn status_text(status: &Status) -> &str {
+pub(super) fn status_text(status: &Status) -> String {
     match status {
-        Status::Ok(s) | Status::Missing(s) | Status::Outdated(s) | Status::Failed(s) => s,
+        Status::Ok(s) | Status::Missing(s) | Status::Outdated(s) | Status::Failed(s) => {
+            s.text(language())
+        }
     }
 }
 
@@ -94,7 +97,7 @@ pub(super) fn push_lines(log: &mut Vec<String>, chunk: &str) {
 /// environment suggested: signed in when it has credentials for any
 /// provider; otherwise missing, keeping the look's own fix when it already
 /// said so and offering the Providers screen when it guessed otherwise.
-pub(super) fn with_registry(checks: &mut [Check], answer: &Result<String, String>) {
+pub(super) fn with_registry(checks: &mut [Check], answer: &Result<Detail, Detail>) {
     for check in checks.iter_mut().filter(|c| c.id == CheckId::Provider) {
         match answer {
             Ok(found) => {

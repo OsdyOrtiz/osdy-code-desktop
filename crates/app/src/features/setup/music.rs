@@ -13,6 +13,7 @@ use gentle_core::backend::Backend;
 use super::probe::run_logged;
 use super::{Log, fetch, refresh_paths, toolchain_dir, user_home};
 use crate::features::backend;
+use crate::shared::i18n::t;
 
 /// The gentle-stream commit the app installs, as a GitHub archive (no git
 /// needed): the merge of `ctl --json` (gentle-stream#29), which the app needs
@@ -192,10 +193,11 @@ fn remote_player(choice: &Backend) -> Option<PathBuf> {
 /// there with everything inside `~/.local/share/gentle-shell-gpui/music`.
 fn remote_install(choice: &Backend, log: &Log) -> Result<(), String> {
     let label = choice.label();
-    let reach = || format!("Couldn't reach {label}.");
+    let reach = || t("Couldn't reach {label}.").replace("{label}", &label);
     let music = format!("{}/music", backend::toolchain(choice).ok_or_else(reach)?);
-    let arch = backend::arch(choice).ok_or_else(|| format!("Couldn't tell {label}'s machine."))?;
-    let here = toolchain_dir().ok_or("This system has no app data folder.")?;
+    let arch = backend::arch(choice)
+        .ok_or_else(|| t("Couldn't tell {label}'s machine.").replace("{label}", &label))?;
+    let here = toolchain_dir().ok_or_else(|| t("This system has no app data folder."))?;
     let uv_here = here.join(format!(".backend-uv-{}", std::process::id()));
     let fetched = fetch::download_uv(&uv_here, "linux", arch, log)
         .and_then(|()| backend::put_file(choice, &uv_here, &format!("{music}/uv"), true));
@@ -240,9 +242,9 @@ fn remote_install(choice: &Backend, log: &Log) -> Result<(), String> {
     }
     let _ = run_logged(uv_command(&["cache", "clean"])?, "uv cache clean", &|_| {});
     if remote_player(choice).is_none() {
-        return Err(format!(
-            "uv finished, but gentle-stream isn't in {music}/bin."
-        ));
+        return Err(
+            t("uv finished, but gentle-stream isn't in {music}/bin.").replace("{music}", &music)
+        );
     }
     log("Done. The ♪ button in the title bar plays music.".into());
     Ok(())
@@ -287,11 +289,18 @@ pub fn install(log: &Log) -> Result<(), String> {
         return remote_install(&choice, log);
     }
     if !SUPPORTED {
-        return Err("gentle-stream runs on macOS and Linux only.".into());
+        return Err(t("gentle-stream runs on macOS and Linux only.").into());
     }
-    let music = music_dir().ok_or("This system has no app data folder.")?;
-    std::fs::create_dir_all(&music)
-        .map_err(|e| format!("Couldn't create {}: {e}", music.display()))?;
+    let music = music_dir().ok_or_else(|| t("This system has no app data folder."))?;
+    std::fs::create_dir_all(&music).map_err(|e| {
+        gentle_core::i18n::fill(
+            t("Couldn't create {path}: {error}"),
+            &[
+                ("path", &music.to_string_lossy()),
+                ("error", &e.to_string()),
+            ],
+        )
+    })?;
     let uv = music.join("uv");
     fetch::install_uv(&uv, log)?;
     log(format!(
@@ -321,7 +330,7 @@ pub fn install(log: &Log) -> Result<(), String> {
     let _ = run_logged(clean, "uv cache clean", &|_| {});
     refresh_paths();
     if app_player().is_none() {
-        return Err("uv finished, but gentle-stream isn't where it should be.".into());
+        return Err(t("uv finished, but gentle-stream isn't where it should be.").into());
     }
     log("Done. The ♪ button in the title bar plays music.".into());
     Ok(())
@@ -330,7 +339,7 @@ pub fn install(log: &Log) -> Result<(), String> {
 /// `gentle-stream setup-samples`: the FluidR3_GM soundfont (about 120 MB,
 /// once) for sampled instruments.
 pub fn install_samples(log: &Log) -> Result<(), String> {
-    let player = player().ok_or("Install gentle-stream first.")?;
+    let player = player().ok_or_else(|| t("Install gentle-stream first."))?;
     log("Downloading the FluidR3_GM soundfont (about 120 MB)…".into());
     let mut command = player_command(&player);
     command.arg("setup-samples");
@@ -351,11 +360,18 @@ pub fn remove(log: &Log) -> Result<(), String> {
         stop.args(["ctl", "stop"]);
         let _ = run_logged(stop, "gentle-stream ctl stop", &|_| {});
     }
-    let music = music_dir().ok_or("This system has no app data folder.")?;
+    let music = music_dir().ok_or_else(|| t("This system has no app data folder."))?;
     if music.exists() {
         log(format!("Deleting {}…", music.display()));
-        std::fs::remove_dir_all(&music)
-            .map_err(|e| format!("Couldn't delete {}: {e}", music.display()))?;
+        std::fs::remove_dir_all(&music).map_err(|e| {
+            gentle_core::i18n::fill(
+                t("Couldn't delete {path}: {error}"),
+                &[
+                    ("path", &music.to_string_lossy()),
+                    ("error", &e.to_string()),
+                ],
+            )
+        })?;
     }
     refresh_paths();
     Ok(())
@@ -366,7 +382,8 @@ pub fn remove(log: &Log) -> Result<(), String> {
 fn remote_remove(choice: &Backend, log: &Log) -> Result<(), String> {
     let music = format!(
         "{}/music",
-        backend::toolchain(choice).ok_or_else(|| format!("Couldn't reach {}.", choice.label()))?
+        backend::toolchain(choice)
+            .ok_or_else(|| t("Couldn't reach {label}.").replace("{label}", &choice.label()))?
     );
     let player = format!("{music}/bin/gentle-stream");
     log("Stopping the music…".into());
@@ -376,7 +393,10 @@ fn remote_remove(choice: &Backend, log: &Log) -> Result<(), String> {
     log(format!("Deleting {music} in {}…", choice.label()));
     match backend::run(choice, "rm", &["-rf", &music]) {
         Some((true, _)) => Ok(()),
-        _ => Err(format!("Couldn't delete {music} in {}.", choice.label())),
+        _ => Err(gentle_core::i18n::fill(
+            t("Couldn't delete {path} in {label}."),
+            &[("path", &music), ("label", &choice.label())],
+        )),
     }
 }
 

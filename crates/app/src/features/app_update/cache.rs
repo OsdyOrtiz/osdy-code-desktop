@@ -81,7 +81,8 @@ pub(super) fn check_blocking(manual: bool) -> Result<Outcome, Problem> {
 }
 
 pub(super) fn skip_blocking(version: &str) -> io::Result<()> {
-    let path = store_path().ok_or_else(|| io::Error::other("no data directory"))?;
+    let path = store_path()
+        .ok_or_else(|| io::Error::other(crate::shared::i18n::t("no data directory")))?;
     let mut store = read_store(&path);
     store.skipped = Some(version.to_string());
     write_store(&path, &store)

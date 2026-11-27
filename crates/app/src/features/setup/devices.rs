@@ -11,6 +11,7 @@ use serde_json::{Value, json};
 
 use super::probe::{capture, parse_version, run_logged};
 use super::{Log, refresh_paths, toolchain_dir};
+use crate::shared::i18n::t;
 
 /// An npm package the app installs at a pinned version.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -100,13 +101,14 @@ pub fn prefs() -> Prefs {
 }
 
 pub fn save_prefs(prefs: Prefs) -> Result<(), String> {
-    let path = crate::shared::themes::store_path().ok_or("This system has no app data folder.")?;
+    let path = crate::shared::themes::store_path()
+        .ok_or_else(|| t("This system has no app data folder."))?;
     crate::shared::themes::write_key(
         &path,
         "devices",
         json!({"enabled": prefs.enabled, "agents": prefs.agents}),
     )
-    .map_err(|e| format!("Couldn't save the device settings: {e}"))
+    .map_err(|e| t("Couldn't save the device settings: {error}").replace("{error}", &e.to_string()))
 }
 
 /// What Configuration → Devices shows.
@@ -116,7 +118,7 @@ pub struct DevicesStatus {
     pub hub: Option<PathBuf>,
     pub agent: Option<PathBuf>,
     /// iOS simulators can stream: Apple silicon with Xcode's simctl.
-    pub ios: Result<(), String>,
+    pub ios: Result<(), &'static str>,
     /// The Android SDK's folder, when one is installed.
     pub android_sdk: Option<PathBuf>,
     /// Emulator video is encoded with ffmpeg (libx264).
@@ -132,11 +134,11 @@ impl DevicesStatus {
 /// Blocking: looks at the machine.
 pub fn status() -> DevicesStatus {
     let ios = if !cfg!(target_os = "macos") {
-        Err("iOS simulators need a Mac.".to_string())
+        Err("iOS simulators need a Mac.")
     } else if std::env::consts::ARCH != "aarch64" {
-        Err("Streaming iOS simulators needs Apple silicon.".to_string())
+        Err("Streaming iOS simulators needs Apple silicon.")
     } else if crate::features::devices::simctl_path().is_none() {
-        Err("Install Xcode for iOS simulators.".to_string())
+        Err("Install Xcode for iOS simulators.")
     } else {
         Ok(())
     };
@@ -165,19 +167,30 @@ fn install_package(package: Package, log: &Log) -> Result<(), String> {
     if package.entry().is_some() {
         return Ok(());
     }
-    let (_, version) = node_version().ok_or("Node.js isn't installed (Setup & requirements).")?;
+    let (_, version) =
+        node_version().ok_or_else(|| t("Node.js isn't installed (Setup & requirements)."))?;
     if version < MIN_NODE {
-        return Err(format!(
-            "{} needs Node.js {}.{} or newer; this one is {}.{}.{}.",
-            package.name, MIN_NODE.0, MIN_NODE.1, version.0, version.1, version.2
-        ));
+        return Err(
+            t("{package} needs Node.js {minimum} or newer; this one is {version}.")
+                .replace("{package}", package.name)
+                .replace("{minimum}", &format!("{}.{}", MIN_NODE.0, MIN_NODE.1))
+                .replace("{version}", &super::probe::show_version(version)),
+        );
     }
-    let npm = pi_rpc::find_program("npm").ok_or("npm isn't installed (Setup & requirements).")?;
+    let npm = pi_rpc::find_program("npm")
+        .ok_or_else(|| t("npm isn't installed (Setup & requirements)."))?;
     let prefix = package
         .prefix()
-        .ok_or("This system has no app data folder.")?;
-    std::fs::create_dir_all(&prefix)
-        .map_err(|e| format!("Couldn't create {}: {e}", prefix.display()))?;
+        .ok_or_else(|| t("This system has no app data folder."))?;
+    std::fs::create_dir_all(&prefix).map_err(|e| {
+        gentle_core::i18n::fill(
+            t("Couldn't create {path}: {error}"),
+            &[
+                ("path", &prefix.to_string_lossy()),
+                ("error", &e.to_string()),
+            ],
+        )
+    })?;
     log(format!("Installing {} {}…", package.name, package.version));
     let mut command = pi_rpc::command(&npm);
     command
@@ -188,10 +201,8 @@ fn install_package(package: Package, log: &Log) -> Result<(), String> {
         .args(["--no-audit", "--no-fund", "--omit=dev"]);
     run_logged(command, &format!("npm install {}", package.name), log)?;
     package.entry().map(|_| ()).ok_or_else(|| {
-        format!(
-            "npm finished, but {} isn't where it should be.",
-            package.name
-        )
+        t("npm finished, but {package} isn't where it should be.")
+            .replace("{package}", package.name)
     })
 }
 

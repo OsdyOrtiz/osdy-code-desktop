@@ -41,6 +41,8 @@ fn link_stays_inside(link: &Path, target: &Path) -> bool {
     true
 }
 
+use crate::shared::i18n::t;
+
 fn invalid(message: impl Into<String>) -> io::Error {
     io::Error::new(io::ErrorKind::InvalidData, message.into())
 }
@@ -53,7 +55,7 @@ pub fn extract_zip(archive: &Path, dest: &Path) -> io::Result<()> {
         let mut entry = zip.by_index(index).map_err(io::Error::other)?;
         let rel = entry
             .enclosed_name()
-            .ok_or_else(|| invalid("the archive has an entry outside its folder"))?;
+            .ok_or_else(|| invalid(t("the archive has an entry outside its folder")))?;
         if is_resource_fork(&rel) {
             continue;
         }
@@ -69,10 +71,10 @@ pub fn extract_zip(archive: &Path, dest: &Path) -> io::Result<()> {
             let mut target = String::new();
             entry.read_to_string(&mut target)?;
             if !link_stays_inside(&rel, Path::new(&target)) {
-                return Err(invalid(format!(
-                    "the archive links {} outside its folder",
-                    rel.display()
-                )));
+                return Err(invalid(
+                    t("the archive links {path} outside its folder")
+                        .replace("{path}", &rel.to_string_lossy()),
+                ));
             }
             symlink(Path::new(&target), &out)?;
             continue;
@@ -94,10 +96,10 @@ fn symlink(target: &Path, link: &Path) -> io::Result<()> {
 
 #[cfg(not(unix))]
 fn symlink(_target: &Path, link: &Path) -> io::Result<()> {
-    Err(invalid(format!(
-        "{} is a symlink; this platform's archive should not have one",
-        link.display()
-    )))
+    Err(invalid(
+        t("{path} is a symlink; this platform's archive should not have one")
+            .replace("{path}", &link.to_string_lossy()),
+    ))
 }
 
 /// Extract a `.tar.gz` (the tar crate refuses entries escaping `dest`).
@@ -109,8 +111,9 @@ pub fn extract_tar_gz(archive: &Path, dest: &Path) -> io::Result<()> {
 /// Extract a `.tar.xz` (the tar crate refuses entries escaping `dest`).
 pub fn extract_tar_xz(archive: &Path, dest: &Path) -> io::Result<()> {
     let mut tar = Vec::new();
-    lzma_rs::xz_decompress(&mut io::BufReader::new(fs::File::open(archive)?), &mut tar)
-        .map_err(|e| invalid(format!("not a valid .tar.xz: {e}")))?;
+    lzma_rs::xz_decompress(&mut io::BufReader::new(fs::File::open(archive)?), &mut tar).map_err(
+        |e| invalid(t("not a valid .tar.xz: {error}").replace("{error}", &e.to_string())),
+    )?;
     fs::create_dir_all(dest)?;
     tar::Archive::new(io::Cursor::new(tar)).unpack(dest)
 }
@@ -133,12 +136,12 @@ pub(super) fn find_payload(os: &str, root: &Path, version: &str) -> io::Result<P
                 .filter(|p| p.extension().is_some_and(|x| x == "app"))
                 .collect();
             let [app] = apps.as_slice() else {
-                return Err(invalid("the archive should hold exactly one .app"));
+                return Err(invalid(t("the archive should hold exactly one .app")));
             };
             if !app.join("Contents").join("MacOS").join(BINARY).is_file() {
-                return Err(invalid(format!(
-                    "{} has no Contents/MacOS/{BINARY}",
-                    app.display()
+                return Err(invalid(gentle_core::i18n::fill(
+                    t("{path} has no Contents/MacOS/{binary}"),
+                    &[("path", &app.to_string_lossy()), ("binary", BINARY)],
                 )));
             }
             app.clone()
@@ -153,10 +156,15 @@ pub(super) fn find_payload(os: &str, root: &Path, version: &str) -> io::Result<P
     if payload.exists() {
         Ok(payload)
     } else {
-        Err(invalid(format!(
-            "the archive has no {}",
-            payload.strip_prefix(root).unwrap_or(&payload).display()
-        )))
+        Err(invalid(
+            t("the archive has no {path}").replace(
+                "{path}",
+                &payload
+                    .strip_prefix(root)
+                    .unwrap_or(&payload)
+                    .to_string_lossy(),
+            ),
+        ))
     }
 }
 
@@ -168,6 +176,26 @@ mod tests {
     use super::super::test_support::fake_bundle;
     use super::super::test_support::temp_dir;
     use super::*;
+
+    #[test]
+    fn t14_missing_bundle_binary_preserves_placeholder_like_path() {
+        use crate::shared::i18n::with_test_language;
+        use gentle_core::i18n::Language;
+
+        let dir = temp_dir("placeholder-payload");
+        let app = dir.join("{binary}.app");
+        fs::create_dir(&app).unwrap();
+        let error = with_test_language(Language::English, || {
+            find_payload("macos", &dir, "0.2.0").unwrap_err()
+        });
+        assert!(!app.join("Contents").exists());
+        fs::remove_dir_all(&dir).unwrap();
+        assert_eq!(error.kind(), io::ErrorKind::InvalidData);
+        assert_eq!(
+            error.to_string(),
+            format!("{} has no Contents/MacOS/{BINARY}", app.display())
+        );
+    }
 
     #[test]
     fn extracts_zip_with_modes_and_links() {

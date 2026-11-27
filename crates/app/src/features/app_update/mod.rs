@@ -14,6 +14,8 @@ use std::path::PathBuf;
 
 use gpui_kit::{App, BorrowAppContext as _, Global, Task};
 
+use crate::shared::i18n::t;
+
 mod archive;
 mod cache;
 mod install;
@@ -40,26 +42,56 @@ pub struct Problem {
     pub message: String,
     /// Somewhere to go instead (the releases page).
     pub link: Option<String>,
+    key: &'static str,
+    args: Vec<(&'static str, String)>,
+    cause: Option<String>,
 }
 
 impl Problem {
-    fn new(message: impl Into<String>) -> Self {
+    fn new(key: &'static str) -> Self {
         Self {
-            message: message.into(),
+            message: key.into(),
             link: None,
+            key,
+            args: Vec::new(),
+            cause: None,
         }
     }
 
-    fn with_releases(message: impl Into<String>) -> Self {
+    fn with_releases(key: &'static str) -> Self {
         Self {
-            message: message.into(),
             link: Some(RELEASES_URL.to_string()),
+            ..Self::new(key)
         }
+    }
+
+    fn arg(mut self, name: &'static str, value: impl ToString) -> Self {
+        self.args.push((name, value.to_string()));
+        self.message = self.format(self.key);
+        self
+    }
+
+    fn cause(mut self, error: impl ToString) -> Self {
+        self.cause = Some(error.to_string());
+        self.message = self.format(self.key);
+        self
+    }
+
+    fn format(&self, text: &str) -> String {
+        let mut text = text.to_string();
+        for (name, value) in &self.args {
+            text = text.replace(name, value);
+        }
+        if let Some(cause) = &self.cause {
+            text.push_str(": ");
+            text.push_str(cause);
+        }
+        text
     }
 }
 
 fn fail(what: &'static str) -> impl FnOnce(io::Error) -> Problem {
-    move |e| Problem::new(format!("{what}: {e}"))
+    move |e| Problem::new(what).cause(e)
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -133,24 +165,28 @@ fn set_status(status: Status, cx: &mut App) {
     cx.update_global::<AppUpdate, _>(|update, _| update.status = status);
 }
 
-pub fn status(cx: &App) -> &Status {
-    &cx.global::<AppUpdate>().status
+pub fn status(cx: &App) -> Status {
+    let mut status = cx.global::<AppUpdate>().status.clone();
+    if let Status::Failed { problem, .. } = &mut status {
+        problem.message = problem.format(t(problem.key));
+    }
+    status
 }
 
 /// The title-bar pill: `(label, tooltip)` while an update waits for the user.
 pub fn badge(cx: &App) -> Option<(&'static str, String)> {
     match &cx.try_global::<AppUpdate>()?.status {
         Status::Available(r) => Some((
-            "Update",
-            format!("Osdy Code Desktop {} is available", r.version),
+            t("Update"),
+            t("Osdy Code Desktop {version} is available").replace("{version}", &r.version),
         )),
         Status::Downloading { release: r, .. } | Status::Installing(r) => Some((
-            "Updating…",
-            format!("Installing Osdy Code Desktop {}", r.version),
+            t("Updating…"),
+            t("Installing Osdy Code Desktop {version}").replace("{version}", &r.version),
         )),
         Status::Ready { release: r, .. } => Some((
-            "Restart to update",
-            format!("Osdy Code Desktop {} is installed", r.version),
+            t("Restart to update"),
+            t("Osdy Code Desktop {version} is installed").replace("{version}", &r.version),
         )),
         _ => None,
     }
@@ -252,7 +288,7 @@ pub fn skip(cx: &mut App) {
     let status = match skip_blocking(&release.version) {
         Ok(()) => Status::Skipped(release.version),
         Err(e) => Status::Failed {
-            problem: Problem::new(format!("Couldn't remember the skip: {e}")),
+            problem: Problem::new("Couldn't remember the skip").cause(e),
             release: Some(release),
         },
     };
@@ -271,10 +307,9 @@ pub fn restart(cx: &mut App) {
         Ok(()) => cx.quit(),
         Err(e) => set_status(
             Status::Failed {
-                problem: Problem::new(format!(
-                    "Osdy Code Desktop {} is installed, but the restart couldn't be scheduled ({e}). Quit and reopen the app.",
-                    release.version
-                )),
+                problem: Problem::new("Osdy Code Desktop {version} is installed, but the restart couldn't be scheduled ({error}). Quit and reopen the app.")
+                    .arg("{version}", &release.version)
+                    .arg("{error}", e),
                 release: None,
             },
             cx,

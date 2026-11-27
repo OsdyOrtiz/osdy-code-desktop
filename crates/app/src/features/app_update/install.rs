@@ -73,17 +73,16 @@ pub(super) fn install_target(exe: &Path, os: &str) -> Result<Target, Problem> {
         }
         "windows" | "linux" if in_cargo_target(exe) => Err(build_dir()),
         "windows" | "linux" => Ok(Target::Exe(exe.to_path_buf())),
-        other => Err(Problem::with_releases(format!(
-            "Self-update isn't available on {other}; download the release from GitHub."
-        ))),
+        other => Err(Problem::with_releases(
+            "Self-update isn't available on {platform}; download the release from GitHub.",
+        )
+        .arg("{platform}", other)),
     }
 }
 
 fn not_writable(dir: &Path) -> Problem {
-    Problem::with_releases(format!(
-        "Osdy Code Desktop can't write to {}. Move the app to a folder you own (e.g. ~/Applications) or install the update from GitHub yourself.",
-        dir.display()
-    ))
+    Problem::with_releases("Osdy Code Desktop can't write to {path}. Move the app to a folder you own (e.g. ~/Applications) or install the update from GitHub yourself.")
+        .arg("{path}", dir.display())
 }
 
 fn ensure_writable(dir: &Path) -> Result<(), Problem> {
@@ -112,7 +111,10 @@ fn stage_beside(new: &Path, target: &Path) -> io::Result<PathBuf> {
         let status = pi_rpc::command("ditto").arg(new).arg(&staged).status()?;
         if !status.success() {
             let _ = fs::remove_dir_all(&staged);
-            return Err(io::Error::other(format!("ditto failed ({status})")));
+            return Err(io::Error::other(
+                crate::shared::i18n::t("ditto failed ({status})")
+                    .replace("{status}", &status.to_string()),
+            ));
         }
     }
     Ok(staged)
@@ -173,11 +175,11 @@ fn replace(target: &Target, payload: &Path) -> Result<(), Problem> {
         .parent()
         .unwrap_or(target.path())
         .to_path_buf();
-    let denied = |e: io::Error, what: &str| {
+    let denied = |e: io::Error, what: &'static str| {
         if e.kind() == io::ErrorKind::PermissionDenied {
             not_writable(&dir)
         } else {
-            Problem::new(format!("{what}: {e}"))
+            Problem::new(what).cause(e)
         }
     };
     match target {
@@ -218,18 +220,15 @@ pub(super) fn install_blocking(
     let target = install_target(&exe, std::env::consts::OS)?;
     ensure_writable(target.path().parent().unwrap_or(target.path()))?;
     let asset = platform_asset(release).ok_or_else(|| {
-        Problem::with_releases(format!(
-            "Release {} has no download for {}-{}.",
-            release.version,
-            std::env::consts::OS,
-            std::env::consts::ARCH
-        ))
+        Problem::with_releases("Release {version} has no download for {os}-{arch}.")
+            .arg("{version}", &release.version)
+            .arg("{os}", std::env::consts::OS)
+            .arg("{arch}", std::env::consts::ARCH)
     })?;
     let sums = release.asset(SUMS).ok_or_else(|| {
-        Problem::new(format!(
-            "Release {} has no {SUMS}; refusing to install an unverified download.",
-            release.version
-        ))
+        Problem::new("Release {version} has no {file}; refusing to install an unverified download.")
+            .arg("{version}", &release.version)
+            .arg("{file}", SUMS)
     })?;
     let work =
         std::env::temp_dir().join(format!("osdy-code-desktop-update-{}", std::process::id()));

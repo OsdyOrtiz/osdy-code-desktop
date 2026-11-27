@@ -15,6 +15,7 @@ use gentle_core::backend::Backend;
 use super::probe::{output_of, parse_version, run_logged};
 use super::{Log, fetch, refresh_paths, toolchain_dir, user_home};
 use crate::features::backend;
+use crate::shared::i18n::t;
 
 /// Maestro runs on Java 17 or newer.
 const MIN_JAVA: u64 = 17;
@@ -176,13 +177,13 @@ pub fn test_connection() -> Result<String, String> {
         .launcher_command(["mcp", "list"])
         .stdin(std::process::Stdio::null())
         .output()
-        .map_err(|e| format!("gentle-shell didn't start: {e}"))?;
+        .map_err(|e| t("gentle-shell didn't start: {error}").replace("{error}", &e.to_string()))?;
     let text = format!(
         "{}{}",
         String::from_utf8_lossy(&output.stdout),
         String::from_utf8_lossy(&output.stderr)
     );
-    server_line(&text).ok_or_else(|| "Pi lists no maestro server.".to_string())
+    server_line(&text).ok_or_else(|| t("Pi lists no maestro server.").to_string())
 }
 
 /// `gentle-shell mcp remove maestro`: the agent loses the tools; the CLI
@@ -205,15 +206,19 @@ pub fn remove(log: &Log) -> Result<(), String> {
     if is_registered(&pi_rpc::resolve_homes().agent) {
         disconnect(log)?;
     }
-    let toolchain = toolchain_dir().ok_or("This system has no app data folder.")?;
+    let toolchain = toolchain_dir().ok_or_else(|| t("This system has no app data folder."))?;
     for (dir, what) in [
         (toolchain.join("maestro"), "Maestro"),
         (toolchain.join("java"), "Java runtime"),
     ] {
         if dir.exists() {
             log(format!("Deleting the {what} in {}…", dir.display()));
-            std::fs::remove_dir_all(&dir)
-                .map_err(|e| format!("Couldn't delete {}: {e}", dir.display()))?;
+            std::fs::remove_dir_all(&dir).map_err(|e| {
+                gentle_core::i18n::fill(
+                    t("Couldn't delete {path}: {error}"),
+                    &[("path", &dir.to_string_lossy()), ("error", &e.to_string())],
+                )
+            })?;
         }
     }
     refresh_paths();
@@ -233,7 +238,7 @@ pub fn install(log: &Log) -> Result<(), String> {
         }
         None => {
             fetch::install_java_runtime(log)?;
-            java_home().ok_or("Java was installed, but it doesn't run.")?
+            java_home().ok_or_else(|| t("Java was installed, but it doesn't run."))?
         }
     };
     let maestro = match maestro() {
@@ -244,7 +249,7 @@ pub fn install(log: &Log) -> Result<(), String> {
         None => {
             fetch::install_maestro_release(log)?;
             refresh_paths();
-            maestro().ok_or("Maestro was installed, but this app can't find it.")?
+            maestro().ok_or_else(|| t("Maestro was installed, but this app can't find it."))?
         }
     };
     let java_env = format!("JAVA_HOME={}", java.display());
@@ -269,7 +274,7 @@ pub fn install(log: &Log) -> Result<(), String> {
         log("Done. New sessions (or /reload in an open one) have the maestro tools.".into());
         Ok(())
     } else {
-        Err("gentle-shell added Maestro, but it isn't in this home's mcp.json.".into())
+        Err(t("gentle-shell added Maestro, but it isn't in this home's mcp.json.").into())
     }
 }
 
@@ -319,7 +324,7 @@ fn copy_in(
     fill: impl FnOnce(&Path) -> Result<(), String>,
     log: &Log,
 ) -> Result<(), String> {
-    let toolchain = toolchain_dir().ok_or("This system has no app data folder.")?;
+    let toolchain = toolchain_dir().ok_or_else(|| t("This system has no app data folder."))?;
     let here = toolchain.join(format!(".backend-{what}-{}", std::process::id()));
     let _ = std::fs::remove_dir_all(&here);
     let done = fill(&here).and_then(|()| {
@@ -339,16 +344,17 @@ fn copy_in(
 fn remote_install(choice: &Backend, log: &Log) -> Result<(), String> {
     let label = choice.label();
     let spec = launcher()?;
-    let toolchain = backend::toolchain(choice).ok_or_else(|| format!("Couldn't reach {label}."))?;
-    let found = remote_status(choice).ok_or_else(|| format!("Couldn't reach {label}."))?;
+    let reach = || t("Couldn't reach {label}.").replace("{label}", &label);
+    let toolchain = backend::toolchain(choice).ok_or_else(reach)?;
+    let found = remote_status(choice).ok_or_else(reach)?;
     let java = match found.java {
         Some((home, _)) => {
             log(format!("Using the Java in {} in {label}.", home.display()));
             home.to_string_lossy().into_owned()
         }
         None => {
-            let arch =
-                backend::arch(choice).ok_or_else(|| format!("Couldn't tell {label}'s machine."))?;
+            let arch = backend::arch(choice)
+                .ok_or_else(|| t("Couldn't tell {label}'s machine.").replace("{label}", &label))?;
             let there = format!("{toolchain}/java");
             copy_in(
                 choice,
@@ -403,9 +409,10 @@ fn remote_install(choice: &Backend, log: &Log) -> Result<(), String> {
         log("Done. New sessions (or /reload in an open one) have the maestro tools.".into());
         Ok(())
     } else {
-        Err(format!(
-            "gentle-shell added Maestro, but it isn't in {label}'s mcp.json."
-        ))
+        Err(
+            t("gentle-shell added Maestro, but it isn't in {label}'s mcp.json.")
+                .replace("{label}", &label),
+        )
     }
 }
 
@@ -413,8 +420,8 @@ fn remote_remove(choice: &Backend, log: &Log) -> Result<(), String> {
     if remote_status(choice).is_some_and(|status| status.connected) {
         disconnect(log)?;
     }
-    let toolchain =
-        backend::toolchain(choice).ok_or_else(|| format!("Couldn't reach {}.", choice.label()))?;
+    let toolchain = backend::toolchain(choice)
+        .ok_or_else(|| t("Couldn't reach {label}.").replace("{label}", &choice.label()))?;
     log(format!(
         "Deleting the Maestro and Java runtime the app installed in {}…",
         choice.label()
@@ -425,7 +432,7 @@ fn remote_remove(choice: &Backend, log: &Log) -> Result<(), String> {
         &["-c", r#"rm -rf "$1/maestro" "$1/java""#, "sh", &toolchain],
     ) {
         Some((true, _)) => Ok(()),
-        _ => Err(format!("Couldn't delete them in {}.", choice.label())),
+        _ => Err(t("Couldn't delete them in {label}.").replace("{label}", &choice.label())),
     }
 }
 

@@ -19,7 +19,10 @@ pub mod tower;
 
 use std::path::{Path, PathBuf};
 
+use gentle_core::i18n::{Language, tr};
 use serde_json::json;
+
+use crate::shared::i18n::{language, t};
 
 pub use probe::platform_label;
 use probe::{Version, capture, parse_version};
@@ -42,13 +45,65 @@ pub enum Need {
     Optional,
 }
 
+/// A retained check detail: app copy is rendered in the current language;
+/// captured tool output and command names remain verbatim.
+#[derive(Clone, Debug)]
+pub enum Detail {
+    Raw(String),
+    Template(&'static str, Vec<(&'static str, String)>),
+}
+
+impl Detail {
+    pub(super) fn template(
+        key: &'static str,
+        args: impl IntoIterator<Item = (&'static str, String)>,
+    ) -> Self {
+        Self::Template(key, args.into_iter().collect())
+    }
+
+    pub fn text(&self, language: Language) -> String {
+        match self {
+            Self::Raw(raw) => raw.clone(),
+            Self::Template(key, args) => args
+                .iter()
+                .fold(tr(language, key).to_string(), |text, (name, value)| {
+                    text.replace(name, value)
+                }),
+        }
+    }
+}
+
+impl From<String> for Detail {
+    fn from(raw: String) -> Self {
+        Self::Raw(raw)
+    }
+}
+
+impl From<&'static str> for Detail {
+    fn from(key: &'static str) -> Self {
+        Self::template(key, [])
+    }
+}
+
+impl PartialEq for Detail {
+    fn eq(&self, other: &Self) -> bool {
+        self.text(Language::English) == other.text(Language::English)
+    }
+}
+
+impl std::fmt::Display for Detail {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.text(language()))
+    }
+}
+
 /// The text says what was found, or why not.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Status {
-    Ok(String),
-    Missing(String),
-    Outdated(String),
-    Failed(String),
+    Ok(Detail),
+    Missing(Detail),
+    Outdated(Detail),
+    Failed(Detail),
 }
 
 /// `Auto`: `install` does it unattended. `Terminal`: needs the user (sudo or
@@ -339,10 +394,10 @@ pub fn install(id: CheckId, log: &(dyn Fn(String) + Send + Sync)) -> Result<(), 
     let result = match id {
         CheckId::Node => fetch::install_node(log),
         CheckId::Go if cfg!(windows) => extras::install_go(log),
-        CheckId::Go => Err("Go is only needed on Windows.".into()),
+        CheckId::Go => Err(t("Go is only needed on Windows.").into()),
         CheckId::GentleShell => gentle::install_gentle_shell(log),
         CheckId::Setup => gentle::run_setup(log),
-        CheckId::Provider => Err("Sign in from the Providers screen.".into()),
+        CheckId::Provider => Err(t("Sign in from the Providers screen.").into()),
         CheckId::Git => extras::install_git(log),
         CheckId::Engram => extras::install_engram(log),
     };

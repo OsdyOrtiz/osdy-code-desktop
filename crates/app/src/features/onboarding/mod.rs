@@ -6,9 +6,11 @@
 
 use std::collections::VecDeque;
 
+use gentle_core::backend::Backend;
 use gpui_kit::*;
 
-use crate::features::setup::{self, Check, CheckId};
+use crate::features::setup::{self, Check, CheckId, Detail};
+use crate::shared::i18n::{language, t};
 
 mod checks;
 mod install;
@@ -30,9 +32,25 @@ enum Mode {
     Sequence,
 }
 
+enum Platform {
+    Local(String),
+    Remote(Backend),
+}
+
+impl Platform {
+    fn label(&self) -> String {
+        match self {
+            Self::Local(label) => label.clone(),
+            Self::Remote(choice) => {
+                t("Agents on {backend}").replace("{backend}", &choice.label_in(language()))
+            }
+        }
+    }
+}
+
 /// One look at the machine: what the screen shows and whether it must open.
 pub struct Probe {
-    pub platform: String,
+    platform: Platform,
     pub first_run: bool,
     pub checks: Vec<Check>,
 }
@@ -42,8 +60,8 @@ impl Probe {
     pub fn run() -> Self {
         // The checks run where agents do: the badge says so.
         let platform = match crate::features::backend::saved() {
-            gentle_core::backend::Backend::Local => setup::platform_label(),
-            choice => format!("Agents on {}", choice.label()),
+            Backend::Local => Platform::Local(setup::platform_label()),
+            choice => Platform::Remote(choice),
         };
         Self {
             platform,
@@ -77,7 +95,7 @@ pub struct OnboardingView {
     /// The sequence's steps start coming in after this (the welcome's
     /// intro plays first).
     entrance: std::time::Duration,
-    platform: Option<String>,
+    platform: Option<Platform>,
     first_run: bool,
     /// `None` until the first look finishes.
     checks: Option<Vec<Check>>,
@@ -93,7 +111,7 @@ pub struct OnboardingView {
     announce: bool,
     /// The provider check as the active agent tab's Gentle Shell answered
     /// it (`get_auth_status`), applied over every look at the machine.
-    registry_sign_in: Option<Result<String, String>>,
+    registry_sign_in: Option<Result<Detail, Detail>>,
     _probe: Task<()>,
     _job: Task<()>,
 }
@@ -208,7 +226,14 @@ impl OnboardingView {
     /// credentials (by id): the provider check follows it from now on,
     /// instead of reading `auth.json`, `models.json` and the environment.
     pub fn adopt_signed_in(&mut self, configured: &[&str], cx: &mut Context<Self>) {
-        let answer = gentle_core::setup::registry_sign_in(configured.iter().copied());
+        let answer = gentle_core::setup::registry_sign_in(configured.iter().copied())
+            .map(|_| {
+                Detail::template(
+                    "Signed in: {providers}",
+                    [("{providers}", configured.join(", "))],
+                )
+            })
+            .map_err(|_| Detail::from("No provider signed in"));
         if let Some(checks) = self.checks.as_mut() {
             with_registry(checks, &answer);
         }

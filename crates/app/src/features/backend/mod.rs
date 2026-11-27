@@ -12,8 +12,11 @@ use std::time::Duration;
 
 use anyhow::{Result, anyhow};
 use gentle_core::backend::{self, Backend, Distro};
+use gentle_core::i18n::fill;
 use gpui_kit::App;
 use serde_json::Value;
+
+use crate::shared::i18n::{language, t};
 
 /// How long the backend may take to answer a probe: a stopped WSL distro
 /// or VM boots first.
@@ -46,7 +49,7 @@ pub fn saved() -> Backend {
 /// Save the backend new agent tabs use (`null` for this computer).
 pub fn save(choice: &Backend) -> std::io::Result<()> {
     let path = crate::shared::themes::store_path()
-        .ok_or_else(|| std::io::Error::other("no data folder"))?;
+        .ok_or_else(|| std::io::Error::other(t("no data folder")))?;
     crate::shared::themes::write_key(&path, backend::KEY, choice.to_json().unwrap_or(Value::Null))?;
     if let Ok(mut saved) = SAVED.write() {
         *saved = Some(choice.clone());
@@ -63,11 +66,13 @@ pub fn for_tab(cwd: &Path) -> Backend {
 /// How `choice` reads `path`, a path on this computer, or why it can't.
 fn reach(choice: &Backend, path: &Path) -> Result<String> {
     choice.path(&path.to_string_lossy()).ok_or_else(|| {
-        anyhow!(
-            "{} can't reach {}. Open the project from a folder it can reach.",
-            choice.label(),
-            path.display()
-        )
+        anyhow!(fill(
+            t("{backend} can't reach {path}. Open the project from a folder it can reach."),
+            &[
+                ("backend", &choice.label_in(language())),
+                ("path", &path.to_string_lossy())
+            ],
+        ))
     })
 }
 
@@ -105,11 +110,13 @@ pub fn launch_spec(
     if let Some(found) = own_shell(choice)
         && backend::is_windows_file(&found)
     {
-        return Err(anyhow!(
-            "Only Windows' gentle-shell is visible from {} ({found}). Install it there: \
-             Setup & requirements has the command.",
-            choice.label()
-        ));
+        return Err(anyhow!(fill(
+            t(
+                "Only Windows' gentle-shell is visible from {backend} ({path}). Install it there: \
+                               Setup & requirements has the command."
+            ),
+            &[("backend", &choice.label_in(language())), ("path", &found)],
+        )));
     }
     pi_rpc::remote_backend(&launch, path.as_deref(), &all, |file| stage(choice, file))
 }
@@ -170,16 +177,19 @@ pub fn put_file(
     let script =
         format!(r#"mkdir -p "${{1%/*}}" && cat > "$1.$$" && {mode} "$1.$$" && mv -f "$1.$$" "$1""#);
     let mut command = in_root(choice, &["sh", "-c", &script, "sh", there])
-        .ok_or("Agents run on this computer.")?;
+        .ok_or_else(|| t("Agents run on this computer."))?;
     command
         .stdin(std::fs::File::open(file).map_err(|e| format!("{}: {e}", file.display()))?)
         .stderr(std::process::Stdio::null());
     match pi_rpc::output_within(&mut command, COPY_TIMEOUT) {
         Some((true, _)) => Ok(()),
-        Some((false, _)) => Err(format!("Couldn't write {there} on {}.", choice.label())),
-        None => Err(format!(
-            "{} didn't answer while copying {there}.",
-            choice.label()
+        Some((false, _)) => Err(fill(
+            t("Couldn't write {path} on {backend}."),
+            &[("path", there), ("backend", &choice.label_in(language()))],
+        )),
+        None => Err(fill(
+            t("{backend} didn't answer while copying {path}."),
+            &[("backend", &choice.label_in(language())), ("path", there)],
         )),
     }
 }
@@ -191,14 +201,23 @@ pub fn put_file(
 pub fn put_dir(choice: &Backend, dir: &Path, there: &str) -> Result<(), String> {
     let script = r#"rm -rf "$1.part" && mkdir -p "$1.part" && tar -xf - --no-same-owner -C "$1.part" && rm -rf "$1" && mv "$1.part" "$1""#;
     let mut command = in_root(choice, &["sh", "-c", script, "sh", there])
-        .ok_or("Agents run on this computer.")?;
+        .ok_or_else(|| t("Agents run on this computer."))?;
+    let unreachable = |e: std::io::Error| {
+        fill(
+            t("Couldn't reach {backend}: {error}"),
+            &[
+                ("backend", &choice.label_in(language())),
+                ("error", &e.to_string()),
+            ],
+        )
+    };
     let mut child = command
         .stdin(std::process::Stdio::piped())
         .stdout(std::process::Stdio::null())
         .stderr(std::process::Stdio::piped())
         .spawn()
-        .map_err(|e| format!("Couldn't reach {}: {e}", choice.label()))?;
-    let stdin = child.stdin.take().ok_or("no input")?;
+        .map_err(unreachable)?;
+    let stdin = child.stdin.take().ok_or_else(|| t("no input"))?;
     let dir = dir.to_path_buf();
     let writer = std::thread::spawn(move || -> std::io::Result<()> {
         let mut tar = tar::Builder::new(stdin);
@@ -206,17 +225,26 @@ pub fn put_dir(choice: &Backend, dir: &Path, there: &str) -> Result<(), String> 
         tar.append_dir_all(".", &dir)?;
         tar.into_inner().map(drop)
     });
-    let out = child
-        .wait_with_output()
-        .map_err(|e| format!("Couldn't reach {}: {e}", choice.label()))?;
-    let written = writer.join().map_err(|_| "The copy stopped.".to_string())?;
+    let out = child.wait_with_output().map_err(unreachable)?;
+    let written = writer
+        .join()
+        .map_err(|_| t("The copy stopped.").to_string())?;
     match (out.status.success(), written) {
         (true, Ok(())) => Ok(()),
-        (_, Err(e)) => Err(format!("Couldn't copy into {}: {e}", choice.label())),
-        (false, _) => Err(format!(
-            "Couldn't unpack into {there} on {}: {}",
-            choice.label(),
-            String::from_utf8_lossy(&out.stderr).trim()
+        (_, Err(e)) => Err(fill(
+            t("Couldn't copy into {backend}: {error}"),
+            &[
+                ("backend", &choice.label_in(language())),
+                ("error", &e.to_string()),
+            ],
+        )),
+        (false, _) => Err(fill(
+            t("Couldn't unpack into {path} on {backend}: {error}"),
+            &[
+                ("path", there),
+                ("backend", &choice.label_in(language())),
+                ("error", String::from_utf8_lossy(&out.stderr).trim()),
+            ],
         )),
     }
 }

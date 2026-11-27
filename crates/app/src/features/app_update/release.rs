@@ -136,16 +136,16 @@ pub(super) fn hex(bytes: &[u8]) -> String {
 /// Refuse anything but an exact match with the published digest.
 pub(super) fn verify_digest(name: &str, actual: &str, sums: &str) -> Result<(), Problem> {
     let expected = expected_digest(sums, name).ok_or_else(|| {
-        Problem::new(format!(
-            "SHA256SUMS has no entry for {name}; refusing to install an unverified download."
-        ))
+        Problem::new(
+            "SHA256SUMS has no entry for {name}; refusing to install an unverified download.",
+        )
+        .arg("{name}", name)
     })?;
     if actual.eq_ignore_ascii_case(&expected) {
         Ok(())
     } else {
-        Err(Problem::new(format!(
-            "{name} failed verification (sha256 {actual}, expected {expected}); nothing was installed."
-        )))
+        Err(Problem::new("{name} failed verification (sha256 {actual}, expected {expected}); nothing was installed.")
+            .arg("{name}", name).arg("{actual}", actual).arg("{expected}", expected))
     }
 }
 

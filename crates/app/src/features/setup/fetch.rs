@@ -12,6 +12,15 @@ use serde_json::Value;
 
 use super::{Log, MIN_NODE, capture, parse_version, prefix_bin, toolchain_dir};
 use crate::features::app_update::{expected_digest, extract_tar_gz, extract_tar_xz, extract_zip};
+use crate::shared::i18n::t;
+
+fn detail(key: &'static str, error: impl std::fmt::Display) -> String {
+    format!("{}: {error}", t(key))
+}
+
+fn require_toolchain() -> Result<PathBuf, &'static str> {
+    toolchain_dir().ok_or_else(|| t("This system has no app data folder."))
+}
 
 const USER_AGENT: &str = concat!("gentle-shell-gpui/", env!("CARGO_PKG_VERSION"));
 const NODE_DIST: &str = "https://nodejs.org/dist";
@@ -169,15 +178,25 @@ fn get(
             .header("Accept", "application/vnd.github+json")
             .header("X-GitHub-Api-Version", "2022-11-28");
     }
-    let response = request
-        .call()
-        .map_err(|e| format!("Couldn't reach {}: {e}", host(url)))?;
+    let response = request.call().map_err(|e| {
+        gentle_core::i18n::fill(
+            t("Couldn't reach {host}: {error}"),
+            &[("host", host(url)), ("error", &e.to_string())],
+        )
+    })?;
     match response.status().as_u16() {
         200..=299 => Ok(response),
         403 | 429 if github_api => {
-            Err("GitHub's rate limit was hit; try again in a while.".to_string())
+            Err(t("GitHub's rate limit was hit; try again in a while.").to_string())
         }
-        status => Err(format!("{} answered HTTP {status} for {url}", host(url))),
+        status => Err(gentle_core::i18n::fill(
+            t("{host} answered HTTP {status} for {url}"),
+            &[
+                ("host", host(url)),
+                ("status", &status.to_string()),
+                ("url", url),
+            ],
+        )),
     }
 }
 
@@ -194,7 +213,12 @@ fn get_text(url: &str, github_api: bool) -> Result<String, String> {
         .with_config()
         .limit(32 * 1024 * 1024)
         .read_to_string()
-        .map_err(|e| format!("Couldn't read {url}: {e}"))
+        .map_err(|e| {
+            gentle_core::i18n::fill(
+                t("Couldn't read {url}: {error}"),
+                &[("url", url), ("error", &e.to_string())],
+            )
+        })
 }
 
 /// Stalls in a row (no new bytes between them) before a download gives up.
@@ -207,7 +231,7 @@ pub(super) fn download(url: &str, dest: &Path, log: &Log) -> Result<String, Stri
     use sha2::{Digest as _, Sha256};
     let agent = agent(true);
     let mut file =
-        fs::File::create(dest).map_err(|e| format!("Couldn't create the download file: {e}"))?;
+        fs::File::create(dest).map_err(|e| detail("Couldn't create the download file", e))?;
     let mut hasher = Sha256::new();
     let mut buf = vec![0u8; 64 * 1024];
     let (mut done, mut step, mut total) = (0u64, 0u64, None::<u64>);
@@ -251,15 +275,23 @@ pub(super) fn download(url: &str, dest: &Path, log: &Log) -> Result<String, Stri
         })();
         let error = match attempt {
             Ok(()) if total.is_none_or(|t| done >= t) => break,
-            Ok(()) => "the server closed the connection early".to_string(),
+            Ok(()) => t("the server closed the connection early").to_string(),
+            // Keep the disk-error prefixes used for retry classification in English;
+            // render them only at the boundary where the error is returned.
             Err(e) if e.starts_with("Couldn't write") || e.starts_with("Couldn't restart") => {
-                return Err(e);
+                let (message, cause) = e.split_once(": ").unwrap_or((&e, ""));
+                let key = match message {
+                    "Couldn't write the download" => "Couldn't write the download",
+                    "Couldn't restart the download" => "Couldn't restart the download",
+                    _ => return Err(e),
+                };
+                return Err(detail(key, cause));
             }
             Err(e) => e,
         };
         stalls = if done > before { 1 } else { stalls + 1 };
         if stalls >= DOWNLOAD_ATTEMPTS {
-            return Err(format!("The download was interrupted: {error}"));
+            return Err(detail("The download was interrupted", error));
         }
         log(format!(
             "  The connection dropped at {:.1} MB; resuming…",
@@ -267,7 +299,7 @@ pub(super) fn download(url: &str, dest: &Path, log: &Log) -> Result<String, Stri
         ));
     }
     file.sync_all()
-        .map_err(|e| format!("Couldn't write the download: {e}"))?;
+        .map_err(|e| detail("Couldn't write the download", e))?;
     Ok(hasher
         .finalize()
         .iter()
@@ -279,12 +311,8 @@ pub(super) fn download(url: &str, dest: &Path, log: &Log) -> Result<String, Stri
 fn verify(name: &str, actual: &str, sums: &str) -> Result<(), String> {
     match expected_digest(sums, name) {
         Some(expected) if expected == actual => Ok(()),
-        Some(_) => Err(format!(
-            "{name} doesn't match its published checksum; refusing to install it."
-        )),
-        None => Err(format!(
-            "The checksums list has no entry for {name}; refusing to install an unverified download."
-        )),
+        Some(_) => Err(t("{name} doesn't match its published checksum; refusing to install it.").replace("{name}", name)),
+        None => Err(t("The checksums list has no entry for {name}; refusing to install an unverified download.").replace("{name}",name)),
     }
 }
 
@@ -297,7 +325,12 @@ fn extract(archive: &Path, dest: &Path) -> Result<(), String> {
     } else {
         extract_tar_gz(archive, dest)
     };
-    result.map_err(|e| format!("Couldn't unpack {name}: {e}"))
+    result.map_err(|e| {
+        gentle_core::i18n::fill(
+            t("Couldn't unpack {name}: {error}"),
+            &[("name", &name), ("error", &e.to_string())],
+        )
+    })
 }
 
 /// A scratch folder inside the toolchain dir (same volume as the target).
@@ -307,7 +340,12 @@ impl Staging {
     pub(super) fn new(toolchain: &Path, tag: &str) -> Result<Self, String> {
         let dir = toolchain.join(format!(".{tag}-{}", std::process::id()));
         let _ = fs::remove_dir_all(&dir);
-        fs::create_dir_all(&dir).map_err(|e| format!("Couldn't create {}: {e}", dir.display()))?;
+        fs::create_dir_all(&dir).map_err(|e| {
+            gentle_core::i18n::fill(
+                t("Couldn't create {path}: {error}"),
+                &[("path", &dir.to_string_lossy()), ("error", &e.to_string())],
+            )
+        })?;
         Ok(Self(dir))
     }
 }
@@ -323,13 +361,14 @@ impl Drop for Staging {
 /// The latest Node 22 LTS into `<toolchain>/node`, verified against the
 /// release's `SHASUMS256.txt`. Never touches a system Node.
 pub fn install_node(log: &Log) -> Result<(), String> {
-    let toolchain = toolchain_dir().ok_or("This system has no app data folder.")?;
+    let toolchain = require_toolchain()?;
     log("Looking up the latest Node.js 22 LTS on nodejs.org…".into());
     let index: Value = serde_json::from_str(&get_text(&format!("{NODE_DIST}/index.json"), false)?)
-        .map_err(|e| format!("nodejs.org's release index is unreadable: {e}"))?;
-    let version = pick_node22(&index).ok_or("nodejs.org lists no Node.js 22 LTS release.")?;
+        .map_err(|e| detail("nodejs.org's release index is unreadable", e))?;
+    let version =
+        pick_node22(&index).ok_or_else(|| t("nodejs.org lists no Node.js 22 LTS release."))?;
     let asset = node_asset(&version, std::env::consts::OS, std::env::consts::ARCH)
-        .ok_or("nodejs.org has no Node.js build for this system.")?;
+        .ok_or_else(|| t("nodejs.org has no Node.js build for this system."))?;
     let target = toolchain.join("node");
     let node =
         prefix_bin(&target, cfg!(windows)).join(if cfg!(windows) { "node.exe" } else { "node" });
@@ -356,18 +395,23 @@ pub fn install_node(log: &Log) -> Result<(), String> {
             .unwrap_or(&asset),
     );
     if !root.is_dir() {
-        return Err(format!("{asset} doesn't have the expected layout."));
+        return Err(t("{asset} doesn't have the expected layout.").replace("{asset}", &asset));
     }
     if target.exists() {
         fs::remove_dir_all(&target).map_err(|e| {
-            format!(
-                "Couldn't replace the previous Node.js in {} ({e}). Close anything using it and try again.",
-                target.display()
-            )
+            gentle_core::i18n::fill(t("Couldn't replace the previous Node.js in {path} ({error}). Close anything using it and try again."),
+                &[("path", &target.to_string_lossy()), ("error", &e.to_string())])
         })?;
     }
-    fs::rename(&root, &target)
-        .map_err(|e| format!("Couldn't move Node.js into {}: {e}", target.display()))?;
+    fs::rename(&root, &target).map_err(|e| {
+        gentle_core::i18n::fill(
+            t("Couldn't move Node.js into {path}: {error}"),
+            &[
+                ("path", &target.to_string_lossy()),
+                ("error", &e.to_string()),
+            ],
+        )
+    })?;
     log(format!(
         "Node.js {version} is installed in {}.",
         target.display()
@@ -381,13 +425,13 @@ pub fn install_node(log: &Log) -> Result<(), String> {
 pub fn engram_latest() -> Result<String, String> {
     parse_release(&get_text(ENGRAM_LATEST, true)?)
         .map(|release| release.version)
-        .ok_or_else(|| "GitHub's answer about Engram's latest release is unreadable.".into())
+        .ok_or_else(|| t("GitHub's answer about Engram's latest release is unreadable.").into())
 }
 
 /// The latest Engram release binary into `<toolchain>/bin`, verified when
 /// the release publishes checksums.
 pub fn install_engram_release(log: &Log) -> Result<(), String> {
-    let toolchain = toolchain_dir().ok_or("This system has no app data folder.")?;
+    let toolchain = require_toolchain()?;
     let (_staging, found, version) =
         download_engram(std::env::consts::OS, std::env::consts::ARCH, log)?;
     let exe = if cfg!(windows) {
@@ -411,18 +455,22 @@ pub fn download_engram(
     arch: &str,
     log: &Log,
 ) -> Result<(Staging, PathBuf, String), String> {
-    let toolchain = toolchain_dir().ok_or("This system has no app data folder.")?;
+    let toolchain = require_toolchain()?;
     log("Looking up the latest Engram release on GitHub…".into());
     let release = parse_release(&get_text(ENGRAM_LATEST, true)?)
-        .ok_or("GitHub's answer about Engram's latest release is unreadable.")?;
+        .ok_or_else(|| t("GitHub's answer about Engram's latest release is unreadable."))?;
     let name = engram_asset(&release.version, os, arch)
-        .ok_or("Engram publishes no build for this system.")?;
+        .ok_or_else(|| t("Engram publishes no build for this system."))?;
     let url = release
         .assets
         .iter()
         .find(|(n, _)| *n == name)
         .map(|(_, u)| u.clone())
-        .ok_or_else(|| format!("Engram {} has no {name}.", release.version))?;
+        .ok_or_else(|| {
+            t("Engram {version} has no {name}.")
+                .replace("{version}", &release.version)
+                .replace("{name}", &name)
+        })?;
     let sums_url = release
         .assets
         .iter()
@@ -446,7 +494,7 @@ pub fn download_engram(
     } else {
         "engram"
     };
-    let found = find_file(&unpacked, exe).ok_or_else(|| format!("{name} has no {exe}."))?;
+    let found = find_file(&unpacked, exe).ok_or_else(|| missing_entry(&name, exe))?;
     Ok((staging, found, release.version))
 }
 
@@ -454,7 +502,12 @@ pub fn download_engram(
 /// previous one in one step. Returns the bin folder.
 fn place_binary(toolchain: &Path, found: &Path, exe: &str) -> Result<PathBuf, String> {
     let bin = toolchain.join("bin");
-    fs::create_dir_all(&bin).map_err(|e| format!("Couldn't create {}: {e}", bin.display()))?;
+    fs::create_dir_all(&bin).map_err(|e| {
+        gentle_core::i18n::fill(
+            t("Couldn't create {path}: {error}"),
+            &[("path", &bin.to_string_lossy()), ("error", &e.to_string())],
+        )
+    })?;
     let target = bin.join(exe);
     let staged = bin.join(format!(".{exe}.new"));
     fs::copy(found, &staged)
@@ -466,7 +519,15 @@ fn place_binary(toolchain: &Path, found: &Path, exe: &str) -> Result<PathBuf, St
             }
             fs::rename(&staged, &target)
         })
-        .map_err(|e| format!("Couldn't install {}: {e}", target.display()))?;
+        .map_err(|e| {
+            gentle_core::i18n::fill(
+                t("Couldn't install {path}: {error}"),
+                &[
+                    ("path", &target.to_string_lossy()),
+                    ("error", &e.to_string()),
+                ],
+            )
+        })?;
     Ok(bin)
 }
 
@@ -501,9 +562,9 @@ pub fn merman_bin() -> Option<PathBuf> {
 /// merman's CLI into `<toolchain>/bin`, verified against the checksum its
 /// release publishes next to each archive.
 pub fn install_merman(log: &Log) -> Result<PathBuf, String> {
-    let toolchain = toolchain_dir().ok_or("This system has no app data folder.")?;
+    let toolchain = require_toolchain()?;
     let name = merman_asset(std::env::consts::OS, std::env::consts::ARCH)
-        .ok_or("The diagram renderer has no build for this system.")?;
+        .ok_or_else(|| t("The diagram renderer has no build for this system."))?;
     let url = format!("{MERMAN_RELEASES}/v{MERMAN_VERSION}/{name}");
     let sums = get_text(&format!("{url}.sha256"), false)?;
     let staging = Staging::new(&toolchain, "merman-download")?;
@@ -517,13 +578,17 @@ pub fn install_merman(log: &Log) -> Result<PathBuf, String> {
     let unpacked = staging.0.join("unpacked");
     extract(&archive, &unpacked)?;
     let exe = merman_exe();
-    let found = find_file(&unpacked, exe).ok_or_else(|| format!("{name} has no {exe}."))?;
+    let found = find_file(&unpacked, exe).ok_or_else(|| missing_entry(name, exe))?;
     let bin = place_binary(&toolchain, &found, exe)?;
     log(format!(
         "The diagram renderer is installed in {}.",
         bin.display()
     ));
     Ok(bin.join(exe))
+}
+
+fn missing_entry(name: &str, exe: &str) -> String {
+    gentle_core::i18n::fill(t("{name} has no {exe}."), &[("name", name), ("exe", exe)])
 }
 
 fn find_file(dir: &Path, name: &str) -> Option<PathBuf> {
@@ -542,21 +607,30 @@ fn find_file(dir: &Path, name: &str) -> Option<PathBuf> {
 
 /// Move the single folder an archive unpacked to into `target`, replacing
 /// what was there.
-fn install_root(unpacked: &Path, target: &Path, what: &str) -> Result<(), String> {
+fn install_root(unpacked: &Path, target: &Path, what: &'static str) -> Result<(), String> {
     let root = fs::read_dir(unpacked)
         .ok()
         .and_then(|entries| entries.flatten().map(|e| e.path()).find(|p| p.is_dir()))
-        .ok_or_else(|| format!("The {what} download doesn't have the expected layout."))?;
+        .ok_or_else(|| {
+            t("The {component} download doesn't have the expected layout.")
+                .replace("{component}", t(what))
+        })?;
     if target.exists() {
         fs::remove_dir_all(target).map_err(|e| {
-            format!(
-                "Couldn't replace the previous {what} in {} ({e}). Close anything using it and try again.",
-                target.display()
-            )
+            gentle_core::i18n::fill(t("Couldn't replace the previous {component} in {path} ({error}). Close anything using it and try again."),
+                &[("component", t(what)), ("path", &target.to_string_lossy()), ("error", &e.to_string())])
         })?;
     }
-    fs::rename(&root, target)
-        .map_err(|e| format!("Couldn't move {what} into {}: {e}", target.display()))
+    fs::rename(&root, target).map_err(|e| {
+        gentle_core::i18n::fill(
+            t("Couldn't move {component} into {path}: {error}"),
+            &[
+                ("component", t(what)),
+                ("path", &target.to_string_lossy()),
+                ("error", &e.to_string()),
+            ],
+        )
+    })
 }
 
 // ── Java and Maestro ───────────────────────────────────────────────────────
@@ -564,7 +638,7 @@ fn install_root(unpacked: &Path, target: &Path, what: &str) -> Result<(), String
 /// The latest Temurin JRE into `<toolchain>/java`, verified against the
 /// checksum Adoptium publishes. Never touches a system Java.
 pub fn install_java_runtime(log: &Log) -> Result<(), String> {
-    let toolchain = toolchain_dir().ok_or("This system has no app data folder.")?;
+    let toolchain = require_toolchain()?;
     install_java_runtime_into(
         &toolchain.join("java"),
         std::env::consts::OS,
@@ -581,23 +655,23 @@ pub fn install_java_runtime_into(
     arch: &str,
     log: &Log,
 ) -> Result<(), String> {
-    let toolchain = toolchain_dir().ok_or("This system has no app data folder.")?;
+    let toolchain = require_toolchain()?;
     let query = java_runtime_query(os, arch)
-        .ok_or("Adoptium publishes no Java runtime for this system.")?;
+        .ok_or_else(|| t("Adoptium publishes no Java runtime for this system."))?;
     log(format!(
         "Looking up the latest Java {JAVA_FEATURE} runtime on Adoptium…"
     ));
     let package = parse_java_runtime(&get_text(&query, false)?)
-        .ok_or("Adoptium's answer about its Java runtimes is unreadable.")?;
+        .ok_or_else(|| t("Adoptium's answer about its Java runtimes is unreadable."))?;
     let staging = Staging::new(&toolchain, "java-download")?;
     let archive = staging.0.join(&package.name);
     log(format!("Downloading {}…", package.name));
     let digest = download(&package.url, &archive, log)?;
     if digest != package.sha256 {
-        return Err(format!(
-            "{} doesn't match its published checksum; refusing to install it.",
-            package.name
-        ));
+        return Err(
+            t("{name} doesn't match its published checksum; refusing to install it.")
+                .replace("{name}", &package.name),
+        );
     }
     log("Checksum verified. Unpacking…".into());
     let unpacked = staging.0.join("unpacked");
@@ -611,7 +685,7 @@ pub fn install_java_runtime_into(
 /// The latest Maestro CLI release into `<toolchain>/maestro`, verified
 /// against the release's `checksums_sha256.txt`.
 pub fn install_maestro_release(log: &Log) -> Result<(), String> {
-    let toolchain = toolchain_dir().ok_or("This system has no app data folder.")?;
+    let toolchain = require_toolchain()?;
     install_maestro_into(&toolchain.join("maestro"), log)
 }
 
@@ -619,10 +693,10 @@ pub fn install_maestro_release(log: &Log) -> Result<(), String> {
 /// `target` here.
 pub fn install_maestro_into(target: &Path, log: &Log) -> Result<(), String> {
     const NAME: &str = "maestro.zip";
-    let toolchain = toolchain_dir().ok_or("This system has no app data folder.")?;
+    let toolchain = require_toolchain()?;
     log("Looking up the latest Maestro release on GitHub…".into());
     let release = parse_release(&get_text(MAESTRO_LATEST, true)?)
-        .ok_or("GitHub's answer about Maestro's latest release is unreadable.")?;
+        .ok_or_else(|| t("GitHub's answer about Maestro's latest release is unreadable."))?;
     let asset = |wanted: &str| {
         release
             .assets
@@ -630,12 +704,13 @@ pub fn install_maestro_into(target: &Path, log: &Log) -> Result<(), String> {
             .find(|(name, _)| name == wanted)
             .map(|(_, url)| url.clone())
     };
-    let url = asset(NAME).ok_or_else(|| format!("Maestro {} has no {NAME}.", release.version))?;
+    let url = asset(NAME).ok_or_else(|| {
+        t("Maestro {version} has no {name}.")
+            .replace("{version}", &release.version)
+            .replace("{name}", NAME)
+    })?;
     let sums = asset("checksums_sha256.txt").ok_or_else(|| {
-        format!(
-            "Maestro {} publishes no checksums; refusing to install an unverified download.",
-            release.version
-        )
+        t("Maestro {version} publishes no checksums; refusing to install an unverified download.").replace("{version}",&release.version)
     })?;
     let staging = Staging::new(&toolchain, "maestro-download")?;
     let archive = staging.0.join(NAME);
@@ -702,9 +777,14 @@ pub fn install_uv(target: &Path, log: &Log) -> Result<(), String> {
 /// The pinned uv built for `os` and `arch` into `target` here (a backend's
 /// is copied there from it), verified against the pinned checksum.
 pub fn download_uv(target: &Path, os: &str, arch: &str, log: &Log) -> Result<(), String> {
-    let (name, sha256) = uv_asset(os, arch).ok_or("uv has no build for this system.")?;
-    let dir = target.parent().ok_or("uv has nowhere to go.")?;
-    fs::create_dir_all(dir).map_err(|e| format!("Couldn't create {}: {e}", dir.display()))?;
+    let (name, sha256) = uv_asset(os, arch).ok_or_else(|| t("uv has no build for this system."))?;
+    let dir = target.parent().ok_or_else(|| t("uv has nowhere to go."))?;
+    fs::create_dir_all(dir).map_err(|e| {
+        gentle_core::i18n::fill(
+            t("Couldn't create {path}: {error}"),
+            &[("path", &dir.to_string_lossy()), ("error", &e.to_string())],
+        )
+    })?;
     let staging = Staging::new(dir, "uv-download")?;
     let archive = staging.0.join(name);
     log(format!("Downloading uv {UV_VERSION}…"));
@@ -714,19 +794,21 @@ pub fn download_uv(target: &Path, os: &str, arch: &str, log: &Log) -> Result<(),
         log,
     )?;
     if digest != sha256 {
-        return Err(format!(
-            "{name} doesn't match its pinned checksum; refusing to install it."
-        ));
+        return Err(
+            t("{name} doesn't match its pinned checksum; refusing to install it.")
+                .replace("{name}", name),
+        );
     }
     let unpacked = staging.0.join("unpacked");
     extract(&archive, &unpacked)?;
-    let uv = find_file(&unpacked, "uv").ok_or("The uv download has no uv executable.")?;
-    fs::copy(&uv, target).map_err(|e| format!("Couldn't install uv: {e}"))?;
+    let uv =
+        find_file(&unpacked, "uv").ok_or_else(|| t("The uv download has no uv executable."))?;
+    fs::copy(&uv, target).map_err(|e| detail("Couldn't install uv", e))?;
     #[cfg(unix)]
     {
         use std::os::unix::fs::PermissionsExt as _;
         fs::set_permissions(target, fs::Permissions::from_mode(0o755))
-            .map_err(|e| format!("Couldn't make uv executable: {e}"))?;
+            .map_err(|e| detail("Couldn't make uv executable", e))?;
     }
     Ok(())
 }

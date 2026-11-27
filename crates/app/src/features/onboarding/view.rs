@@ -12,7 +12,7 @@ use super::checks::{Tone, all_set, install_plan, is_ok, required_ok, status_text
 use super::{Mode, OnboardingEvent, OnboardingView};
 use crate::features::setup::{Check, Fix, Need, Status};
 use crate::shared::banner::badge;
-use crate::shared::ui;
+use crate::shared::{i18n::t, ui};
 
 /// Install output lines a running row shows.
 const LOG_LINES: usize = 8;
@@ -83,7 +83,7 @@ impl OnboardingView {
                     .text_xl()
                     .font_weight(FontWeight::SEMIBOLD)
                     .text_color(ui::fg())
-                    .child(title),
+                    .child(t(title)),
             )
             .child(
                 div()
@@ -91,14 +91,14 @@ impl OnboardingView {
                     .text_sm()
                     .text_center()
                     .text_color(ui::muted())
-                    .child(line),
+                    .child(t(line)),
             )
             .child(
                 h_flex()
                     .pt_1()
                     .gap_2()
-                    .when_some(self.platform.clone(), |d, platform| {
-                        d.child(ui::chip(platform, ui::petal()))
+                    .when_some(self.platform.as_ref(), |d, platform| {
+                        d.child(ui::chip(platform.label(), ui::petal()))
                     })
                     .when(self.checking && self.checks.is_some(), |d| {
                         d.child(
@@ -107,7 +107,7 @@ impl OnboardingView {
                                 .text_xs()
                                 .text_color(ui::faint())
                                 .child(Spinner::new().xsmall().color(ui::faint()))
-                                .child("Checking again…"),
+                                .child(t("Checking again…")),
                         )
                     }),
             )
@@ -171,18 +171,23 @@ impl OnboardingView {
                                             .text_sm()
                                             .font_weight(FontWeight::MEDIUM)
                                             .text_color(ui::fg())
-                                            .child(check.title),
+                                            .child(t(check.title)),
                                     )
                                     .child(ui::chip(label, if mine { ui::petal() } else { color })),
                             )
-                            .child(div().text_xs().text_color(ui::muted()).child(check.summary))
+                            .child(
+                                div()
+                                    .text_xs()
+                                    .text_color(ui::muted())
+                                    .child(t(check.summary)),
+                            )
                             .child(
                                 div()
                                     .text_size(ui::code_rems(12.))
                                     .font_family(ui::mono())
                                     .text_color(ui::faint())
                                     .truncate()
-                                    .child(status_text(&check.status).to_string()),
+                                    .child(status_text(&check.status)),
                             ),
                     )
                     .children(action),
@@ -217,7 +222,7 @@ impl OnboardingView {
                 .font_family(ui::mono())
                 .text_size(ui::code_rems(12.))
                 .when(self.log.is_empty() && mine, |d| {
-                    d.child(div().text_color(ui::faint()).child("Starting…"))
+                    d.child(div().text_color(ui::faint()).child(t("Starting…")))
                 })
                 .children(
                     self.log[start..]
@@ -250,11 +255,11 @@ impl OnboardingView {
                             Status::Failed(_) => IconName::RefreshCw,
                             _ => IconName::ArrowDown,
                         }))
-                        .label(match check.status {
+                        .label(t(match check.status {
                             Status::Failed(_) => "Retry",
                             Status::Outdated(_) => "Update",
                             _ => "Install",
-                        })
+                        }))
                         .loading(mine)
                         .disabled(busy)
                         .on_click(cx.listener(move |this, _, _, cx| this.install(id, cx)));
@@ -271,7 +276,7 @@ impl OnboardingView {
                             .small()
                             .ghost()
                             .icon(Icon::new(IconName::SquareTerminal))
-                            .label("Open terminal")
+                            .label(t("Open terminal"))
                             .tooltip(command.clone())
                             .disabled(busy)
                             .on_click(cx.listener(move |_, _, _, cx| {
@@ -284,7 +289,7 @@ impl OnboardingView {
                         .small()
                         .primary()
                         .icon(Icon::new(IconName::KeyRound))
-                        .label("Sign in")
+                        .label(t("Sign in"))
                         .disabled(busy)
                         .on_click(cx.listener(|_, _, _, cx| cx.emit(OnboardingEvent::SignIn))),
                 ),
@@ -317,7 +322,7 @@ impl OnboardingView {
             column = column.child(
                 v_flex()
                     .gap_2()
-                    .child(div().px_1().child(ui::section_label(label)))
+                    .child(div().px_1().child(ui::section_label(t(label))))
                     .child(
                         ui::island(cx)
                             .p(rems(6. / 16.))
@@ -342,7 +347,7 @@ impl OnboardingView {
                     .small()
                     .ghost()
                     .icon(Icon::new(IconName::RefreshCw))
-                    .label("Check again")
+                    .label(t("Check again"))
                     .loading(self.checking)
                     .disabled(busy || self.checking)
                     .on_click(cx.listener(|this, _, _, cx| this.refresh(cx))),
@@ -353,7 +358,7 @@ impl OnboardingView {
                     Button::new("onboarding-skip")
                         .small()
                         .ghost()
-                        .label("Skip for now")
+                        .label(t("Skip for now"))
                         .disabled(busy)
                         .on_click(cx.listener(|_, _, _, cx| cx.emit(OnboardingEvent::Close))),
                 )
@@ -364,11 +369,11 @@ impl OnboardingView {
                         .small()
                         .primary()
                         .icon(Icon::new(IconName::ArrowDown))
-                        .label(if busy {
+                        .label(t(if busy {
                             "Installing…"
                         } else {
                             "Install everything"
-                        })
+                        }))
                         .loading(busy)
                         .disabled(busy || self.checking)
                         .on_click(cx.listener(|this, _, _, cx| this.install_all(cx))),
@@ -378,7 +383,7 @@ impl OnboardingView {
                 let button = Button::new("onboarding-continue")
                     .small()
                     .icon(Icon::new(IconName::ArrowRight))
-                    .label("Continue")
+                    .label(t("Continue"))
                     .disabled(busy || !ready)
                     .on_click(cx.listener(|this, _, _, cx| this.finish(cx)));
                 if plan.is_empty() && !busy {
@@ -398,8 +403,12 @@ impl OnboardingView {
             .pb_3()
             .gap_2()
             .items_center()
-            .when_some(self.platform.clone(), |d, platform| {
-                d.child(ui::chip(platform, ui::muted()).border_0().rounded_full())
+            .when_some(self.platform.as_ref(), |d, platform| {
+                d.child(
+                    ui::chip(platform.label(), ui::muted())
+                        .border_0()
+                        .rounded_full(),
+                )
             })
             .child(div().flex_1())
             .child(
@@ -407,7 +416,7 @@ impl OnboardingView {
                     .small()
                     .ghost()
                     .icon(Icon::new(IconName::RefreshCw))
-                    .label("Check again")
+                    .label(t("Check again"))
                     .loading(self.checking)
                     .disabled(busy || self.checking)
                     .on_click(cx.listener(|this, _, _, cx| this.refresh(cx))),
@@ -418,11 +427,11 @@ impl OnboardingView {
                         .small()
                         .primary()
                         .icon(Icon::new(IconName::ArrowDown))
-                        .label(if busy {
+                        .label(t(if busy {
                             "Installing…"
                         } else {
                             "Install everything"
-                        })
+                        }))
                         .loading(busy)
                         .disabled(busy || self.checking)
                         .on_click(cx.listener(|this, _, _, cx| this.install_all(cx))),
@@ -444,7 +453,7 @@ impl Render for OnboardingView {
                 .text_sm()
                 .text_color(ui::muted())
                 .child(Spinner::new().small().color(ui::petal()))
-                .child("Checking Node, Gentle Shell and the rest…")
+                .child(t("Checking Node, Gentle Shell and the rest…"))
                 .into_any_element(),
             Some(checks) => self.render_checks(checks, cx).into_any_element(),
         };
@@ -494,11 +503,11 @@ impl Render for OnboardingView {
 
 /// The chip a check wears: Installing while it runs, else its status.
 pub(super) fn status_label(status: &Status, installing: bool) -> &'static str {
-    match (status, installing) {
+    t(match (status, installing) {
         (_, true) => "Installing",
         (Status::Ok(_), _) => "Ready",
         (Status::Missing(_), _) => "Missing",
         (Status::Outdated(_), _) => "Outdated",
         (Status::Failed(_), _) => "Failed",
-    }
+    })
 }

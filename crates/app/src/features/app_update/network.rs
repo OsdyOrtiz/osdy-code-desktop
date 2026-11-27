@@ -30,14 +30,14 @@ fn get(agent: &ureq::Agent, url: &str) -> Result<ureq::http::Response<ureq::Body
         .get(url)
         .header("User-Agent", USER_AGENT)
         .call()
-        .map_err(|e| Problem::new(format!("Couldn't reach GitHub: {e}")))?;
+        .map_err(|e| Problem::new("Couldn't reach GitHub").cause(e))?;
     let status = response.status().as_u16();
     if (200..300).contains(&status) {
         Ok(response)
     } else {
-        Err(Problem::new(format!(
-            "GitHub answered HTTP {status} for {url}"
-        )))
+        Err(Problem::new("GitHub answered HTTP {status} for {url}")
+            .arg("{status}", status)
+            .arg("{url}", url))
     }
 }
 
@@ -49,7 +49,7 @@ pub(super) fn fetch_release() -> Result<Release, Problem> {
             .header("Accept", "application/vnd.github+json")
             .header("X-GitHub-Api-Version", "2022-11-28")
             .call()
-            .map_err(|e| Problem::new(format!("Couldn't reach GitHub: {e}")))
+            .map_err(|e| Problem::new("Couldn't reach GitHub").cause(e))
     })
 }
 
@@ -65,12 +65,14 @@ fn fetch_release_with(
                 "GitHub's rate limit was hit; try again in a while.",
             ));
         }
-        status => return Err(Problem::new(format!("GitHub answered HTTP {status}."))),
+        status => {
+            return Err(Problem::new("GitHub answered HTTP {status}.").arg("{status}", status));
+        }
     }
     let body = response
         .body_mut()
         .read_to_string()
-        .map_err(|e| Problem::new(format!("Couldn't read GitHub's answer: {e}")))?;
+        .map_err(|e| Problem::new("Couldn't read GitHub's answer").cause(e))?;
     parse_release(&body)
         .ok_or_else(|| Problem::new("GitHub's latest release is not a stable vX.Y.Z release."))
 }
@@ -97,7 +99,7 @@ pub(super) fn download(
     loop {
         let n = reader
             .read(&mut buf)
-            .map_err(|e| Problem::new(format!("The download was interrupted: {e}")))?;
+            .map_err(|e| Problem::new("The download was interrupted").cause(e))?;
         if n == 0 {
             break;
         }
@@ -125,7 +127,11 @@ pub(super) fn fetch_text(url: &str) -> Result<String, Problem> {
     get(&agent(false), url)?
         .body_mut()
         .read_to_string()
-        .map_err(|e| Problem::new(format!("Couldn't read {SUMS}: {e}")))
+        .map_err(|e| {
+            Problem::new("Couldn't read {file}")
+                .arg("{file}", SUMS)
+                .cause(e)
+        })
 }
 
 #[cfg(test)]

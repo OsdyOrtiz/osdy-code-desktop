@@ -8,7 +8,8 @@ use gpui_kit::component::{Icon, Sizable as _, h_flex, v_flex};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
 
-use super::{ProvidersEvent, ProvidersView};
+use super::{ProvidersEvent, ProvidersView, SignInError};
+use crate::shared::i18n::{sync_placeholder, t};
 use crate::shared::ui;
 
 /// Rounded initial badge for a provider.
@@ -63,7 +64,14 @@ pub(super) fn notice(icon: IconName, color: Hsla, text: String) -> Div {
 }
 
 impl Render for ProvidersView {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        sync_placeholder(
+            &self.filter,
+            "Search providers",
+            &mut self.filter_language,
+            window,
+            cx,
+        );
         let listing = self.flow.is_none() && !(self.error.is_some() && self.helper.is_none());
         let body: AnyElement = if let Some((cwd, label)) = &self.remote {
             let (cwd, label) = (cwd.clone(), label.clone());
@@ -72,10 +80,11 @@ impl Render for ProvidersView {
                 .child(notice(
                     IconName::SquareTerminal,
                     ui::accent(),
-                    format!(
+                    t(
                         "Agents here run on {label}, so they sign in there: open Gentle Shell \
-                         in a terminal on {label} and run /login. Credentials go to its auth.json."
-                    ),
+                       in a terminal on {label} and run /login. Credentials go to its auth.json.",
+                    )
+                    .replace("{label}", &label),
                 ))
                 .child(
                     h_flex().child(
@@ -83,7 +92,7 @@ impl Render for ProvidersView {
                             .primary()
                             .small()
                             .icon(Icon::new(IconName::SquareTerminal))
-                            .label(format!("Open a terminal on {label}"))
+                            .label(t("Open a terminal on {label}").replace("{label}", &label))
                             .on_click(cx.listener(move |_, _, _, cx| {
                                 cx.emit(ProvidersEvent::Terminal(
                                     cwd.clone(),
@@ -96,7 +105,11 @@ impl Render for ProvidersView {
         } else if let Some(error) = &self.error
             && self.helper.is_none()
         {
-            notice(IconName::CircleAlert, ui::danger(), error.clone()).into_any_element()
+            let text = match error {
+                SignInError::HelperStopped => t("The sign-in helper stopped.").into(),
+                SignInError::Detail(detail) => detail.clone(),
+            };
+            notice(IconName::CircleAlert, ui::danger(), text).into_any_element()
         } else if let Some(flow) = &self.flow {
             self.render_flow(flow, cx).into_any_element()
         } else if self.providers.is_empty() {
@@ -107,7 +120,7 @@ impl Render for ProvidersView {
                 .text_sm()
                 .text_color(ui::muted())
                 .child(Spinner::new().small().color(ui::accent()))
-                .child("Loading providers…")
+                .child(t("Loading providers…"))
                 .into_any_element()
         } else {
             self.render_list(cx).into_any_element()
@@ -132,7 +145,7 @@ impl Render for ProvidersView {
                                 .text_base()
                                 .font_weight(FontWeight::SEMIBOLD)
                                 .text_color(ui::fg())
-                                .child("Providers"),
+                                .child(t("Providers")),
                         )
                         .child(
                             div()
@@ -141,7 +154,9 @@ impl Render for ProvidersView {
                                 .truncate()
                                 .text_xs()
                                 .text_color(ui::muted())
-                                .child("Credentials go to Gentle Shell's auth.json, like /login."),
+                                .child(t(
+                                    "Credentials go to Gentle Shell's auth.json, like /login.",
+                                )),
                         )
                         .child(
                             Button::new("providers-close")
@@ -189,7 +204,7 @@ impl Render for ProvidersView {
                                     } else {
                                         IconName::X
                                     }))
-                                    .label(if finished { "Back" } else { "Cancel" })
+                                    .label(t(if finished { "Back" } else { "Cancel" }))
                                     .on_click(cx.listener(|this, _, _, cx| this.cancel_flow(cx))),
                             ),
                     )
