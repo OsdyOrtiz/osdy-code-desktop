@@ -612,7 +612,7 @@ App paths: `dirs::data_dir()/osdy-code-desktop/` (on macOS, `~/Library/Applicati
 
 | File | Owner | Read / write | Module |
 | --- | --- | --- | --- |
-| `<data>/osdy-code-desktop/settings.json` (`theme`, `transparency`, `blur`, `opacity`, `interfaceScale`, `interfaceFont`, `codeFont`, `terminalFont`, `codeFontSize`, `terminalFontSize`, `composerParticles`, `onboarding`, `browserProfiles`, `changesGroupByFolder`) | App | R/W | `shared/themes.rs` (`store_path`, `write_key`, `write_glass`, `write_fonts` through `apply_fonts`), `shared/kisses.rs` (`set_typing`), `features/setup/mod.rs` (`first_run`, `mark_done`), `features/browser/mod.rs` (`add_named_profile`), `features/files/changes.rs` (`write_group_by_folder`) |
+| `<data>/osdy-code-desktop/settings.json` (`theme`, `transparency`, `blur`, `opacity`, `interfaceScale`, `interfaceFont`, `codeFont`, `terminalFont`, `codeFontSize`, `terminalFontSize`, `composerParticles`, `onboarding`, `browserProfiles`, `changesGroupByFolder`) | App | R/W | `shared/themes.rs` (`store_path`, `write_key`, `write_glass`, `write_fonts` through `apply_fonts`), `shared/kisses.rs` (`set_typing` for Typing paws & notes), `features/setup/mod.rs` (`first_run`, `mark_done`), `features/browser/mod.rs` (`add_named_profile`), `features/files/changes.rs` (`write_group_by_folder`) |
 | `<data>/osdy-code-desktop/workspaces.json` | App | R/W | `features/workspaces/store.rs` |
 | `<data>/osdy-code-desktop/app-update.json` | App | R/W | `features/app_update/cache.rs` |
 | `<data>/osdy-code-desktop/engram-update.json` (`checkedAt`, `latest`, `skipped`) | App | R/W | `features/updates/engram.rs` |
@@ -635,7 +635,7 @@ App paths: `dirs::data_dir()/osdy-code-desktop/` (on macOS, `~/Library/Applicati
 | Launcher `config.json` (`mode`, `dir`): `pi_rpc::launcher_config_path()`, `GENTLE_SHELL_CONFIG` or `~/.gentle-shell/config.json` | Launcher | R | `pi-rpc/home.rs` |
 | Launcher `config.json` (`startupReleaseCheck`, `skippedStartupRelease`) | Launcher, shared | R/W | `features/updates/` (same `launcher_config_path()`) |
 | `<agent>/auth.json` | Pi | R (Pi writes it via `login-helper.mjs`; Configuration's Sign-ins and provider check use `get_auth_status` when the active tab's Shell advertises it) | `usage/credentials.rs`, `settings/snapshot.rs`, `setup/extras.rs` |
-| `<agent>/settings.json` | Pi | R/W | `themes.rs` (`theme`), `sessions/discovery.rs` (`sessionDir`), `profiles/files.rs` (orchestrator), `setup/gentle.rs` (`packages`) |
+| `<agent>/settings.json` | Pi | R/W | `sessions/discovery.rs` (`sessionDir`), `profiles/files.rs` (orchestrator), `setup/gentle.rs` (`packages`) |
 | `<agent>/models.json`, `<agent>/mcp.json` | Pi | R (`mcp.json` changes only through `gentle-shell mcp add`, so Pi writes it) | `settings/snapshot.rs`, `setup/extras.rs`, `setup/maestro.rs` |
 | `<agent>/subagents.json`, `<cwd>/.pi/subagents.json` | Gentle AI | R/W (over RPC, read as the `subagents` store; written only by Make default) | `profiles/env.rs`, `profiles/apply.rs` |
 | `<agent>/gentle-ai/managed-assets.json` | Gentle AI installer | R/W (over RPC, read as the `managed_assets` store; written only by Make default) | `profiles/apply.rs` |

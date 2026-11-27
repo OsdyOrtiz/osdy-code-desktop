@@ -1,7 +1,6 @@
-//! Pixel kisses: Gentle Shell's lips and heart sprites, painted dot by dot.
-//! The welcome finale blows a handful from the rose; the composer blows
-//! small ones from the caret while you type, unless Configuration turned
-//! them off (`gentle_core::typing_kisses`).
+//! Pixel sprites painted dot by dot: paws and notes for the welcome and
+//! composer flights, a heart for the finale stamp, and a shared painter
+//! for the hydration drops.
 
 use gentle_core::typing_kisses::{self, TypingKisses};
 use gpui_kit::*;
@@ -12,43 +11,86 @@ struct TypingChoice(TypingKisses);
 
 impl Global for TypingChoice {}
 
-/// Read the saved choice for the composer's kisses.
+/// Read the saved choice for the composer's typing particles.
 pub fn init(cx: &mut App) {
     let saved = themes::store_path().and_then(|path| themes::read_key(&path, typing_kisses::KEY));
     cx.set_global(TypingChoice(TypingKisses::from_json(saved.as_ref())));
 }
 
-/// The composer's kisses as chosen in Configuration.
+/// The composer's typing particles as chosen in Configuration.
 pub fn typing(cx: &App) -> TypingKisses {
     cx.try_global::<TypingChoice>()
         .map_or_else(TypingKisses::default, |c| c.0)
 }
 
-/// Choose and save whether the composer blows kisses.
+/// Choose and save whether the composer shows typing particles.
 pub fn set_typing(choice: TypingKisses, cx: &mut App) {
     cx.set_global(TypingChoice(choice));
     if let Some(path) = themes::store_path()
         && let Err(err) = themes::write_key(&path, typing_kisses::KEY, choice.to_json())
     {
-        eprintln!("gentle-shell-gpui: could not save the typing kisses: {err}");
+        eprintln!("gentle-shell-gpui: could not save the typing paws & notes setting: {err}");
     }
 }
 
-/// Pixel lips: `#` the lips, `o` the line between them.
-pub const LIPS: [&str; 6] = [
-    "..###.###..",
-    ".#########.",
-    "###########",
-    "#ooooooooo#",
-    ".#########.",
-    "..#######..",
+// In these grids, # is the fill, o the darker edge, and . is transparent.
+const PAW: [&str; 8] = [
+    "..oo.oo..",
+    "..##.##..",
+    "oo.....oo",
+    "#o..o..o#",
+    "...o#o...",
+    "..o###o..",
+    ".o#####o.",
+    "..ooooo..",
 ];
-/// A pixel heart.
+const EIGHTH_NOTE: [&str; 8] = [
+    "...o..", "...#o.", "...##o", "...#.o", "...#..", ".oo#..", "o###..", ".oo...",
+];
+const BEAMED_NOTES: [&str; 8] = [
+    ".....oooo",
+    "..o######",
+    "..###o..#",
+    "..#.....#",
+    "..#...oo#",
+    "oo#..o###",
+    "###...oo.",
+    ".oo......",
+];
+/// The welcome finale's heart stamp.
 pub const HEART: [&str; 6] = [
     ".##.##.", "#######", "#######", ".#####.", "..###..", "...#...",
 ];
 
-/// A stable pseudo-random value in 0..1 for kiss `i`'s `salt`.
+fn particle(i: usize) -> (&'static [&'static str], u32, u32) {
+    if i.is_multiple_of(2) {
+        (&PAW, 0xbb9af7, 0x7652a4)
+    } else {
+        let sprite = if i % 4 == 1 {
+            &EIGHTH_NOTE[..]
+        } else {
+            &BEAMED_NOTES[..]
+        };
+        (sprite, 0x7dcfff, 0x386b92)
+    }
+}
+
+/// Paint the shared flight mix: a paw every other particle, with two note shapes.
+pub fn paint_particle(window: &mut Window, i: usize, center: Point<Pixels>, dot: f32, alpha: f32) {
+    let (sprite, body, line) = particle(i);
+    let body: Hsla = rgb(body).into();
+    let line: Hsla = rgb(line).into();
+    paint_sprite(
+        window,
+        sprite,
+        center,
+        dot,
+        body.opacity(alpha),
+        line.opacity(alpha),
+    );
+}
+
+/// A stable pseudo-random value in 0..1 for particle `i`'s `salt`.
 pub fn noise(i: usize, salt: u32) -> f32 {
     let mut x = (i as u32).wrapping_mul(0x9E37_79B9) ^ salt.wrapping_mul(0x85EB_CA6B);
     x ^= x >> 15;
@@ -82,6 +124,46 @@ pub fn paint_sprite(
                 Bounds::new(origin, size(px(dot * 0.9), px(dot * 0.9))),
                 color,
             ));
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{HEART, particle};
+
+    fn particle_sprite(i: usize) -> &'static [&'static str] {
+        particle(i).0
+    }
+
+    #[test]
+    fn flight_selection_alternates_paws_and_notes_deterministically() {
+        let paw = particle_sprite(0);
+        let run: Vec<_> = (0..64).map(particle).collect();
+        assert_eq!(run, (0..64).map(particle).collect::<Vec<_>>());
+        for (i, (sprite, body, _)) in run.into_iter().enumerate() {
+            let even = i.is_multiple_of(2);
+            assert_eq!(sprite == paw, even);
+            assert_eq!(body, if even { 0xbb9af7 } else { 0x7dcfff });
+        }
+    }
+
+    #[test]
+    fn particle_grids_include_a_paw_and_two_well_formed_notes() {
+        let sprites: std::collections::HashSet<_> = (0..64).map(particle_sprite).collect();
+        assert_eq!(sprites.len(), 3);
+        let mut widths: Vec<_> = sprites.iter().map(|rows| rows[0].len()).collect();
+        widths.sort_unstable();
+        assert_eq!(widths, [6, 9, 9]);
+        assert!(sprites.iter().all(|sprite| sprite.len() == 8));
+        for sprite in sprites.into_iter().chain([HEART.as_slice()]) {
+            assert!(sprite.iter().all(|row| row.len() == sprite[0].len()));
+            assert!(
+                sprite
+                    .iter()
+                    .flat_map(|row| row.bytes())
+                    .all(|cell| matches!(cell, b'#' | b'o' | b'.' | b' '))
+            );
         }
     }
 }

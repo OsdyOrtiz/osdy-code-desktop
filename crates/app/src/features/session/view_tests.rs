@@ -3748,11 +3748,12 @@ impl gpui_kit::Render for Pane {
 }
 
 /// A pane whose tab has a ready backend and its composer focused, with
-/// typing kisses on (the default) unless `reduce_motion`.
+/// typing particles on (the default) unless `reduce_motion`.
 #[cfg(unix)]
 fn typing_pane(
     cx: &mut TestAppContext,
     reduce_motion: bool,
+    empty: bool,
 ) -> (Entity<SessionView>, &mut VisualTestContext, Backend) {
     use gpui_kit::AppContext as _;
     cx.update(|cx| {
@@ -3764,6 +3765,12 @@ fn typing_pane(
         Pane(cx.new(|cx| {
             let mut view = SessionView::new(cwd, None, window, cx, false);
             view.backend.started = true;
+            // Composer assertions measure only the focus pulse and particles.
+            // An empty tab also has an independently animated hero.
+            if !empty {
+                view.transcript
+                    .load_messages(&[json!({"role": "user", "content": "Earlier prompt"})]);
+            }
             view
         }))
     });
@@ -3777,7 +3784,9 @@ fn typing_pane(
     cx.run_until_parked();
     // The focus pulse plays out first.
     frames_for(std::time::Duration::from_millis(600), cx);
-    assert_eq!(cx.update(|window, cx| window.simulate_next_frame(cx)), 0);
+    if !empty {
+        assert_eq!(cx.update(|window, cx| window.simulate_next_frame(cx)), 0);
+    }
     (view, cx, backend)
 }
 
@@ -3795,12 +3804,24 @@ fn frames_for(span: std::time::Duration, cx: &mut VisualTestContext) -> usize {
     asked
 }
 
-/// Typing blows a kiss from the caret; it flies while it lives (frames are
+/// The empty hero keeps animating without invalidating the cached session pane.
+#[cfg(unix)]
+#[gpui::test]
+fn the_hero_banner_animates_without_redrawing_the_pane(cx: &mut TestAppContext) {
+    let (view, cx, backend) = typing_pane(cx, false, true);
+    let renders = || super::view::RENDERS.with(std::cell::Cell::get);
+    let before = renders();
+    assert!(frames_for(std::time::Duration::from_millis(200), cx) > 0);
+    assert_eq!(renders(), before);
+    backend.stop(&view, cx);
+}
+
+/// Typing emits a particle from the caret; it flies while it lives (frames are
 /// asked for) and lands after its 900 ms (none are).
 #[cfg(unix)]
 #[gpui::test]
-fn a_typed_kiss_rises_from_the_caret_and_lands(cx: &mut TestAppContext) {
-    let (view, cx, backend) = typing_pane(cx, false);
+fn a_typing_particle_rises_from_the_caret_and_lands(cx: &mut TestAppContext) {
+    let (view, cx, backend) = typing_pane(cx, false, false);
     let caret = view.read_with(cx, |view, cx| {
         let caret = view.composer.read(cx).prepaint_caret_geometry();
         caret
@@ -3809,38 +3830,38 @@ fn a_typed_kiss_rises_from_the_caret_and_lands(cx: &mut TestAppContext) {
             .origin
     });
     cx.simulate_keystrokes("a");
-    let blown: Vec<_> = view.read_with(cx, |view, _| {
-        view.kisses.iter().map(|(_, at, _)| *at).collect()
+    let origins: Vec<_> = view.read_with(cx, |view, _| {
+        view.typing_particles.iter().map(|(_, at, _)| *at).collect()
     });
-    assert_eq!(blown, [caret]);
+    assert_eq!(origins, [caret]);
     assert!(frames_for(std::time::Duration::from_millis(200), cx) > 0);
     frames_for(std::time::Duration::from_millis(900), cx);
     assert_eq!(cx.update(|window, cx| window.simulate_next_frame(cx)), 0);
     backend.stop(&view, cx);
 }
 
-/// With reduced motion the composer blows no kiss and asks for no frame.
+/// With reduced motion the composer emits no particles and asks for no frame.
 #[cfg(unix)]
 #[gpui::test]
-fn reduced_motion_blows_no_kiss(cx: &mut TestAppContext) {
-    let (view, cx, backend) = typing_pane(cx, true);
+fn reduced_motion_emits_no_typing_particle(cx: &mut TestAppContext) {
+    let (view, cx, backend) = typing_pane(cx, true, false);
     cx.simulate_keystrokes("a");
-    assert!(view.read_with(cx, |view, _| view.kisses.is_empty()));
+    assert!(view.read_with(cx, |view, _| view.typing_particles.is_empty()));
     assert_eq!(cx.update(|window, cx| window.simulate_next_frame(cx)), 0);
     backend.stop(&view, cx);
 }
 
-/// A kiss's flight redraws only the tab's live layer: the conversation is
-/// drawn for the keystroke and reused from its cache while the kiss flies.
+/// A particle's flight redraws only the tab's live layer: the conversation
+/// is drawn for the keystroke and reused from its cache while it flies.
 #[cfg(unix)]
 #[gpui::test]
-fn a_typed_kiss_redraws_only_the_live_layer(cx: &mut TestAppContext) {
-    let (view, cx, backend) = typing_pane(cx, false);
+fn a_typing_particle_redraws_only_the_live_layer(cx: &mut TestAppContext) {
+    let (view, cx, backend) = typing_pane(cx, false, false);
     let renders = || super::view::RENDERS.with(std::cell::Cell::get);
     cx.simulate_keystrokes("a");
     // The keystroke draws the tab, and so does the next frame: an edit
     // leaves it to draw once more, as the text area reports its moved caret
-    // while it paints (gpui-base's input element), kiss or no kiss.
+    // while it paints (gpui-base's input element), with or without particles.
     assert!(cx.update(|window, cx| window.simulate_next_frame(cx)) > 0);
     cx.run_until_parked();
     let flying = renders();
@@ -4233,4 +4254,21 @@ fn backend_exit_clears_the_background_light(cx: &mut TestAppContext) {
         view.handle_batch(vec![pi_rpc::Incoming::Exited(None)], window, cx);
         assert!(view.chrome.as_ref().unwrap().background.is_idle());
     });
+}
+
+#[cfg(unix)]
+#[gpui::test]
+fn reduced_motion_keeps_the_empty_hero_quiet(cx: &mut TestAppContext) {
+    let (view, cx, backend) = typing_pane(cx, true, true);
+    cx.update(|_, cx| {
+        view.update(cx, |view, cx| {
+            view.banner = crate::shared::banner::BannerConfig::default();
+            cx.notify();
+        });
+    });
+    cx.run_until_parked();
+    frames_for(std::time::Duration::from_millis(600), cx);
+    assert!(view.read_with(cx, |view, _| view.hero_shown()));
+    assert_eq!(frames_for(std::time::Duration::from_millis(200), cx), 0);
+    backend.stop(&view, cx);
 }

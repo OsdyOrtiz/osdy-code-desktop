@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Regenerates every checked-in icon from crates/app/src/shared/banner.rs.
+# Regenerates every checked-in icon from assets/mascot/osdy-code.png.
 # macOS only (AppKit renders the SVG; iconutil builds the .icns).
 # CI never runs this: the outputs are committed.
 set -euo pipefail

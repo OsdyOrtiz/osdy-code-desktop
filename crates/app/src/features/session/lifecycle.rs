@@ -48,34 +48,6 @@ impl SessionView {
             return;
         }
         self.start(window, cx);
-        self.animate_banner(cx);
-    }
-
-    /// Bloom the rose and write the wordmark in over
-    /// [`crate::shared::banner::WRITE`]; the banner paces it.
-    fn animate_banner(&mut self, cx: &mut Context<Self>) {
-        self.banner_reveal = 0.0;
-        self._banner_anim = cx.spawn(async move |this, cx| {
-            const FRAME: Duration = Duration::from_millis(16);
-            let frames = (crate::shared::banner::WRITE.as_millis() / FRAME.as_millis()) as u32;
-            for frame in 1..=frames {
-                cx.background_executor().timer(FRAME).await;
-                crate::shared::diagnostics::tick();
-                let t = frame as f32 / frames as f32;
-                if this
-                    .update(cx, |this, cx| {
-                        this.banner_reveal = t;
-                        // Only the hero shows the banner: repaint just this pane, and only then.
-                        if this.hero_shown() {
-                            cx.notify();
-                        }
-                    })
-                    .is_err()
-                {
-                    return;
-                }
-            }
-        });
     }
 
     /// Without Gentle Shell's `reload_credentials`, new credentials only

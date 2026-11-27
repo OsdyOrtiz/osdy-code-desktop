@@ -1,4 +1,4 @@
-//! Design system: the active theme (`themes.rs`, Gentleman-Cute by default)
+//! Design system: the active theme (`themes.rs`, Tokyo Night by default)
 //! as translucent glass, the gpui-component theme mapped onto it so every
 //! stock button, input and menu matches, and shared building blocks
 //! (cards, chips, key caps, section labels, entrance animations).

@@ -1,6 +1,5 @@
-//! Render: the full-window frame with its glow, the banner writing itself in
-//! (green once everything required is ready), the heading, the install
-//! sequence, and the footer. ↵ is the main button.
+//! Render: the full-window glow, animated brand banner, heading, install
+//! sequence, and footer. ↵ is the main button.
 
 use gpui_kit::assets::IconName;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
@@ -9,7 +8,7 @@ use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
 
 use super::{AFTER_INTRO, WelcomeView, finale};
-use crate::shared::banner::{Palette, WRITE, banner};
+use crate::shared::banner::{WRITE, banner};
 use crate::shared::ui;
 
 /// The client-drawn title bar (Windows, Linux) keeps its window controls
@@ -20,26 +19,21 @@ const TITLE_BAR: f32 = 36.;
 const BANNER_SCALE: f32 = 2.6;
 
 impl WelcomeView {
-    fn render_banner(&self, ready: bool) -> AnyElement {
-        let mut config = self.banner;
-        if ready {
-            // Everything required is in place: the rose blooms green.
-            config.palette = Palette::Green;
-            return ui::pop_in(
-                "welcome-banner-ready",
-                div().child(banner(config, BANNER_SCALE, 1.)),
-            )
-            .into_any_element();
+    fn render_banner(&self, still: bool) -> AnyElement {
+        let config = self.banner;
+        if still {
+            return banner(config, BANNER_SCALE, 1.).into_any_element();
         }
-        if self.intro_done {
-            return div()
-                .child(banner(config, BANNER_SCALE, 1.))
-                .into_any_element();
-        }
-        // Linear: the banner paces its own bloom and handwriting.
+        // Keep the same element identity when the intro ends so the idle
+        // animations don't restart. The ready state keeps its green glow.
+        let intro_done = self.intro_done;
         div()
             .with_animation("welcome-banner", Animation::new(WRITE), move |el, t| {
-                el.child(banner(config, BANNER_SCALE, t))
+                el.child(banner(
+                    config,
+                    BANNER_SCALE,
+                    if intro_done { 1. } else { t },
+                ))
             })
             .into_any_element()
     }
@@ -247,7 +241,7 @@ impl Render for WelcomeView {
                                 .pt_6()
                                 .pb_6()
                                 .gap_6()
-                                .child(self.render_banner(ready))
+                                .child(self.render_banner(cx.reduce_motion()))
                                 .child(self.render_heading(cx))
                                 .child(
                                     div()

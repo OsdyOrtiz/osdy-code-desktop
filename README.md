@@ -1,7 +1,7 @@
 <a id="top"></a>
 
 <div align="center">
-  <img src="packaging/icons/icon-512.png" width="160" alt="Gentle Shell's pixel rose">
+  <img src="packaging/icons/icon-512.png" width="160" alt="Osdy Code raccoon icon">
 </div>
 
 <h1 align="center">Osdy Code Desktop</h1>
@@ -258,9 +258,9 @@ Extension notices go to a notification center instead of piling up as toasts; on
 
 ## The conversation
 
-### Start screen — The rose, written in
+### Start screen — Osdy Code_
 
-The rose from Gentle Shell and the Osdy Code Desktop pixel wordmark, written in like the terminal intro. It follows `banner.json` (`showRose`, `showTextLogo`, `color`).
+The welcome screen and empty session show the animated raccoon badge beside the blue and purple Osdy Code wordmark in every theme. The raccoon blinks and a comet circles its badge, ducking behind the disc. A cyan cursor leads the left-to-right wordmark reveal, then blinks like a terminal cursor. Onboarding uses the same badge and adds a green glow when all checks pass. With reduced motion, the entire banner is visible and the badge is still. The source art is in [`assets/mascot/`](assets/mascot/); `banner.json` still controls the badge (`showRose`) and wordmark (`showTextLogo`) independently.
 
 ---
 
@@ -296,7 +296,7 @@ The composer comes in five input styles, in **Configuration → Appearance → C
 
 <br>
 
-Click the context percentage to compact now or turn auto-compaction on or off. For reasoning models, the effort chip (the level's icon and name) opens a slider in Gentle Shell's rose gradient with one stop per level the model accepts (`get_available_thinking_levels`: off … high, and xhigh / max where supported): click, drag or pick a label; the card says what the level costs, and the icon follows the level (moon, feather, leaf, brain, circuit brain, bolt, flame). Every level plays its own surge over the window, and each one builds on the level below until max: minimal and low send a pixel comet along a quarter and half of the window's edge; medium runs the whole lap and the edge flares; high adds energy spiralling into a glowing core while the window trembles; xhigh trembles harder and hatches the core with a flash, a shockwave and a shower of sparks; max (about 4 seconds) goes all the way: one last jolt and Gentle Shell's pixel rose bursts out with a rebound. Off plays nothing. Shows model, effort, plan usage (a chip after the effort picker), context %, cost, the ODD phase (`✿ exploring…`), extension statuses, queued messages and running jobs.
+Click the context percentage to compact now or turn auto-compaction on or off. For reasoning models, the effort chip (the level's icon and name) opens a slider in Gentle Shell's rose gradient with one stop per level the model accepts (`get_available_thinking_levels`: off … high, and xhigh / max where supported): click, drag or pick a label; the card says what the level costs, and the icon follows the level (moon, feather, leaf, brain, circuit brain, bolt, flame). Every level plays its own surge over the window, and each one builds on the level below until max: minimal and low send a pixel comet along a quarter and half of the window's edge; medium runs the whole lap and the edge flares; high adds energy spiralling into a glowing core while the window trembles; xhigh trembles harder and hatches the core with a flash, a shockwave and a shower of sparks; max (about 4 seconds) goes all the way: one last jolt and a pixel raccoon bursts out with a rebound. Off plays nothing. Shows model, effort, plan usage (a chip after the effort picker), context %, cost, the ODD phase (`✿ exploring…`), extension statuses, queued messages and running jobs.
 
 </details>
 
@@ -673,7 +673,7 @@ Your existing Gentle Shell setup: home, models, profiles, sign-ins, permission m
 
 Three sliders, 0–100% each, set the glass. **Transparency** (default 60%; 15% on Linux, where the desktop usually isn't blurred behind the window) sets how much of the blurred desktop, or the theme's own background, shows through the window, as in Tern. **Opacity** (default 20%) sets how solid the areas that hold text are (panes, sidebars, the composer, code, diffs, terminals) on top of that; whatever the two say, text stays readable: every theme meets WCAG AA contrast (4.5:1 for text, 3:1 for hints, status colors and field borders) over a black or a white desktop, so a text area never gets clearer than that and a too-dim theme color is brightened (or darkened) just enough. **Blur** (default 0%) softens the theme's background picture (blurred once, in the background; animated scenes are faded instead, and themes without a picture have nothing to blur). Menus, the palette and screens such as Profiles stay solid at any setting, and a theme can ask for fully solid surfaces itself (`"solid": true`, as Studio does) so Transparency and Opacity have no visible effect on it. **Interface size** (80–150%, default 100%, in 10% steps; ⌘= or ⌘+ bigger, ⌘- smaller, ⌘0 back to 100%, Ctrl on Windows and Linux, also in the app menu) scales text, spacing, the window chrome, screens and terminals in every window, remembered across launches (`interfaceScale` in the app's `settings.json`; a hand-set `1.25` matches a desktop scaled to 125% that the app doesn't see, as under WSLg). **Fonts** (Configuration › Appearance): pick the interface font, the code font (monospace text in the interface: paths, cards, the editor, diffs) and the terminal font from a searchable list of the fonts installed on your machine, with the monospace ones first for code and terminal. Code and terminal also get a size each (in px at 100 %, next to the picker); the interface text follows Interface size. With nothing chosen each keeps today's default, and the terminal follows the code font's family (not its size) unless you give it its own. The Reading Desk above the rows previews a family while you hover it or move to it with the arrow keys, without changing the app; a click or Enter applies it at once, a size applies on Enter or when you leave the field (Esc puts the old one back), and a toast lets you undo the change. Choices are remembered (`interfaceFont`, `codeFont`, `terminalFont`, `codeFontSize` and `terminalFontSize` in `settings.json`). For terminal icons, install a Nerd Font yourself (the app doesn't download one) and choose it as the terminal font. **Setup & requirements** is the first-run checklist, always here: the same checks, installs, terminal commands and sign-in. When a newer Gentle Shell is published, a card offers Update now (runs `gentle-shell upgrade`), Release notes and Skip this version. While it runs, the button shows a spinner and the elapsed time (`Updating… 1:42`, also on Update Pi), with a note that it can take several minutes and that open tabs restart when it ends. When the upgrade ends the card says how it went, from what the app actually runs afterwards: installed (open agent tabs restart on it and resume their conversations; a tab mid-turn switches when the turn ends), installed but an older launcher still comes first (with the command to remove it), or failed (with Gentle Shell's output). With a Gentle Shell newer than 4.8 (its `main`), the active agent tab's Shell answers whether there is one (`get_update_status`; the header's reload looks it up again), and also shows a newer Pi or `main` commit with the command to run, and marks packages with a newer version (**update**) with an **Update packages** button (`gentle-shell update --extensions`). Otherwise the check mirrors the launcher's own startup check: npm `gentle-pi/latest`, stable versions only, with the cache and the skipped version shared with the terminal in `~/.gentle-shell/config.json`; a "newer" answer holds for a day, a "nothing newer" is asked again after an hour, so a release shows the same day. When a newer **Engram** is out (its GitHub releases), a second card offers Update now (`brew upgrade` for Homebrew's Engram, else the release binary), Release notes and Skip this version. Agent tabs run Gentle Shell's self-contained install when there is one (`~/.gentle-shell/bin/gentle-shell`; `%LOCALAPPDATA%\gentle-shell\bin\gentle-shell.cmd` on Windows), which `gentle-shell upgrade` sets up since 4.7, ahead of an older global `gentle-pi` on your PATH; otherwise whichever `gentle-shell` is on your PATH, so updating outside the app works too.
 
-**Typing kisses** (Configuration › Appearance): Auto, the default, lets the composer blow small pixel kisses and hearts from the caret as you type, none while the system asks to reduce motion; Off stops them for this app only (`composerParticles` in `settings.json`).
+**Typing paws & notes** (Configuration › Appearance): Auto, the default, shows pixel paw prints and music notes rising from the caret as you type, unless the system asks to reduce motion. Off stops them for this app only (`composerParticles` in `settings.json`).
 
 **About** (Configuration › About): the app's version and license, links to this repository and its issues, everyone who has committed to it, from [CREDITS.md](CREDITS.md) (generated from the git history and built into the app, so no network call), and where the third-party licenses are.
 
@@ -765,7 +765,7 @@ Download the asset for your system from [Releases](https://github.com/OsdyOrtiz/
    ```
 
    The first build takes a few minutes. `.` opens the current folder as a workspace; pass any folder instead, or nothing to reopen the last workspace. `--prompt "first message"` starts a new agent tab with that message.
-3. Optional, macOS: to run it as a normal app (rose icon in the Dock, Finder, Spotlight), bundle it and copy it to `~/Applications`:
+3. Optional, macOS: to run it as a normal app (raccoon icon in the Dock, Finder, Spotlight), bundle it and copy it to `~/Applications`:
 
    ```bash
    packaging/macos/bundle.sh aarch64-apple-darwin 0.1.0   # x86_64-apple-darwin on Intel
@@ -873,7 +873,7 @@ cargo test
 
 <br>
 
-The app icon (the Gentle Shell pixel rose) lives in `packaging/icons/`. `generate.py` builds it from the `ROSE` art in `crates/app/src/shared/banner.rs`; run `packaging/icons/generate.sh` on macOS after editing and commit the outputs (`AppIcon.icns`, `icon.ico`, PNGs). A bare `cargo run` shows a generic icon in the Dock; the bundled app shows the rose.
+The raccoon app icon lives in `packaging/icons/`. `generate.py` builds it from `assets/mascot/osdy-code.png`; run `packaging/icons/generate.sh` on macOS after editing and commit the outputs (`AppIcon.icns`, `icon.ico`, PNGs).
 
 Build packages locally:
 

@@ -313,10 +313,10 @@ impl SettingsView {
                             .w(rems(120. / 16.))
                             .text_sm()
                             .text_color(ui::muted())
-                            .child("Typing kisses"),
+                            .child("Typing paws & notes"),
                     )
                     .child(ui::segmented(
-                        "typing-kisses",
+                        "typing-paws-notes",
                         &labels,
                         TypingKisses::ALL.iter().position(|c| *c == choice),
                         cx.listener(|_, index: &usize, _, cx| {

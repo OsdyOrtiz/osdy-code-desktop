@@ -1,260 +1,18 @@
-//! Osdy Code Desktop's startup banner: the braille rose from Gentle Shell
-//! and the pixel "OSDY CODE" wordmark, drawn as real pixels instead of terminal
-//! glyphs. The rose comes from `gentle_rose.txt` and `gentle_rose_color.txt`;
-//! palettes and `banner.json` semantics come from gentle-pi's
-//! `extensions/startup-banner.ts`.
+//! The Osdy Code banner and its animated raccoon badge.
 
 use std::path::Path;
-use std::sync::LazyLock;
 use std::time::Duration;
 
+use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
 
-use crate::shared::themes;
-
-const TEXT_LOGO: &[&str] = &[
-    "               ▄▄▄▄▄▄       ▄▄▄▄▄▄▄▄   ▄▄▄▄▄▄▄▄     ▄▄▄▄  ▄▄▄▄              ▄▄▄▄▄▄▄▄     ▄▄▄▄▄▄     ▄▄▄▄▄▄▄▄     ▄▄▄▄▄▄▄▄▄▄",
-    "            ▄▄██▀▀██▄▄▒  ▄▄██▀▀▀▀▀▀▒▒▒████▀▀██▄▄▒  ████▒▒████▒▒▒         ▄▄██▀▀▀▀▀▀▒▒▒▄▄██▀▀██▄▄▒  ████▀▀██▄▄▒  ████▀▀▀▀▀▀▒▒▒",
-    "          ▄███▀▒▄███▀▒▒▄███▀▒▒▒▒▒▒▒▒▄███▀▒▄███▀▒▒▄███▀▒▄███▀▒▒▒        ▄███▀▒▒▒▒▒▒▒▒▄███▀▒▄███▀▒▒▄███▀▒▄███▀▒▒▄███▀▒▒▒▒▒▒▒▒▒",
-    "        ▄███▀▒▄███▀▒▒▄███▀▒▒▒▒    ▄███▀▒▄███▀▒▒▒▀███▄▄█▀▀▀▒▒▒▒       ▄███▀▒▒▒▒    ▄███▀▒▄███▀▒▒▄███▀▒▄███▀▒▒▄███▀▒▒▒▒",
-    "       ▄███▀▒▄███▀▒▒▒▀███▄▄▄     ▄███▀▒▄███▀▒▒▒  ▀██▀▀▀▒▒▒▒▒        ▄███▀▒▒▒     ▄███▀▒▄███▀▒▒▄███▀▒▄███▀▒▒▄████▄▄▄",
-    "     ▄███▀▒▄███▀▒▒▒▒ ▀▀▀███▄▒▒ ▄███▀▒▄███▀▒▒▒▒  ▄█▀▒▒▒▒▒▒         ▄███▀▒▒▒▒    ▄███▀▒▄███▀▒▒▄███▀▒▄███▀▒▒▄███▀▀▀▀▀▒▒▒",
-    "    ████▒▒████▒▒▒▒     ████▒▒▒████▒▒████▒▒▒▒   ██ ▒▒▒            ████▒▒▒▒     ████▒▒████▒▒▒████▒▒████▒▒▒████▒▒▒▒▒▒▒▒",
-    "  ▄███▀▒▄███▀▒▒▒     ▄███▀▒▒▄███▀▒▄███▀▒▒▒   ▄█▀ ▒▒            ▄███▀▒▒▒     ▄███▀▒▄███▀▒▒▄███▀▒▄███▀▒▒▄███▀▒▒▒",
-    " ▀███▄▄█▀▀▀▒▒▄▄▄▄▄▄▄█▀▀▀▒▒▄████▄▄█▀▀▀▒▒▒▒  ▄█▀ ▒▒▒            ▀███▄▄▄▄▄    ▀███▄▄█▀▀▀▒▒▄████▄▄█▀▀▀▒▒▄████▄▄▄▄▄",
-    "  ▀▀▀▀▀▀▒▒▒▒▒▀▀▀▀▀▀▀▀▒▒▒▒▒▀▀▀▀▀▀▀▀▒▒▒▒▒    ▀▀▒▒▒               ▀▀▀▀▀▀▀▀▒▒   ▀▀▀▀▀▀▒▒▒▒▒▀▀▀▀▀▀▀▀▒▒▒▒▒▀▀▀▀▀▀▀▀▀▀▒▒",
-    "    ▒▒▒▒▒▒     ▒▒▒▒▒▒▒▒     ▒▒▒▒▒▒▒▒         ▒▒                  ▒▒▒▒▒▒▒▒     ▒▒▒▒▒▒     ▒▒▒▒▒▒▒▒     ▒▒▒▒▒▒▒▒▒▒",
-];
-
-const ROSE: &[&str] = &[
-    "            ⣠⣿⣿⣶⣶⣤⣤⣤⣤⣤⣤⣤⣀    ⢀⡀",
-    "         ⢀⣴⣾⣿⣿⠟⠝⢙⣙⣙⣙⣙⢙⣿⣷⢿⢿⢿⢿⢿⣿⣷⣄⡀",
-    "      ⣀⣠⣴⣿⣿⣿⠟⢡⣶⡿⠟⢟⡽⣿⣿⣿⣿⡟⢶⣤⣤⣄⣁⠁⠙⢿⣿⣦",
-    "   ⢀⣴⣿⣿⠅⣿⣿⣿⠅⢀⣿⠏ ⢰⡏⢹⢯⡤⢖⣯⣍⠻⡍⢻⡌⢽⣷⠄ ⢿⣿⡷⢶⣤⣤",
-    "⢀⣀⣴⣿⣿⣿⠟ ⠹⣿⣿  ⢻⣇ ⠘⠻⣦⣈⢙⣻⣿⣷⣾⡥⠜⢁⣼⠟⠁⢴⣿⡿⠁⢽⣿⣿⣄",
-    "⢻⣿⢿⣿⣿⣟⠅  ⠘⢿⣧ ⠘⠙⢦⣀  ⠙⠳⢤  ⢀⡴⠞⠛⠝⢀⣴⣿⠟  ⢽⣿⣿⢿⡆",
-    " ⣿⢝⢿⣿⣧⠁   ⢸⠍⠳⣄  ⠉⠓⠦⢄⢀⣀⣁⣤⣥⣤⣤⣶⠿⢿⡟⠁   ⣽⣿⢿⣽⡇",
-    " ⢿⣟⠝⢿⣿⣷⣄  ⠝⠕⠅⠈⠂ ⢀⡤⠖⠛⠉⠉⡁⣀   ⢀⠅⢽⠇  ⢀⣽⣿⣿⣿⠏",
-    " ⠈⠻⢷⣝⣝⣿⢿⢷⣤⣄    ⠴⠉⠄⢔⢴⢾⢿⢿⢿⢗⠔⠔⠄⠁ ⢁⢄⣵⣿⡿⠟⢉⢽⣷⡄",
-    "    ⠈⠉⠉⢿⡛⠿⢿⣿⣶⣤⣀⡁  ⠁⠁⠙⠅⠙⠁⠁⠁ ⣀⣴⣾⢿⠿⠛⠉ ⢤⣽⣿⣿⣇",
-    "       ⠈⢿⣧⡄ ⠁⠉⠛⠿⠿⢷⣶⣤⣀   ⢀⡴⠛⠉⠁ ⠁ ⢀⣴⢿⢿⣽⠟⠉⠁",
-    "         ⠙⠻⣷⣥⣄⢀    ⠈⠙⢷⡄ ⠁ ⢀⢄⣴⣴⢵⠿⢟⣭⣽⠟⠁",
-    "            ⢉⢙⣛⣿⠷⢤⣄⡀  ⢿⢠⠔⢓⣛⠿⠿⠷⠷⠟⠛⠉⠁",
-    "            ⠈⠙⠛⠛⠓⠒⢖⠙⠷⡄⢈⡴⠟⢅⢴⣶⣤⣤⠄",
-    "                   ⢷⡄⠱⢍⡤⠐⠉⠉⠉⠉",
-    "                   ⠈⣷ ⠍",
-    "                    ⣿⢄",
-];
-
-/// Each rose cell's shade, `0` darkest to `9` lightest, from
-/// `gentle_rose_color.txt`: the cell's lightness over the base color's,
-/// `0.55 + 0.075 × shade` ([`shade_factor`]).
-const ROSE_SHADE: &[&str] = &[
-    "            7767687656668    66",
-    "         678755455455555564566796",
-    "      6757654566556666656555433478",
-    "   687536652366 665666665565563 476675",
-    "3887663 465  65 56666666666666045563479",
-    "8656642  565 5666  666  656536566  35477",
-    " 835643   4566  6665666566655556   45367",
-    " 7435643  22266 66666653   0026  335556",
-    " 3866545555    26033454333300 2344555575",
-    "    666665655662  03222300 6565566 24468",
-    "       6755 356655555   66563 0 34347886",
-    "         776543    3656 3 33444344686",
-    "            76765553  5335555556780",
-    "            6965564445565346896",
-    "                   5532433565",
-    "                   36 2",
-    "                    62",
-];
-
-/// Columns of space between the rose and the wordmark in the combo asset.
-const GAP: f32 = 5.0;
-
-/// A [`ROSE_SHADE`] digit as a lightness multiplier.
-fn shade_factor(shade: char) -> f32 {
-    0.55 + 0.075 * shade.to_digit(10).unwrap_or(6) as f32
-}
-
-/// One pixel of the wordmark: half-block cells are 1×2 pixels; `▒` is the
-/// darker drop shadow.
-#[derive(Clone, Copy)]
-struct Pixel {
-    x: u16,
-    y: u16,
-    shadow: bool,
-    /// When the pen reaches it, 0..=1 of the writing ([`pen_times`]).
-    at: f32,
-}
-
-struct Art {
-    logo: Vec<Pixel>,
-    logo_size: (u16, u16),
-    rose: Vec<(u16, u16)>,
-    /// [`shade_factor`] of each `rose` dot, in the same order.
-    rose_shade: Vec<f32>,
-    /// When each `rose` dot opens, 0..=1 of the bloom ([`bloom_times`]).
-    rose_at: Vec<f32>,
-    rose_size: (u16, u16),
-}
-
-static ART: LazyLock<Art> = LazyLock::new(|| {
-    let mut cells = Vec::new();
-    let mut logo_w = 0;
-    for (row, line) in TEXT_LOGO.iter().enumerate() {
-        for (col, ch) in line.chars().enumerate() {
-            let (x, top, bottom) = (col as u16, row as u16 * 2, row as u16 * 2 + 1);
-            let pixels: &[(u16, bool)] = match ch {
-                '▀' => &[(top, false)],
-                '▄' => &[(bottom, false)],
-                '█' => &[(top, false), (bottom, false)],
-                '▒' => &[(top, true), (bottom, true)],
-                _ => &[],
-            };
-            for &(y, shadow) in pixels {
-                cells.push((x, y, shadow));
-                logo_w = logo_w.max(x + 1);
-            }
-        }
-    }
-    let ink: Vec<(u16, u16)> = cells
-        .iter()
-        .filter(|c| !c.2)
-        .map(|&(x, y, _)| (x, y))
-        .collect();
-    let all: Vec<(u16, u16)> = cells.iter().map(|&(x, y, _)| (x, y)).collect();
-    let times = pen_times(&ink, &all);
-    let mut logo: Vec<Pixel> = cells
-        .iter()
-        .zip(times)
-        .map(|(&(x, y, shadow), at)| Pixel { x, y, shadow, at })
-        .collect();
-    // Shadows sit behind the ink.
-    logo.sort_by_key(|p| !p.shadow);
-
-    // Braille U+2800: bits 0-2 and 6 are the left column (rows 0-3), 3-5 and 7 the right.
-    const DOTS: [(u16, u16); 8] = [
-        (0, 0),
-        (0, 1),
-        (0, 2),
-        (1, 0),
-        (1, 1),
-        (1, 2),
-        (0, 3),
-        (1, 3),
-    ];
-    let mut rose = Vec::new();
-    let mut rose_shade = Vec::new();
-    let mut rose_w = 0;
-    for (row, (line, shades)) in ROSE.iter().zip(ROSE_SHADE).enumerate() {
-        let shades = shades.chars().chain(std::iter::repeat(' '));
-        for (col, (ch, shade)) in line.chars().zip(shades).enumerate() {
-            let code = ch as u32;
-            if !(0x2800..=0x28FF).contains(&code) {
-                continue;
-            }
-            let bits = code - 0x2800;
-            for (bit, (dx, dy)) in DOTS.iter().enumerate() {
-                if bits & (1 << bit) != 0 {
-                    rose.push((col as u16 * 2 + dx, row as u16 * 4 + dy));
-                    rose_shade.push(shade_factor(shade));
-                    rose_w = rose_w.max(col as u16 * 2 + dx + 1);
-                }
-            }
-        }
-    }
-    let rose_size = (rose_w, ROSE.len() as u16 * 4);
-    Art {
-        logo,
-        logo_size: (logo_w, TEXT_LOGO.len() as u16 * 2),
-        rose_at: bloom_times(&rose, rose_size),
-        rose,
-        rose_shade,
-        rose_size,
-    }
-});
-
-/// How far the wordmark's italic leans: a stroke moves this many pixels
-/// right per pixel up, so `x + SLANT × y` is constant along it.
-const SLANT: f32 = 0.8;
-
-/// When a pen writing the wordmark reaches each of `pixels`, 0..=1. It sweeps
-/// along the italic's slant at a steady ink rate: it takes its time over the
-/// letters' dense strokes and lifts for a breath over blank columns (the
-/// space between the words). `ink` sets the pace.
-fn pen_times(ink: &[(u16, u16)], pixels: &[(u16, u16)]) -> Vec<f32> {
-    /// Time for a column the pen only passes through.
-    const TRAVEL: f32 = 2.0;
-    /// Time for a blank column: the pen lifts and moves on.
-    const LIFT: f32 = 12.0;
-    let u = |&(x, y): &(u16, u16)| x as f32 + SLANT * y as f32;
-    let columns = pixels.iter().map(u).fold(0f32, f32::max) as usize + 1;
-    let mut weight = vec![0f32; columns];
-    for p in ink {
-        weight[u(p) as usize] += 1.0;
-    }
-    let first = ink.iter().map(u).fold(f32::MAX, f32::min) as usize;
-    for (i, w) in weight.iter_mut().enumerate() {
-        *w = if i < first {
-            0.0
-        } else if *w == 0.0 {
-            LIFT
-        } else {
-            *w + TRAVEL
-        };
-    }
-    let mut start = Vec::with_capacity(columns);
-    let mut total = 0.0;
-    for w in &weight {
-        start.push(total);
-        total += w;
-    }
-    pixels
-        .iter()
-        .map(|p| {
-            let u = u(p);
-            let i = u as usize;
-            ((start[i] + u.fract() * weight[i]) / total).clamp(0.0, 1.0)
-        })
-        .collect()
-}
-
-/// When each rose dot opens, 0..=1: from the heart of the bloom outward, so
-/// the petals unfold and the stem comes last.
-fn bloom_times(dots: &[(u16, u16)], (w, h): (u16, u16)) -> Vec<f32> {
-    let (cx, cy) = (w as f32 * 0.5, h as f32 * 0.32);
-    let dist = |&(x, y): &(u16, u16)| ((x as f32 - cx).powi(2) + (y as f32 - cy).powi(2)).sqrt();
-    let far = dots.iter().map(dist).fold(1f32, f32::max);
-    dots.iter().map(|d| dist(d) / far).collect()
-}
+#[path = "brand/orbit.rs"]
+mod orbit;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct BannerConfig {
     pub show_rose: bool,
     pub show_text_logo: bool,
-    pub palette: Palette,
-}
-
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum Palette {
-    Pink,
-    Cyan,
-    Yellow,
-    Green,
-}
-
-impl Palette {
-    /// (rose, logo ink, logo shadow)
-    fn colors(self) -> (Rgba, Rgba, Rgba) {
-        let c = |r: u32, g: u32, b: u32| rgb((r << 16) | (g << 8) | b);
-        match self {
-            Self::Pink => (c(255, 118, 195), c(255, 118, 195), c(120, 45, 80)),
-            Self::Cyan => (c(95, 210, 255), c(105, 220, 255), c(25, 80, 100)),
-            Self::Yellow => (c(255, 210, 95), c(255, 215, 105), c(105, 75, 25)),
-            Self::Green => (c(110, 220, 145), c(120, 230, 150), c(30, 95, 50)),
-        }
-    }
 }
 
 impl Default for BannerConfig {
@@ -262,27 +20,47 @@ impl Default for BannerConfig {
         Self {
             show_rose: true,
             show_text_logo: true,
-            palette: Palette::Pink,
         }
     }
 }
 
-/// A solid theme's banner colors: the rose blooms in `petal` (the theme's
-/// accent — what `ui::petal()` reads), the wordmark is written in its
-/// `fg`, and the shadow dims from the ink (like the fixed palettes: dimmer
-/// and grayer than the ink). Other themes keep the palette `banner.json`
-/// chose, so this only runs for solid ones.
-fn solid_colors(petal: Hsla, fg: Hsla) -> (Hsla, Hsla, Hsla) {
-    let shadow = Hsla {
-        l: fg.l * 0.44,
-        s: fg.s * 0.45,
-        ..fg
-    };
-    (petal, fg, shadow)
+impl BannerConfig {
+    /// Width in unscaled banner units, including the gap only when both layers show.
+    pub fn width(self) -> f32 {
+        match (self.show_rose, self.show_text_logo) {
+            (true, true) => BADGE + GAP + WORDMARK,
+            (true, false) => BADGE,
+            (false, true) => WORDMARK,
+            (false, false) => 0.,
+        }
+    }
+
+    /// Reserve the banner's layout without loading images or asking for frames.
+    pub fn placeholder(self, scale: f32) -> impl IntoElement {
+        let height = if self.show_rose {
+            BADGE
+        } else if self.show_text_logo {
+            WORDMARK / WORDMARK_ASPECT
+        } else {
+            0.
+        };
+        div().w(px(self.width() * scale)).h(px(height * scale))
+    }
+
+    /// The badge's mouth, relative to the banner's center, in unscaled units.
+    pub fn particle_anchor(self) -> Option<(f32, f32)> {
+        self.show_rose.then(|| {
+            let x = BADGE / 2. - self.width() / 2.;
+            // Mouth center is at (192, 266) in the 384 px source canvas.
+            let y = (266. / 384. - 0.5) * BADGE;
+            (x, y)
+        })
+    }
 }
 
 /// `<config>/banner.json`, tolerant like the launcher's own read: missing or
-/// malformed fields fall back to the defaults.
+/// malformed fields fall back to the defaults. Its `color` picks the
+/// terminal banner's palette and is ignored by the desktop.
 pub fn read_config(config_home: &Path) -> BannerConfig {
     let default = BannerConfig::default();
     let Ok(raw) = std::fs::read_to_string(config_home.join("banner.json")) else {
@@ -296,298 +74,280 @@ pub fn read_config(config_home: &Path) -> BannerConfig {
         show_text_logo: value["showTextLogo"]
             .as_bool()
             .unwrap_or(default.show_text_logo),
-        palette: match value["color"].as_str() {
-            Some("cyan") => Palette::Cyan,
-            Some("yellow") => Palette::Yellow,
-            Some("green") => Palette::Green,
-            _ => Palette::Pink,
-        },
     }
 }
 
-/// The rose's dots (x, y in dot units) and its size, for other effects that
-/// draw it (the max-effort surge).
-pub fn rose() -> (&'static [(u16, u16)], (u16, u16)) {
-    (&ART.rose, ART.rose_size)
+/// Drive `reveal` linearly from 0 to 1 over this interval.
+pub const WRITE: Duration = Duration::from_millis(2600);
+
+const BADGE: f32 = 48.;
+const GAP: f32 = 5.;
+const WORDMARK: f32 = 122.;
+const WORDMARK_ASPECT: f32 = 1130. / 229.;
+// The cursor SVG retains the wordmark viewBox (left edge 4) and the source's
+// glyph origin at x=1017.29. Move the entire layer left to meet the clip edge.
+const CURSOR_AT: f32 = (1017.29 - 4.) / 1130.;
+const CURSOR_PERIOD: Duration = Duration::from_secs(1);
+const EYE_PERIOD: Duration = Duration::from_secs(5);
+
+fn cursor_edge(reveal: f32) -> f32 {
+    let t = reveal.clamp(0., 1.);
+    CURSOR_AT * t * t * (3. - 2. * t)
 }
 
-/// Gentle Shell's pixel rose, `height` px tall, in `color`.
-pub fn pixel_rose(height: f32, color: Hsla) -> impl IntoElement {
-    let (dots, (width, rows)) = rose();
-    let dot = height / rows.max(1) as f32;
+fn cursor_on(seconds: f32) -> bool {
+    seconds % CURSOR_PERIOD.as_secs_f32() < 0.5
+}
+
+fn eyes_closed(seconds: f32) -> bool {
+    seconds % EYE_PERIOD.as_secs_f32() >= 4.85
+}
+
+/// Full-color square badge, static when the caller has reduced motion enabled.
+pub fn badge(side: f32, still: bool) -> AnyElement {
+    let side = px(side);
+    let path = if still {
+        "brand/badge-still.png"
+    } else {
+        "brand/badge.webp"
+    };
+    let badge = div()
+        .relative()
+        .flex_none()
+        .size(side)
+        .child(img(path).id("badge-image").size_full());
+    if still {
+        return badge.into_any_element();
+    }
+    badge
+        .with_animation(
+            "brand-badge-motion",
+            Animation::new(EYE_PERIOD).repeat(),
+            |el, t| {
+                // Use the same canvas as the badge. The mask covers the eye positions
+                // across all WebP frames, so the loops don't need to share a clock.
+                let visible = eyes_closed(t * EYE_PERIOD.as_secs_f32());
+                el.child(
+                    div()
+                        .absolute()
+                        .inset_0()
+                        .opacity(if visible { 1. } else { 0. })
+                        .child(img("brand/eyes-closed.svg").size_full()),
+                )
+                // Two orbits per eye cycle; both repeat without a second frame driver.
+                .child(orbit_comet(2. * t + 0.18))
+            },
+        )
+        .into_any_element()
+}
+
+fn orbit_comet(phase: f32) -> impl IntoElement {
     canvas(
         |_, _, _| {},
         move |bounds, _, window, _| {
-            let side = px((dot * 0.55).max(1.0));
-            for &(x, y) in dots {
-                let origin = point(
-                    bounds.origin.x + px(x as f32 * dot),
-                    bounds.origin.y + px(y as f32 * dot),
-                );
-                window.paint_quad(fill(Bounds::new(origin, size(side, side)), color));
+            let scale = bounds.size.width / 384.;
+            let purple: Hsla = rgb(0xbb9af7).into();
+            let cyan: Hsla = rgb(0x7dcfff).into();
+            for i in (0..=10).rev() {
+                let p = orbit::position(phase - i as f32 * 0.006);
+                if p.visibility == 0. {
+                    continue;
+                }
+                let x = bounds.origin.x + scale * p.x;
+                let y = bounds.origin.y + scale * p.y;
+                let mut disc = |diameter: f32, ink: Hsla, alpha: f32| {
+                    let side = scale * diameter;
+                    let at = point(x - side / 2., y - side / 2.);
+                    window.paint_quad(
+                        fill(
+                            Bounds::new(at, size(side, side)),
+                            ink.opacity(alpha * p.visibility),
+                        )
+                        .corner_radii(side / 2.),
+                    );
+                };
+                if i == 0 {
+                    disc(33., purple, 0.18);
+                    disc(23., cyan, 0.45);
+                    disc(14., cyan, 0.95);
+                    disc(8., white(), 1.);
+                } else {
+                    let fade = 1. - i as f32 / 11.;
+                    disc(
+                        5. + 8. * fade,
+                        if i < 4 { cyan } else { purple },
+                        0.82 * fade,
+                    );
+                }
             }
         },
     )
-    .w(px(width as f32 * dot))
-    .h(px(height))
+    .absolute()
+    .inset_0()
 }
 
-/// How long the banner takes to bloom and write itself: drive `reveal` from
-/// 0 to 1 over this, linearly (the pacing is inside [`banner`]).
-pub const WRITE: Duration = Duration::from_millis(2600);
-
-/// Share of `reveal` the rose blooms over.
-const BLOOM_UNTIL: f32 = 0.5;
-/// Share of `reveal` before the pen touches down.
-const PEN_FROM: f32 = 0.14;
-/// How long, in pen time, a fresh stroke glows like wet ink.
-const WET: f32 = 0.09;
-/// Pen time past the last pixel, so the final strokes dry too.
-const PEN_TAIL: f32 = WET + 0.03;
-/// The rose's float while the banner writes itself: a slow rise and fall
-/// (in wordmark pixels) and a sway (in radians), each with its period in
-/// seconds, easing to rest from this share of `reveal` on.
-const BOB: (f32, f32) = (0.9, 5.2);
-const SWAY: (f32, f32) = (0.022, 7.3);
-const SETTLE_FROM: f32 = 0.6;
-
-fn smoothstep(t: f32) -> f32 {
-    let t = t.clamp(0.0, 1.0);
-    t * t * (3.0 - 2.0 * t)
+fn wordmark(scale: f32, reveal: f32, still: bool) -> impl IntoElement {
+    let width = px(WORDMARK * scale);
+    let height = width / WORDMARK_ASPECT;
+    let reveal = if still { 1. } else { reveal };
+    let edge = cursor_edge(reveal);
+    let cursor = div()
+        .absolute()
+        .top_0()
+        .left(width * (edge - CURSOR_AT))
+        .w(width)
+        .h(height)
+        .child(img("brand/cursor.svg").size_full());
+    let cursor = if still || reveal < 1. {
+        cursor.into_any_element()
+    } else {
+        cursor
+            .with_animation(
+                "banner-cursor",
+                Animation::new(CURSOR_PERIOD).repeat(),
+                |el, t| {
+                    el.opacity(if cursor_on(t * CURSOR_PERIOD.as_secs_f32()) {
+                        1.
+                    } else {
+                        0.
+                    })
+                },
+            )
+            .into_any_element()
+    };
+    div()
+        .relative()
+        .flex_none()
+        .w(width)
+        .h(height)
+        .overflow_hidden()
+        .child(
+            div()
+                .relative()
+                .w(width * edge)
+                .h(height)
+                .overflow_hidden()
+                .child(
+                    img("brand/wordmark-text.svg")
+                        .absolute()
+                        .top_0()
+                        .left_0()
+                        .w(width)
+                        .h(height),
+                ),
+        )
+        .child(cursor)
 }
 
-/// `color` lit toward a pale, glowing tint by `by` (0..=1).
-fn lighten(color: Hsla, by: f32) -> Hsla {
-    Hsla {
-        l: color.l + (0.97 - color.l) * by,
-        s: color.s * (1.0 - 0.35 * by),
-        ..color
+/// The full-color brand in every theme. Reduced motion shows the completed,
+/// static art regardless of the caller's reveal progress.
+pub fn banner(config: BannerConfig, scale: f32, reveal: f32) -> impl IntoElement {
+    Banner {
+        config,
+        scale,
+        reveal,
     }
 }
 
-/// The banner at `scale` px per wordmark pixel. With `reveal` going 0 → 1
-/// over [`WRITE`], the rose blooms from its heart outward while a pen writes
-/// the wordmark, each stroke glowing like wet ink before it dries
-/// and its shadow settles. Meanwhile the rose floats (it rises, sways, and a
-/// glint crosses its petals) and comes to rest as the writing ends. Every
-/// motion follows `reveal`, so a finished banner is still and asks for no
-/// frames; with reduced motion the rose doesn't float at all.
-pub fn banner(config: BannerConfig, scale: f32, reveal: f32) -> impl IntoElement {
-    let art = &*ART;
-    // A solid theme tints the banner in its own colors; every other theme
-    // keeps the palette banner.json chose (which stays read-only).
-    let (rose_base, ink, shadow) = if themes::solid() {
-        // The petal is the theme's accent (the same color; the palette only
-        // carries it under `accent`).
-        let (petal, fg) = themes::palette(|p| (p.accent, p.fg));
-        solid_colors(petal, fg)
-    } else {
-        let (rose_color, ink, shadow) = config.palette.colors();
-        (Hsla::from(rose_color), Hsla::from(ink), Hsla::from(shadow))
-    };
-    let logo_size = size(
-        px(art.logo_size.0 as f32 * scale),
-        px(art.logo_size.1 as f32 * scale),
-    );
-    // Laid out like the combo asset: a terminal cell is one wordmark pixel
-    // wide and two tall, and holds 2×4 braille dots, so a dot is half a
-    // pixel; the rose then stands 17 cells to the wordmark's 11, centered.
-    let dot = scale / 2.0;
-    let rose_size = size(
-        px(art.rose_size.0 as f32 * dot),
-        px(art.rose_size.1 as f32 * dot),
-    );
-    let reveal = reveal.clamp(0.0, 1.0);
-
-    let rose = canvas(
-        |_, _, _| {},
-        move |bounds, _, window, cx| {
-            use std::f32::consts::TAU;
-            let still = cx.reduce_motion();
-            let t = reveal * WRITE.as_secs_f32();
-            let float = if still {
-                0.0
-            } else {
-                1.0 - smoothstep((reveal - SETTLE_FROM) / (1.0 - SETTLE_FROM))
-            };
-            let bob = (t * TAU / BOB.1).sin() * BOB.0 * scale * float;
-            let sway = (t * TAU / SWAY.1).sin() * SWAY.0 * float;
-            let (sin, cos) = sway.sin_cos();
-            // One glint sweeps the diagonal, from off one corner to past the
-            // other, as the banner writes.
-            let glint = reveal * 1.8 - 0.4;
-            let (w, h) = (ART.rose_size.0 as f32, ART.rose_size.1 as f32);
-            // It sways about the bloom, like a flower held by its stem.
-            let (pivot_x, pivot_y) = (w * 0.5, h * 0.32);
-            let bloom = reveal / BLOOM_UNTIL;
-            let side = px((dot * 0.55).max(1.0));
-            for (i, &(x, y)) in ART.rose.iter().enumerate() {
-                let open = smoothstep((bloom - ART.rose_at[i] * 0.75) / 0.25);
-                if open <= 0.0 {
-                    continue;
-                }
-                // Petals open outward as they appear.
-                let unfold = 0.82 + 0.18 * open;
-                let (dx, dy) = ((x as f32 - pivot_x) * unfold, (y as f32 - pivot_y) * unfold);
-                let (rx, ry) = (pivot_x + dx * cos - dy * sin, pivot_y + dx * sin + dy * cos);
-                let along = (x as f32 / w + y as f32 / h) * 0.5;
-                let shine = if still {
-                    0.0
-                } else {
-                    (1.0 - ((along - glint) / 0.12).abs()).max(0.0).powi(2) * 0.35
-                };
-                let base = Hsla {
-                    l: (rose_base.l * ART.rose_shade[i]).min(0.95),
-                    a: open,
-                    ..rose_base
-                };
-                let origin = point(
-                    bounds.origin.x + px(rx * dot),
-                    bounds.origin.y + px(ry * dot + bob),
-                );
-                window.paint_quad(fill(
-                    Bounds::new(origin, size(side, side)),
-                    lighten(base, shine),
-                ));
-            }
-        },
-    )
-    .w(rose_size.width)
-    .h(rose_size.height);
-
-    let logo = canvas(
-        |_, _, _| {},
-        move |bounds, _, window, _| {
-            // The pen eases in and out, like a hand starting and finishing a
-            // signature; its pace along the word is in each pixel's `at`.
-            let pen = ((reveal - PEN_FROM) / (1.0 - PEN_FROM)).clamp(0.0, 1.0);
-            let pen = (0.5 - 0.5 * (pen * std::f32::consts::PI).cos()) * (1.0 + PEN_TAIL);
-            let side = size(px(scale), px(scale));
-            for p in &ART.logo {
-                let since = pen - p.at;
-                let color = if p.shadow {
-                    // The shadow settles in once the ink above it has dried a little.
-                    Hsla {
-                        a: smoothstep((since - 0.04) / 0.07),
-                        ..shadow
-                    }
-                } else {
-                    let wet = 1.0 - (since / WET).clamp(0.0, 1.0);
-                    Hsla {
-                        a: smoothstep(since / 0.02),
-                        ..lighten(ink, wet * 0.75)
-                    }
-                };
-                if color.a <= 0.0 {
-                    continue;
-                }
-                let origin = point(
-                    bounds.origin.x + px(p.x as f32 * scale),
-                    bounds.origin.y + px(p.y as f32 * scale),
-                );
-                window.paint_quad(fill(Bounds::new(origin, side), color));
-            }
-        },
-    )
-    .w(logo_size.width)
-    .h(logo_size.height);
-
-    div()
-        .flex()
-        .flex_row()
-        .items_center()
-        .gap(px(scale * GAP))
-        .when(config.show_rose, |d| d.child(rose))
-        .when(config.show_text_logo, |d| d.child(logo))
+#[derive(IntoElement)]
+struct Banner {
+    config: BannerConfig,
+    scale: f32,
+    reveal: f32,
 }
 
-use gpui_kit::prelude::FluentBuilder as _;
+impl RenderOnce for Banner {
+    fn render(self, _: &mut Window, cx: &mut App) -> impl IntoElement {
+        let still = cx.reduce_motion();
+        div()
+            .flex()
+            .items_center()
+            .gap(px(self.scale * GAP))
+            .when(self.config.show_rose, |el| {
+                el.child(badge(BADGE * self.scale, still))
+            })
+            .when(self.config.show_text_logo, |el| {
+                el.child(wordmark(self.scale, self.reveal, still))
+            })
+    }
+}
 
 #[cfg(test)]
 mod tests {
-    use super::{
-        ART, BannerConfig, Palette, ROSE, ROSE_SHADE, bloom_times, pen_times, read_config,
-    };
+    use super::{BannerConfig, read_config};
 
     #[test]
-    fn pen_writes_left_to_right_and_lifts_over_blank_columns() {
-        // Two strokes on one row, a blank stretch between them.
-        let ink = [(0, 0), (1, 0), (2, 0), (12, 0), (13, 0)];
-        let at = pen_times(&ink, &ink);
-        assert!(at.windows(2).all(|w| w[0] < w[1]), "{at:?}");
-        assert!(at.iter().all(|t| (0.0..=1.0).contains(t)));
-        // Crossing the blank takes longer than writing a pixel.
-        assert!(at[3] - at[2] > 3.0 * (at[2] - at[1]), "{at:?}");
-
-        // The real wordmark: "OSDY" is done before "CODE" starts.
-        let osdy = ART.logo.iter().filter(|p| !p.shadow && p.x < 62);
-        let code = ART.logo.iter().filter(|p| !p.shadow && p.x >= 62);
-        let osdy_end = osdy.map(|p| p.at).fold(0f32, f32::max);
-        let code_start = code.map(|p| p.at).fold(1f32, f32::min);
-        assert!(osdy_end < code_start, "{osdy_end} vs {code_start}");
+    fn cursor_moves_with_the_clip_and_lands_on_the_svg_glyph() {
+        let edge = super::cursor_edge;
+        assert_eq!(edge(-0.1), 0.);
+        assert!(0. < edge(0.25) && edge(0.25) < edge(0.5));
+        assert!(edge(0.5) < edge(0.75) && edge(0.75) < edge(1.));
+        assert!((edge(1.) - (1017.29 - 4.) / 1130.).abs() < 0.0001);
+        assert_eq!(edge(1.1), edge(1.));
     }
 
     #[test]
-    fn rose_blooms_from_its_heart_outward() {
-        let dots = [(10, 6), (10, 18), (0, 0)];
-        let at = bloom_times(&dots, (20, 20));
-        assert!(at[0] < at[1] && at[1] < at[2], "{at:?}");
+    fn idle_blinks_are_steps_and_repeat() {
+        use super::{cursor_on, eyes_closed};
+        assert!(cursor_on(0.));
+        assert!(cursor_on(0.49));
+        assert!(!cursor_on(0.5));
+        assert!(!cursor_on(0.99));
+        assert!(cursor_on(1.));
+        assert!(!eyes_closed(0.));
+        assert!(!eyes_closed(4.84));
+        assert!(eyes_closed(4.85));
+        assert!(eyes_closed(4.99));
+        assert!(!eyes_closed(5.));
+        assert!(eyes_closed(9.9));
     }
 
     #[test]
-    fn art_decodes_to_pixels() {
-        let art = &*ART;
-        assert_eq!(art.logo_size.1, 22);
-        assert!(art.logo_size.0 > 100);
-        assert!(art.logo.iter().any(|p| p.shadow) && art.logo.iter().any(|p| !p.shadow));
-        // `⣿` sets all eight dots.
-        assert!(art.rose.len() > 500);
-        assert_eq!(art.rose_size.1, ROSE.len() as u16 * 4);
-    }
-
-    #[test]
-    fn every_rose_cell_has_a_shade() {
-        assert_eq!(ROSE.len(), ROSE_SHADE.len());
-        for (line, shades) in ROSE.iter().zip(ROSE_SHADE) {
-            let mut shades = shades.chars().chain(std::iter::repeat(' '));
-            for ch in line.chars() {
-                let shade = shades.next().unwrap();
-                let dots = ch != ' ' && ch != '\u{2800}';
-                assert_eq!(dots, shade.is_ascii_digit(), "{line:?} at {ch:?}");
-            }
-        }
-    }
-
-    #[test]
-    fn solid_banner_colors_bloom_the_rose_and_dim_the_shadow_from_the_ink() {
-        use gpui_kit::hsla;
-        let petal = hsla(330. / 360., 0.85, 0.62, 1.);
-        let fg = hsla(240. / 360., 0.03, 0.93, 1.);
-        // The rose blooms in the petal passed in, the wordmark is written in
-        // the fg, and the shadow dims from the ink.
-        let (rose, ink, shadow) = super::solid_colors(petal, fg);
-        assert_eq!((rose.h, rose.s, rose.l), (petal.h, petal.s, petal.l));
-        assert_eq!((ink.h, ink.s, ink.l), (fg.h, fg.s, fg.l));
-        assert!((shadow.l - fg.l * 0.44).abs() < 1e-5);
-        assert!((shadow.s - fg.s * 0.45).abs() < 1e-5);
+    fn particles_track_the_badge_when_the_wordmark_is_hidden() {
+        let both = BannerConfig::default();
+        let badge_only = BannerConfig {
+            show_text_logo: false,
+            ..both
+        };
+        let text_only = BannerConfig {
+            show_rose: false,
+            ..both
+        };
+        let (both_x, both_y) = both.particle_anchor().unwrap();
+        let (badge_x, badge_y) = badge_only.particle_anchor().unwrap();
+        assert_eq!(badge_x, 0.);
+        assert_eq!(both_x + (both.width() - badge_only.width()) / 2., badge_x);
+        assert_eq!(both_y, badge_y);
+        assert!(badge_y > 0. && badge_y < badge_only.width() / 2.);
+        assert_eq!(text_only.particle_anchor(), None);
     }
 
     #[test]
     fn config_falls_back_per_field() {
         let dir = std::env::temp_dir().join(format!("gs-banner-test-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
+        let config_path = dir.join("banner.json");
+        assert_eq!(read_config(&dir), BannerConfig::default());
+        std::fs::write(&config_path, "not JSON").unwrap();
         assert_eq!(read_config(&dir), BannerConfig::default());
         std::fs::write(
-            dir.join("banner.json"),
-            r#"{"showRose":false,"color":"cyan"}"#,
+            &config_path,
+            r#"{"showRose":false,"showTextLogo":1,"color":"cyan"}"#,
         )
         .unwrap();
         assert_eq!(
             read_config(&dir),
             BannerConfig {
                 show_rose: false,
-                show_text_logo: true,
-                palette: Palette::Cyan
+                show_text_logo: true
+            }
+        );
+        std::fs::write(&config_path, r#"{"showTextLogo":false}"#).unwrap();
+        assert_eq!(
+            read_config(&dir),
+            BannerConfig {
+                show_rose: true,
+                show_text_logo: false
             }
         );
         std::fs::remove_dir_all(dir).unwrap();

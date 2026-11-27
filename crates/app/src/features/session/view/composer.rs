@@ -4,10 +4,10 @@ use std::time::{Duration, Instant};
 
 /// The focus pulse's length.
 const PULSE: Duration = Duration::from_millis(460);
-/// A typed kiss's flight, the least time between two, and how many fly.
-const KISS_LIFE: Duration = Duration::from_millis(900);
-const KISS_GAP: Duration = Duration::from_millis(90);
-const KISSES_MAX: usize = 10;
+/// A typing particle's flight, the least time between two, and how many fly.
+const PARTICLE_LIFE: Duration = Duration::from_millis(900);
+const PARTICLE_GAP: Duration = Duration::from_millis(90);
+const PARTICLES_MAX: usize = 10;
 
 use gpui_kit::assets::IconName;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
@@ -23,7 +23,7 @@ use super::{FileStrip, NARROW, TINY, file_tile, image_tile, number_badge};
 use crate::features::session::SessionView;
 use crate::features::session::attachments::{self, PastedText};
 use crate::features::session::submit::SKILL_TOKEN_ID;
-use crate::shared::kisses::{HEART, LIPS, noise, paint_sprite};
+use crate::shared::kisses::{noise, paint_particle};
 use crate::shared::ui;
 use gentle_core::input_style::InputStyle;
 use gentle_core::transcript::format_tokens;
@@ -345,22 +345,23 @@ impl SessionView {
             )
     }
 
-    /// The text grew (you typed): blow a small kiss from the caret. At most
-    /// one every `KISS_GAP` and `KISSES_MAX` alive, so it stays a sprinkle.
+    /// The text grew (you typed): emit a particle from the caret. At most
+    /// one every `PARTICLE_GAP` and `PARTICLES_MAX` alive.
     /// None when Configuration turned them off, or with reduced motion.
-    pub(in crate::features::session) fn blow_kiss(&mut self, cx: &mut Context<Self>) {
+    pub(in crate::features::session) fn emit_typing_particle(&mut self, cx: &mut Context<Self>) {
         let len = self.composer.read(cx).value().len();
         let typed = len > self.composer_len;
         self.composer_len = len;
         if !typed || !crate::shared::kisses::typing(cx).plays(cx.reduce_motion()) {
             return;
         }
-        self.kisses.retain(|(at, _, _)| at.elapsed() < KISS_LIFE);
+        self.typing_particles
+            .retain(|(at, _, _)| at.elapsed() < PARTICLE_LIFE);
         let recent = self
-            .kisses
+            .typing_particles
             .last()
-            .is_some_and(|(at, _, _)| at.elapsed() < KISS_GAP);
-        if recent || self.kisses.len() >= KISSES_MAX {
+            .is_some_and(|(at, _, _)| at.elapsed() < PARTICLE_GAP);
+        if recent || self.typing_particles.len() >= PARTICLES_MAX {
             return;
         }
         let Some(caret) = self.composer.read(cx).prepaint_caret_geometry() else {
@@ -368,39 +369,38 @@ impl SessionView {
         };
         let bounds = caret.cursor_bounds();
         let at = point(bounds.origin.x, bounds.origin.y);
-        self.kisses.push((Instant::now(), at, self.kisses_blown));
-        self.kisses_blown += 1;
+        self.typing_particles
+            .push((Instant::now(), at, self.particles_emitted));
+        self.particles_emitted += 1;
     }
 
-    /// Drop the kisses that landed and end a finished focus pulse; whether
-    /// the pulse still plays (the view then asks for the next frame; the
-    /// kisses ask for the live layer's).
+    /// Drop expired particles and end a finished focus pulse; whether the
+    /// pulse still plays (particles ask for frames on the live layer instead).
     pub(super) fn composer_animating(&mut self) -> bool {
-        self.kisses.retain(|(at, _, _)| at.elapsed() < KISS_LIFE);
+        self.typing_particles
+            .retain(|(at, _, _)| at.elapsed() < PARTICLE_LIFE);
         if self.composer_pulse.is_some_and(|at| at.elapsed() >= PULSE) {
             self.composer_pulse = None;
         }
         self.composer_pulse.is_some()
     }
 
-    /// The kisses in the air: each rises from where it was blown, swaying,
-    /// pops in small, and fades. Every fourth one is a heart. Painted in
-    /// window coordinates, over the composer, on the live layer: while one
-    /// flies it asks for the layer's next frame, and the conversation is
-    /// reused from its cache.
-    fn render_kisses(&self) -> Option<Div> {
-        if self.kisses.is_empty() {
+    /// Paws and notes rise from the caret, swaying and fading. While any
+    /// are in flight, only the live layer asks for its next frame; the
+    /// conversation is reused from its cache.
+    fn render_typing_particles(&self) -> Option<Div> {
+        if self.typing_particles.is_empty() {
             return None;
         }
-        let kisses = self.kisses.clone();
+        let particles = self.typing_particles.clone();
         let build = move || {
-            let kisses = kisses.clone();
+            let particles = particles.clone();
             canvas(
                 |_, _, _| {},
                 move |_, _, window, _| {
                     let mut flying = false;
-                    for (born, from, i) in &kisses {
-                        let age = born.elapsed().as_secs_f32() / KISS_LIFE.as_secs_f32();
+                    for (born, from, i) in &particles {
+                        let age = born.elapsed().as_secs_f32() / PARTICLE_LIFE.as_secs_f32();
                         if age >= 1. {
                             continue;
                         }
@@ -417,23 +417,7 @@ impl SessionView {
                         let grow = ui::spring((age * 3.).min(1.));
                         let dot = (1.1 + 0.4 * noise(i, 3)) * (0.5 + 0.5 * grow);
                         let alpha = if age > 0.55 { (1. - age) / 0.45 } else { 1. };
-                        let heart = i % 4 == 3;
-                        let (body, line) = if heart {
-                            (ui::petal(), ui::petal())
-                        } else {
-                            (
-                                hsla(340. / 360., 0.85, 0.62, 1.),
-                                hsla(340. / 360., 0.70, 0.30, 1.),
-                            )
-                        };
-                        paint_sprite(
-                            window,
-                            if heart { &HEART } else { &LIPS },
-                            at,
-                            dot,
-                            body.opacity(alpha),
-                            line.opacity(alpha),
-                        );
+                        paint_particle(window, i, at, dot, alpha);
                     }
                     // Only the layer's copy paints: the slot's is invisible.
                     if flying {
@@ -445,7 +429,12 @@ impl SessionView {
             .size_0()
             .into_any_element()
         };
-        Some(self.live_slots.slot("kisses", build).absolute().size_0())
+        Some(
+            self.live_slots
+                .slot("typing-particles", build)
+                .absolute()
+                .size_0(),
+        )
     }
 
     /// Play the focus pulse (none with reduced motion): frames are asked
@@ -847,7 +836,7 @@ impl SessionView {
             .children(self.render_review_confirm(cx))
             .child(self.render_activity(rem_size, cx))
             .child(composer)
-            .children(self.render_kisses());
+            .children(self.render_typing_particles());
         (main.into_any_element(), strip)
     }
 
