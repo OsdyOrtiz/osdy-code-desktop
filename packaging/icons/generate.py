@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Writes icon.svg: the pixel rose on a Tokyo Night squircle.
+"""Writes icon.svg: the neon pink pixel rose on a Tokyo Night squircle.
 
 The rose is decoded from the braille art in crates/app/src/shared/banner.rs, so the
 icon and the in-app banner never drift apart. Layout follows Apple's macOS
@@ -104,9 +104,9 @@ def main():
       <stop offset="0.45" stop-color="#ffffff" stop-opacity="0"/>
     </linearGradient>
     <linearGradient id="petal" x1="0" y1="{top:.1f}" x2="0" y2="{bottom:.1f}" gradientUnits="userSpaceOnUse">
-      <stop offset="0" stop-color="#e4d6ff"/>
-      <stop offset="0.35" stop-color="#bb9af7"/>
-      <stop offset="1" stop-color="#7aa2f7"/>
+      <stop offset="0" stop-color="#ffd1ec"/>
+      <stop offset="0.35" stop-color="#ff6ac1"/>
+      <stop offset="1" stop-color="#b97cff"/>
     </linearGradient>
     <clipPath id="body"><path d="{body}"/></clipPath>
   </defs>

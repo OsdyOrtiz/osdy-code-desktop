@@ -238,7 +238,8 @@ pub struct BannerConfig {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Palette {
-    /// The app's colors: a purple rose, a blue wordmark and its dark blue shadow.
+    /// The app's colors: a neon purple rose, a neon pink wordmark and its
+    /// dark magenta shadow.
     TokyoNight,
     /// Everything required is installed: the welcome's banner turns
     /// Tokyo Night's green.
@@ -249,7 +250,7 @@ impl Palette {
     /// (rose, logo ink, logo shadow)
     fn colors(self) -> (Rgba, Rgba, Rgba) {
         match self {
-            Self::TokyoNight => (rgb(0xbb9af7), rgb(0x7aa2f7), rgb(0x3d59a1)),
+            Self::TokyoNight => (rgb(0xb97cff), rgb(0xff6ac1), rgb(0x8c2f73)),
             Self::Ready => (rgb(0x9ece6a), rgb(0x9ece6a), rgb(0x41592c)),
         }
     }
