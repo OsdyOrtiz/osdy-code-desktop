@@ -70,7 +70,7 @@ raw-window-handle = "0.6"
 webkit2gtk = "2.0"
 # Desktop apps an agent drives (`gentle-screen`): X11 window lists, captures
 # and XTEST input. The version GPUI already locks.
-x11rb = { version = "0.13", features = ["xtest"] }
+x11rb = { version = "0.14", features = ["xtest"] }
 
 # The in-app browser on Windows: WebView2 in a popup owned by the window (GPUI
 # composites above child windows), rounded by DWM on Windows 11.
