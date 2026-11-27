@@ -717,7 +717,8 @@ impl SessionView {
     // ── Empty and error states ─────────────────────────────────────────────
 
     fn render_hero(&self, cx: &mut Context<Self>) -> impl IntoElement {
-        let version = self.backend.version.clone().unwrap_or_default();
+        // The app's own version, not the Gentle Shell backend's.
+        let version = env!("CARGO_PKG_VERSION");
         let needs_sign_in =
             self.backend.is_ready() && self.models.loaded && self.models.available.is_empty();
         // Shrink the visible banner layers to fit the pane.
@@ -2094,8 +2095,8 @@ impl Render for SessionView {
             });
             self.list.language_changed(self.transcript.items.len());
         }
-        // An `@` reference searches this tab's folder: its files are read once
         self.sync_view(cx);
+        // An `@` reference searches this tab's folder: its files are read once
         // the composer holds one (see `path_menu`).
         self.ensure_path_files(cx);
         self.watch_surfaces(window, cx);
