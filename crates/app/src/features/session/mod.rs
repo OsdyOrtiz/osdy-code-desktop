@@ -151,10 +151,10 @@ pub struct SessionView {
     /// When the composer last took the keyboard: its pulse plays for
     /// `PULSE` from then (see `composer_shell`), a frame at a time.
     composer_pulse: Option<std::time::Instant>,
-    /// Pixel kisses floating up from the caret as you type: when each was
-    /// blown, where, and its number (for its own drift and size).
-    kisses: Vec<(std::time::Instant, Point<Pixels>, usize)>,
-    kisses_blown: usize,
+    /// Particles floating up from the caret as you type: when each was
+    /// emitted, where, and its number (for its sprite, drift and size).
+    typing_particles: Vec<(std::time::Instant, Point<Pixels>, usize)>,
+    particles_emitted: usize,
     /// The composer's text length last time, to tell typing from deleting.
     composer_len: usize,
     /// The `@` file menu's files and highlight (see `view::path_menu`):
@@ -289,7 +289,7 @@ impl SessionView {
                     InputEvent::PressEnter { shift: false, .. } => this.submit(window, cx),
                     InputEvent::Change => {
                         this.sync_pasted(window, cx);
-                        this.blow_kiss(cx);
+                        this.emit_typing_particle(cx);
                         cx.notify();
                     }
                     InputEvent::Focus | InputEvent::Blur => {
@@ -381,8 +381,8 @@ impl SessionView {
             composer,
             composer_focused: false,
             composer_pulse: None,
-            kisses: Vec::new(),
-            kisses_blown: 0,
+            typing_particles: Vec::new(),
+            particles_emitted: 0,
             composer_len: 0,
             path_menu: view::PathMenu::default(),
             attachments: Vec::new(),

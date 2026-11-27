@@ -1,5 +1,5 @@
-//! The kisses the composer blows from the caret while you type: whether they
-//! play, saved as `composerParticles` in the app's `settings.json`.
+//! Whether the composer's paws and notes play, saved as `composerParticles`
+//! in the app's `settings.json`.
 
 use serde_json::Value;
 
@@ -28,8 +28,10 @@ impl TypingKisses {
     /// One line for Configuration, next to the choice: what it does.
     pub fn summary(self) -> &'static str {
         match self {
-            TypingKisses::Auto => "Kisses float up as you type, unless the system reduces motion.",
-            TypingKisses::Off => "No kisses while typing.",
+            TypingKisses::Auto => {
+                "Paws and notes float up as you type, unless the system reduces motion."
+            }
+            TypingKisses::Off => "No paws or notes while typing.",
         }
     }
 
@@ -45,7 +47,7 @@ impl TypingKisses {
         Value::String(self.label().to_ascii_lowercase())
     }
 
-    /// Whether a kiss is blown, given the system's reduce-motion setting.
+    /// Whether typing particles play, given the system's reduce-motion setting.
     pub fn plays(self, reduce_motion: bool) -> bool {
         self == TypingKisses::Auto && !reduce_motion
     }

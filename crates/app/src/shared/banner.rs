@@ -48,7 +48,7 @@ impl BannerConfig {
     }
 
     /// The badge's mouth, relative to the banner's center, in unscaled units.
-    pub fn kiss_anchor(self) -> Option<(f32, f32)> {
+    pub fn particle_anchor(self) -> Option<(f32, f32)> {
         self.show_rose.then(|| {
             let x = BADGE / 2. - self.width() / 2.;
             // Mouth center is at (192, 266) in the 384 px source canvas.
@@ -303,7 +303,7 @@ mod tests {
     }
 
     #[test]
-    fn kisses_track_the_badge_when_the_wordmark_is_hidden() {
+    fn particles_track_the_badge_when_the_wordmark_is_hidden() {
         let both = BannerConfig::default();
         let badge_only = BannerConfig {
             show_text_logo: false,
@@ -313,13 +313,13 @@ mod tests {
             show_rose: false,
             ..both
         };
-        let (both_x, both_y) = both.kiss_anchor().unwrap();
-        let (badge_x, badge_y) = badge_only.kiss_anchor().unwrap();
+        let (both_x, both_y) = both.particle_anchor().unwrap();
+        let (badge_x, badge_y) = badge_only.particle_anchor().unwrap();
         assert_eq!(badge_x, 0.);
         assert_eq!(both_x + (both.width() - badge_only.width()) / 2., badge_x);
         assert_eq!(both_y, badge_y);
         assert!(badge_y > 0. && badge_y < badge_only.width() / 2.);
-        assert_eq!(text_only.kiss_anchor(), None);
+        assert_eq!(text_only.particle_anchor(), None);
     }
 
     #[test]

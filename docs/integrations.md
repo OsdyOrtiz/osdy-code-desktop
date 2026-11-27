@@ -612,7 +612,7 @@ App paths: `dirs::data_dir()/osdy-code-desktop/` (on macOS, `~/Library/Applicati
 
 | File | Owner | Read / write | Module |
 | --- | --- | --- | --- |
-| `<data>/osdy-code-desktop/settings.json` (`theme`, `transparency`, `blur`, `opacity`, `interfaceScale`, `interfaceFont`, `codeFont`, `terminalFont`, `codeFontSize`, `terminalFontSize`, `composerParticles`, `onboarding`, `browserProfiles`, `changesGroupByFolder`) | App | R/W | `shared/themes.rs` (`store_path`, `write_key`, `write_glass`, `write_fonts` through `apply_fonts`), `shared/kisses.rs` (`set_typing`), `features/setup/mod.rs` (`first_run`, `mark_done`), `features/browser/mod.rs` (`add_named_profile`), `features/files/changes.rs` (`write_group_by_folder`) |
+| `<data>/osdy-code-desktop/settings.json` (`theme`, `transparency`, `blur`, `opacity`, `interfaceScale`, `interfaceFont`, `codeFont`, `terminalFont`, `codeFontSize`, `terminalFontSize`, `composerParticles`, `onboarding`, `browserProfiles`, `changesGroupByFolder`) | App | R/W | `shared/themes.rs` (`store_path`, `write_key`, `write_glass`, `write_fonts` through `apply_fonts`), `shared/kisses.rs` (`set_typing` for Typing paws & notes), `features/setup/mod.rs` (`first_run`, `mark_done`), `features/browser/mod.rs` (`add_named_profile`), `features/files/changes.rs` (`write_group_by_folder`) |
 | `<data>/osdy-code-desktop/workspaces.json` | App | R/W | `features/workspaces/store.rs` |
 | `<data>/osdy-code-desktop/app-update.json` | App | R/W | `features/app_update/cache.rs` |
 | `<data>/osdy-code-desktop/engram-update.json` (`checkedAt`, `latest`, `skipped`) | App | R/W | `features/updates/engram.rs` |
