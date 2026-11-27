@@ -2079,7 +2079,6 @@ impl Render for SessionView {
         self.live_slots.clear(cx.entity_id());
         // A tab starts its backend once shown.
         self.ensure_started(window, cx);
-        self.sync_view(cx);
         i18n::sync_placeholder(
             &self.model_search,
             "Search models…",
@@ -2096,6 +2095,7 @@ impl Render for SessionView {
             self.list.language_changed(self.transcript.items.len());
         }
         // An `@` reference searches this tab's folder: its files are read once
+        self.sync_view(cx);
         // the composer holds one (see `path_menu`).
         self.ensure_path_files(cx);
         self.watch_surfaces(window, cx);
