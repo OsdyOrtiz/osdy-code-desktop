@@ -2,7 +2,7 @@
 //! second launch hands its folder/prompt to the running app and exits.
 //!
 //! The running app listens on a loopback TCP port recorded, with a random
-//! token, in `<data dir>/gentle-shell-gpui/instance.json` (mode 0600). A
+//! token, in `<data dir>/osdy-code-desktop/instance.json` (mode 0600). A
 //! launch that cannot reach a live listener becomes the primary.
 
 use std::io::{BufRead, BufReader, Write};
@@ -129,7 +129,7 @@ fn forward(path: &Path, request: &OpenRequest) -> bool {
 /// Hand a `gentle-browser` operation to the running app and wait up to
 /// `timeout` for its answer.
 pub fn browser(op: &serde_json::Value, timeout: Duration) -> Result<serde_json::Value, String> {
-    let not_running = || "the Gentle Shell app isn't running".to_string();
+    let not_running = || "Osdy Code Desktop isn't running".to_string();
     let record = record_path()
         .and_then(|path| record(&path))
         .ok_or_else(not_running)?;

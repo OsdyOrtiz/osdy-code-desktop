@@ -172,10 +172,10 @@ mod tests {
         let archive = dir.join("a.zip");
         let mut zip = zip::ZipWriter::new(fs::File::create(&archive).unwrap());
         let options = SimpleFileOptions::default();
-        zip.add_directory("Gentle Shell.app/Contents/MacOS/", options)
+        zip.add_directory("Osdy Code Desktop.app/Contents/MacOS/", options)
             .unwrap();
         zip.start_file(
-            "Gentle Shell.app/Contents/MacOS/gentle-shell-gpui",
+            "Osdy Code Desktop.app/Contents/MacOS/gentle-shell-gpui",
             options.unix_permissions(0o755),
         )
         .unwrap();
@@ -183,16 +183,16 @@ mod tests {
         // A `.app` carries symlinks, but only Unix builds extract them; off
         // Unix a symlink is refused (see `refuses_symlinks_off_unix`).
         #[cfg(unix)]
-        zip.add_symlink("Gentle Shell.app/Contents/Current", "MacOS", options)
+        zip.add_symlink("Osdy Code Desktop.app/Contents/Current", "MacOS", options)
             .unwrap();
-        zip.start_file("__MACOSX/._Gentle Shell.app", options)
+        zip.start_file("__MACOSX/._Osdy Code Desktop.app", options)
             .unwrap();
         zip.write_all(b"fork").unwrap();
         zip.finish().unwrap();
 
         let out = dir.join("out");
         extract_zip(&archive, &out).unwrap();
-        let binary = out.join("Gentle Shell.app/Contents/MacOS/gentle-shell-gpui");
+        let binary = out.join("Osdy Code Desktop.app/Contents/MacOS/gentle-shell-gpui");
         assert_eq!(fs::read(&binary).unwrap(), b"binary");
         #[cfg(unix)]
         {
@@ -201,13 +201,13 @@ mod tests {
                 fs::metadata(&binary).unwrap().permissions().mode() & 0o777,
                 0o755
             );
-            let link = out.join("Gentle Shell.app/Contents/Current");
+            let link = out.join("Osdy Code Desktop.app/Contents/Current");
             assert_eq!(fs::read_link(&link).unwrap(), Path::new("MacOS"));
         }
         assert!(!out.join("__MACOSX").exists());
         assert_eq!(
             find_payload("macos", &out, "0.2.0").unwrap(),
-            out.join("Gentle Shell.app")
+            out.join("Osdy Code Desktop.app")
         );
         fs::remove_dir_all(&dir).unwrap();
     }
@@ -235,7 +235,7 @@ mod tests {
     fn extracts_ditto_zip() {
         use std::os::unix::fs::PermissionsExt as _;
         let dir = temp_dir("ditto");
-        let bundle = fake_bundle(&dir.join("src"), "Gentle Shell.app", "binary");
+        let bundle = fake_bundle(&dir.join("src"), "Osdy Code Desktop.app", "binary");
         let binary = bundle.join("Contents/MacOS").join(BINARY);
         fs::set_permissions(&binary, fs::Permissions::from_mode(0o755)).unwrap();
         std::os::unix::fs::symlink("MacOS", bundle.join("Contents/Current")).unwrap();

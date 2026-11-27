@@ -66,12 +66,12 @@ pub fn run(
                 window_min_size: Some(size(px(720.), px(480.))),
                 window_background: WindowBackgroundAppearance::Blurred,
                 titlebar: Some(TitlebarOptions {
-                    title: Some("Gentle Shell".into()),
+                    title: Some("Osdy Code Desktop".into()),
                     appears_transparent: true,
                     // Centered in the 36 px title bar (workspace.rs).
                     traffic_light_position: Some(point(px(14.), px(11.))),
                 }),
-                app_id: Some("dev.gentle-shell.gpui".into()),
+                app_id: Some("io.github.osdyortiz.osdy-code-desktop".into()),
                 #[cfg(target_os = "linux")]
                 icon: crate::platform::icons::window_icon(),
                 ..TitleBar::window_options()
@@ -84,7 +84,7 @@ pub fn run(
                 integration::attach_sidebar(&workspace, window, cx);
                 workspace
             })
-            .expect("failed to open the Gentle Shell window");
+            .expect("failed to open the Osdy Code Desktop window");
             // Requests from later launches: bring this window forward and act on them.
             // Weak, so quitting releases the workspace (and stops its tabs' backends).
             let workspace = workspace.downgrade();
@@ -233,7 +233,7 @@ fn bind_keys(cx: &mut App) {
 
 fn set_menus(cx: &mut App) {
     cx.set_menus(vec![Menu {
-        name: "Gentle Shell".into(),
+        name: "Osdy Code Desktop".into(),
         items: vec![
             MenuItem::action("New Tab", NewTab),
             MenuItem::action("New Terminal Tab", NewTerminalTab),
@@ -252,7 +252,7 @@ fn set_menus(cx: &mut App) {
             MenuItem::action("Zoom Out", ZoomOut),
             MenuItem::action("Actual Size", ActualSize),
             MenuItem::separator(),
-            MenuItem::action("Quit Gentle Shell", Quit),
+            MenuItem::action("Quit Osdy Code Desktop", Quit),
         ],
         disabled: false,
     }]);

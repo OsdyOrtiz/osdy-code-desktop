@@ -136,9 +136,8 @@ impl NativeView {
                 std::mem::size_of_val(&corners) as u32,
             );
         }
-        // Each profile is a WebView2 user data folder of its own; Private is
-        // InPrivate; Shared keeps the default folder every page used before.
-        let mut context = (!profile.is_shared() && !profile.is_private())
+        // Keep every persistent profile, including Shared, under app data.
+        let mut context = (!profile.is_private())
             .then(|| super::profile_dir(profile).map(|dir| wry::WebContext::new(Some(dir))))
             .flatten();
         let builder = match context.as_mut() {

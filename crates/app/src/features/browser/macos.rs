@@ -64,8 +64,6 @@ impl NativeView {
         // earlier, WebKit only has the default one).
         let builder = if profile.is_private() {
             builder.with_incognito(true)
-        } else if profile.is_shared() {
-            builder
         } else {
             builder.with_data_store_identifier(profile.store_id())
         };

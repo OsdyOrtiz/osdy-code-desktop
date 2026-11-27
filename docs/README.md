@@ -1,6 +1,6 @@
 # Documentation
 
-Gentle Shell GPUI is a desktop app in Rust ([GPUI](https://www.gpui.rs) + gpui-kit) that gives [Gentle Shell](https://github.com/Gentleman-Programming/gentle-shell)'s agents a native interface: each agent tab launches `gentle-shell --mode rpc` and talks to it over JSONL. This folder explains how it is built, how it integrates and how to work on it.
+Osdy Code Desktop is a desktop app in Rust ([GPUI](https://www.gpui.rs) + gpui-kit) that gives [Gentle Shell](https://github.com/Gentleman-Programming/gentle-shell)'s agents a native interface: each agent tab launches `gentle-shell --mode rpc` and talks to it over JSONL. This folder explains how it is built, how it integrates and how to work on it.
 
 ## What to read for what you're doing
 

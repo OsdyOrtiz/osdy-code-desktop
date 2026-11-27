@@ -368,7 +368,7 @@ impl Profile {
         *self == Profile::Private
     }
 
-    /// The default store: the one every page used before profiles.
+    /// The general-purpose store shared by pages that use the Shared profile.
     pub fn is_shared(&self) -> bool {
         *self == Profile::Shared
     }
@@ -393,10 +393,10 @@ impl Profile {
         }
     }
 
-    /// A stable 16-byte identifier for the store (WebKit's data stores are
-    /// named by one).
+    /// A stable 16-byte WebKit store identifier, scoped to this app so the
+    /// same browser profile in upstream gets a different store.
     pub fn store_id(&self) -> [u8; 16] {
-        let key = self.key();
+        let key = format!("osdy-code-desktop:{}", self.key());
         let mut id = [0u8; 16];
         id[..8].copy_from_slice(&fnv(key.as_bytes(), 0).to_le_bytes());
         id[8..].copy_from_slice(&fnv(key.as_bytes(), 0x9e37_79b9_7f4a_7c15).to_le_bytes());
@@ -472,7 +472,7 @@ impl CardLayout {
 // ── The command line ────────────────────────────────────────────────────────
 
 pub const USAGE: &str = "\
-gentle-browser: drive a page in the Gentle Shell app's browser
+gentle-browser: drive a page in the Osdy Code Desktop browser
 
   gentle-browser open <url> [--name N] [--profile P] [--hidden]
   gentle-browser tabs
@@ -787,6 +787,16 @@ mod tests {
         );
         assert!(!Profile::Named("../..".into()).folder().contains('.'));
         assert_ne!(Profile::Agent.store_id(), Profile::Shared.store_id());
+    }
+
+    #[test]
+    fn fork_identity_uses_separate_webkit_profile_stores() {
+        let profile = Profile::Named("Work".into());
+        let key = profile.key();
+        let mut upstream = [0; 16];
+        upstream[..8].copy_from_slice(&fnv(key.as_bytes(), 0).to_le_bytes());
+        upstream[8..].copy_from_slice(&fnv(key.as_bytes(), 0x9e37_79b9_7f4a_7c15).to_le_bytes());
+        assert_ne!(profile.store_id(), upstream);
     }
 
     #[test]

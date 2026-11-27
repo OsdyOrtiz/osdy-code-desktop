@@ -98,7 +98,10 @@ impl PaletteView {
             icon: IconName::Folder,
             title: "Browse folders…".into(),
             meta: String::new(),
-            detail: format!("Open Gentle Shell in any folder ({})", ui::shortcut("O")),
+            detail: format!(
+                "Open Osdy Code Desktop in any folder ({})",
+                ui::shortcut("O")
+            ),
             group: "Workspaces",
             action: PaletteAction::OpenExplorer,
             workspace: None,

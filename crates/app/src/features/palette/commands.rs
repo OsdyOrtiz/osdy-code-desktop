@@ -15,7 +15,7 @@ pub(super) fn screen_rows(tab_layout: TabLayout) -> Vec<Row> {
         title: title.into(),
         meta: String::new(),
         detail: detail.into(),
-        group: "Gentle Shell",
+        group: "Osdy Code Desktop",
         action,
         workspace: None,
         current: false,
@@ -81,7 +81,7 @@ pub(super) fn screen_rows(tab_layout: TabLayout) -> Vec<Row> {
         row(
             IconName::Settings,
             "Settings",
-            "Gentle Shell configuration",
+            "Osdy Code Desktop and Gentle Shell settings",
             PaletteAction::Settings,
         ),
         row(
@@ -100,15 +100,15 @@ pub(super) fn screen_rows(tab_layout: TabLayout) -> Vec<Row> {
             IconName::Folder,
             "Browse folders",
             &format!(
-                "Open Gentle Shell in any folder, oil-style ({})",
+                "Open Osdy Code Desktop in any folder, oil-style ({})",
                 ui::shortcut("O")
             ),
             PaletteAction::OpenExplorer,
         ),
         row(
             IconName::Terminal,
-            "Install `gsd` command",
-            "Type gsd in any terminal folder to open it here as a workspace",
+            "Install `ocd` command",
+            "Type ocd in any terminal folder to open it here as a workspace",
             PaletteAction::InstallGsd,
         ),
         row(

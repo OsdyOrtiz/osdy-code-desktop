@@ -1,13 +1,13 @@
 [Desktop Entry]
 Type=Application
 Version=1.0
-Name=Gentle Shell
+Name=Osdy Code Desktop
 GenericName=AI Coding Shell
 Comment=Desktop front-end for Gentle Shell
 Exec=gentle-shell-gpui %f
-Icon=gentle-shell-gpui
+Icon=osdy-code-desktop
 Terminal=false
 Categories=Development;IDE;
 Keywords=terminal;ai;agent;shell;
 StartupNotify=true
-StartupWMClass=dev.gentle-shell.gpui
+StartupWMClass=io.github.osdyortiz.osdy-code-desktop

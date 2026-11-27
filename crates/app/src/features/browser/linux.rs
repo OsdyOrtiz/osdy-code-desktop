@@ -76,9 +76,8 @@ impl NativeView {
         relays: super::Relays,
     ) -> Result<Self, String> {
         GTK.clone()?;
-        // Each profile is a WebKit context with a data folder of its own;
-        // Private keeps nothing; Shared is the default every page used before.
-        let mut context = (!profile.is_shared() && !profile.is_private())
+        // Keep every persistent profile, including Shared, under app data.
+        let mut context = (!profile.is_private())
             .then(|| super::profile_dir(profile).map(|dir| wry::WebContext::new(Some(dir))))
             .flatten();
         let builder = match context.as_mut() {

@@ -1,4 +1,4 @@
-// Gentle Shell: what an agent's `gentle-browser` does inside a page. The app
+// Osdy Code Desktop: what an agent's `gentle-browser` does inside a page. The app
 // runs this before each operation (it does nothing when already loaded),
 // starts one with `__gentleBrowser.run(id, name, args)`, and polls
 // `__gentleBrowser.take(id)` for the answer. Refs (e12) name the elements a

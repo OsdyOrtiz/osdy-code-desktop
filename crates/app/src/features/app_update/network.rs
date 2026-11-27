@@ -9,8 +9,7 @@ use std::time::Duration;
 use super::release::{Release, hex, parse_release};
 use super::{Phase, Problem, SUMS, fail};
 
-const LATEST_API: &str =
-    "https://api.github.com/repos/Gentleman-Programming/gentle-shell-gpui/releases/latest";
+const LATEST_API: &str = "https://api.github.com/repos/OsdyOrtiz/osdy-code-desktop/releases/latest";
 const USER_AGENT: &str = concat!("gentle-shell-gpui/", env!("CARGO_PKG_VERSION"));
 const CHECK_TIMEOUT: Duration = Duration::from_secs(15);
 
@@ -43,13 +42,21 @@ fn get(agent: &ureq::Agent, url: &str) -> Result<ureq::http::Response<ureq::Body
 }
 
 pub(super) fn fetch_release() -> Result<Release, Problem> {
-    let mut response = agent(false)
-        .get(LATEST_API)
-        .header("User-Agent", USER_AGENT)
-        .header("Accept", "application/vnd.github+json")
-        .header("X-GitHub-Api-Version", "2022-11-28")
-        .call()
-        .map_err(|e| Problem::new(format!("Couldn't reach GitHub: {e}")))?;
+    fetch_release_with(|url| {
+        agent(false)
+            .get(url)
+            .header("User-Agent", USER_AGENT)
+            .header("Accept", "application/vnd.github+json")
+            .header("X-GitHub-Api-Version", "2022-11-28")
+            .call()
+            .map_err(|e| Problem::new(format!("Couldn't reach GitHub: {e}")))
+    })
+}
+
+fn fetch_release_with(
+    request: impl FnOnce(&str) -> Result<ureq::http::Response<ureq::Body>, Problem>,
+) -> Result<Release, Problem> {
+    let mut response = request(LATEST_API)?;
     match response.status().as_u16() {
         200..=299 => {}
         404 => return Err(Problem::new("No release has been published yet.")),
@@ -119,4 +126,30 @@ pub(super) fn fetch_text(url: &str) -> Result<String, Problem> {
         .body_mut()
         .read_to_string()
         .map_err(|e| Problem::new(format!("Couldn't read {SUMS}: {e}")))
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn fork_identity_checks_its_own_latest_release() {
+        let mut endpoint = String::new();
+        let result = super::fetch_release_with(|url| {
+            endpoint = url.to_owned();
+            Err(super::Problem::new("no network in this test"))
+        });
+        assert_eq!(
+            endpoint,
+            "https://api.github.com/repos/OsdyOrtiz/osdy-code-desktop/releases/latest"
+        );
+        assert_eq!(
+            result.err(),
+            Some(super::Problem::new("no network in this test"))
+        );
+        assert_eq!(
+            super::Problem::with_releases("manual update")
+                .link
+                .as_deref(),
+            Some("https://github.com/OsdyOrtiz/osdy-code-desktop/releases")
+        );
+    }
 }

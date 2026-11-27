@@ -4,18 +4,18 @@
 # See docs/security.md.
 
 # Everything: any maintainer.
-*                                       @ismaelosuna7824
+*                                       @OsdyOrtiz
 
 # Code that runs on CI, at build time or installs and updates the app on
 # users' machines. Keep this list to people trusted with releases, even when
 # the line above grows.
-/.github/                               @ismaelosuna7824
-/deny.toml                              @ismaelosuna7824
-/Cargo.toml                             @ismaelosuna7824
-/Cargo.lock                             @ismaelosuna7824
-/crates/*/Cargo.toml                    @ismaelosuna7824
-/crates/*/build.rs                      @ismaelosuna7824
-/packaging/                             @ismaelosuna7824
-/crates/app/src/features/app_update/    @ismaelosuna7824
-/crates/app/src/features/setup/         @ismaelosuna7824
-/crates/pi-rpc/                         @ismaelosuna7824
+/.github/                               @OsdyOrtiz
+/deny.toml                              @OsdyOrtiz
+/Cargo.toml                             @OsdyOrtiz
+/Cargo.lock                             @OsdyOrtiz
+/crates/*/Cargo.toml                    @OsdyOrtiz
+/crates/*/build.rs                      @OsdyOrtiz
+/packaging/                             @OsdyOrtiz
+/crates/app/src/features/app_update/    @OsdyOrtiz
+/crates/app/src/features/setup/         @OsdyOrtiz
+/crates/pi-rpc/                         @OsdyOrtiz

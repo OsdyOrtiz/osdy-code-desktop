@@ -58,12 +58,12 @@ BEGIN
   BEGIN
     BLOCK "040904B0"
     BEGIN
-      VALUE "CompanyName", "Gentle Shell"
-      VALUE "FileDescription", "Gentle Shell"
+      VALUE "CompanyName", "OsdyOrtiz"
+      VALUE "FileDescription", "Osdy Code Desktop"
       VALUE "FileVersion", "{version}"
       VALUE "InternalName", "gentle-shell-gpui"
       VALUE "OriginalFilename", "gentle-shell-gpui.exe"
-      VALUE "ProductName", "Gentle Shell"
+      VALUE "ProductName", "Osdy Code Desktop"
       VALUE "ProductVersion", "{version}"
       VALUE "LegalCopyright", "MIT License"
     END

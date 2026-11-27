@@ -1,9 +1,9 @@
 //! Folder explorer in the style of oil.nvim: one directory at a time, driven
-//! from the keyboard, to pick where Gentle Shell opens. ↵ enters a folder,
+//! from the keyboard, to pick where Osdy Code Desktop opens. ↵ enters a folder,
 //! `-` (or ←, or ⌫ with nothing typed) goes to the parent, `~` goes home and
 //! typing filters. ⌘↵ / Ctrl+↵ opens an agent tab in the selected folder (or
 //! the one shown), ⌥↵ / Alt+↵ a terminal; both show the workspace rooted
-//! there, creating it, like `gsd <folder>`.
+//! there, creating it, like `ocd <folder>`.
 
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
@@ -440,7 +440,7 @@ impl Render for ExplorerView {
                             .primary()
                             .small()
                             .icon(Icon::new(IconName::Bot))
-                            .label("Open Gentle Shell here")
+                            .label("Open Osdy Code Desktop here")
                             .on_click(cx.listener(|this, _, _, cx| {
                                 if !this.dir.as_os_str().is_empty() {
                                     cx.emit(ExplorerEvent::OpenAgent(this.dir.clone()))
@@ -479,7 +479,7 @@ impl Render for ExplorerView {
                     .child(hint(
                         [ui::key_button("explorer-agent", format!("{secondary} ↵"))
                             .on_click(cx.listener(|this, _, _, cx| this.open_agent(cx)))],
-                        "Gentle Shell",
+                        "Osdy Code Desktop",
                     ))
                     .child(hint(
                         [ui::key_button("explorer-terminal", format!("{alt} ↵"))

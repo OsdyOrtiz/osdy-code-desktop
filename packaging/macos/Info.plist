@@ -5,13 +5,13 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
 	<key>CFBundleDisplayName</key>
-	<string>Gentle Shell</string>
+	<string>Osdy Code Desktop</string>
 	<key>CFBundleName</key>
-	<string>Gentle Shell</string>
+	<string>Osdy Code Desktop</string>
 	<key>CFBundleExecutable</key>
 	<string>gentle-shell-gpui</string>
 	<key>CFBundleIdentifier</key>
-	<string>io.github.ismaelosuna7824.gentle-shell-gpui</string>
+	<string>io.github.osdyortiz.osdy-code-desktop</string>
 	<key>CFBundleIconFile</key>
 	<string>AppIcon</string>
 	<key>CFBundleInfoDictionaryVersion</key>

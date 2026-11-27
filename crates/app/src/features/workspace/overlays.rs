@@ -196,7 +196,7 @@ impl Workspace {
     }
 
     /// Show the workspace rooted at `folder`, creating it (a new workspace
-    /// opens with an agent tab). `gsd <folder>` and the explorer both land here.
+    /// opens with an agent tab). `ocd <folder>` and the explorer both land here.
     pub(super) fn show_folder(
         &mut self,
         folder: PathBuf,
@@ -211,7 +211,7 @@ impl Workspace {
         self.switch_workspace(index, window, cx);
     }
 
-    /// Palette → Install `gsd` command; the result arrives as a notification.
+    /// Palette → Install `ocd` command; the result arrives as a notification.
     fn install_gsd(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         cx.spawn_in(window, async move |_, cx| {
             let result = cx

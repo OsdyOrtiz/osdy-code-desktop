@@ -1,6 +1,6 @@
 # Development
 
-How to build, run, test and release Gentle Shell GPUI, and how to work on the project day to day without touching the developer's real app or data. Boundaries and code rules live in [`architecture.md`](architecture.md) and in the [ADRs](adr/); this page only links to them.
+How to build, run, test and release Osdy Code Desktop, and how to work on the project day to day without touching the developer's real app or data. Boundaries and code rules live in [`architecture.md`](architecture.md) and in the [ADRs](adr/); this page only links to them.
 
 ## Requirements
 
@@ -9,7 +9,7 @@ How to build, run, test and release Gentle Shell GPUI, and how to work on the pr
 | Rust | Stable, 1.88 or newer (README). The workspace uses `edition = "2024"` and the code uses `if let … && …` (let chains). There is no `rust-toolchain` or `rust-version`: CI installs `dtolnay/rust-toolchain@stable`. |
 | Components | `clippy` (CI installs it explicitly) and `rustfmt`. |
 | Gentle Shell | Needed for agent tabs: `npm install -g gentle-pi --allow-scripts=gentle-pi` and `gentle-shell setup`, or the standalone install in `~/.gentle-shell/bin/gentle-shell`. Without it the app still opens and shows the setup screen. |
-| Node.js | On the PATH (or the one the app installs in `<data dir>/gentle-shell-gpui/toolchain`). |
+| Node.js | On the PATH (or the one the app installs in `<data dir>/osdy-code-desktop/toolchain`). |
 | Linux | GPUI and WebKitGTK libraries, the same ones CI installs (`.github/workflows/ci.yml`). |
 | macOS (packaging) | `codesign`, `ditto`, `hdiutil`, `plutil` (ship with the system/Xcode CLT). Regenerating icons: `python3`, `swift`, `iconutil`. |
 | Windows (installer) | Inno Setup 6 (`ISCC.exe`). |
@@ -55,7 +55,7 @@ cargo build --profile dist -p gentle-shell-gpui   # as in a release
 | Argument | Effect |
 | --- | --- |
 | `FOLDER` | Selects (or creates) the workspace with that root. Ignored if it is not a directory. Without a folder, the last workspace is restored. |
-| `--cwd` | Without `FOLDER`, opens the folder the app was launched in (`cli::launch_dir`) as a workspace instead of restoring the last one. It is what `gsd` passes; a plain launch (Start menu, Finder, Dock) never uses its launch folder this way. A `FOLDER` that doesn't exist is ignored without falling back to the launch folder. |
+| `--cwd` | Without `FOLDER`, opens the folder the app was launched in (`cli::launch_dir`) as a workspace instead of restoring the last one. It is what `ocd` passes; a plain launch (Start menu, Finder, Dock) never uses its launch folder this way. A `FOLDER` that doesn't exist is ignored without falling back to the launch folder. |
 | `-p TEXT`, `--prompt TEXT` | Opens a new agent tab and, once the backend starts, runs the text as if it had been typed in the composer (`SessionView::run_text` in `features/session/submit.rs`). |
 | `-p "!cmd"` | Runs `cmd` as a shell command in that tab; `-p "!!cmd"` keeps it out of the context (Pi convention). |
 | `--diagnostics` | Records resource diagnostics for this run, like `GENTLE_SHELL_GPUI_DIAGNOSTICS=1` (see [Diagnostics](#diagnostics)). |
@@ -63,17 +63,17 @@ cargo build --profile dist -p gentle-shell-gpui   # as in a release
 
 `-p` is useful during development to bring the app to a specific state without typing into it.
 
-`gsd` (`crates/app/src/platform/gsd.rs`) is the user's command for this: a generated shim that runs `<app> --cwd "$@"` in the background (`start "" "<app>" --cwd %*` in a `.cmd` on Windows) and returns to the prompt. Unlike the agents' shims it lives on the user's own PATH, and only when they ask: the Windows installer ships `{app}\bin\gsd.cmd` and adds `{app}\bin` to `HKCU\Environment\Path` (removed on uninstall); ⌘K → Install `gsd` command writes `~/.local/bin/gsd` (macOS, Linux) or `<app data dir>\bin\gsd.cmd` plus that folder on the user PATH (Windows, read and written as the raw `REG_EXPAND_SZ` value so `%VAR%` entries survive). A marker line makes a `gsd` file the app's own: startup refreshes only that one (the executable moves on update), and the install refuses to overwrite anyone else's. An isolated copy (`GENTLE_SHELL_GPUI_DATA_DIR`) never refreshes it.
+`ocd` (`crates/app/src/platform/gsd.rs`) is the user's command for this: a generated shim that runs `<app> --cwd "$@"` in the background (`start "" "<app>" --cwd %*` in a `.cmd` on Windows) and returns to the prompt. `ocd workspace` commands run synchronously so their output and exit status reach the terminal. Unlike the agents' shims it lives on the user's own PATH, and only when they ask: the Windows installer ships `{app}\bin\ocd.cmd` and adds `{app}\bin` to `HKCU\Environment\Path` (removed on uninstall); ⌘K → Install `ocd` command writes `~/.local/bin/ocd` (macOS, Linux) or `<app data dir>\bin\ocd.cmd` plus that folder on the user PATH (Windows, read and written as the raw `REG_EXPAND_SZ` value so `%VAR%` entries survive). Startup refreshes only an `ocd` file with this fork's ownership marker; installation refuses to overwrite anyone else's shim. An isolated copy (`GENTLE_SHELL_GPUI_DATA_DIR`) never refreshes it.
 
 ### Single instance
 
-`crates/app/src/platform/instance.rs`: one app per user, whatever the build. The primary instance listens on a loopback TCP port and registers it with a random token in `<data dir>/gentle-shell-gpui/instance.json` (mode 0600 on Unix). A second launch sends its `OpenRequest { folder, prompt }` to the primary and exits (`Role::Forwarded`); if there is no live listener, it becomes the primary.
+`crates/app/src/platform/instance.rs`: one app per data directory. The primary instance listens on a loopback TCP port and registers it with a random token in `<data dir>/osdy-code-desktop/instance.json` (mode 0600 on Unix). A second launch sends its `OpenRequest { folder, prompt }` to the primary and exits (`Role::Forwarded`); if there is no live listener, it becomes the primary.
 
 Practical consequence: with your installed app open, `cargo run` **does not open a new window**; it sends the folder and prompt to the app that is already running. To run a development build at the same time, change the data dir (see [Isolated testing](#isolated-testing)).
 
 ### Data dir
 
-Everything the app stores lives under `dirs::data_dir()/gentle-shell-gpui/`, or under `GENTLE_SHELL_GPUI_DATA_DIR` when it is set (`shared/data_dir.rs`, see [Isolated testing](#isolated-testing)):
+Settings, workspaces and the toolchain live under `dirs::data_dir()/osdy-code-desktop/`, or under `GENTLE_SHELL_GPUI_DATA_DIR` when it is set (`shared/data_dir.rs`, see [Isolated testing](#isolated-testing)):
 
 | File | Owner |
 | --- | --- |
@@ -103,7 +103,7 @@ Everything the app stores lives under `dirs::data_dir()/gentle-shell-gpui/`, or 
 | `ENGRAM_BIN` | `features/setup/extras.rs` | Engram binary for the check, ahead of the PATH. Resolved the way it is run (a bare name on the PATH counts); when nothing it names can be run the check fails with that path and Install and Update stop, since a download can't fix it. Only for Engram on this computer: in a backend, Setup looks for Engram there. |
 | `SHELL` | `launch.rs` (`login_shell_path`), `features/terminal/mod.rs` | Login shell whose PATH is combined (Unix), and the shell for terminal panels. |
 | `GOBIN`, `GOPATH` | `launch.rs` (`go_bin_dir`) | Where `go install` puts programs (default `~/go/bin`), added at the end of the combined PATH when it exists. |
-| `GENTLE_SHELL_GPUI_DATA_DIR` | `shared/data_dir.rs` | Replaces the app's data folder (`<data dir>/gentle-shell-gpui`). Gentle Shell's homes still come from `HOME`. |
+| `GENTLE_SHELL_GPUI_DATA_DIR` | `shared/data_dir.rs` | Replaces the app's data folder (`<data dir>/osdy-code-desktop`). Gentle Shell's homes still come from `HOME`. |
 | `GENTLE_SHELL_GPUI_DIAGNOSTICS` | `shared/diagnostics.rs` | Any value but empty or `0` records resource diagnostics from launch (see [Diagnostics](#diagnostics)). |
 | `HOME` / `USERPROFILE` | `home.rs` (`home_dir`), `dirs` | Base of all homes and, on macOS/Linux, of the data dir. |
 
@@ -132,15 +132,15 @@ To try a branch with your Gentle Shell, providers and sign-ins as they are, chan
 git fetch origin pull/<N>/head:pr-<N> && git switch pr-<N>
 cargo build --release
 sandbox="$(mktemp -d)"
-cp "$HOME/Library/Application Support/gentle-shell-gpui/settings.json" "$sandbox/"  # optional: your theme, no welcome screen
+cp "$HOME/Library/Application Support/osdy-code-desktop/settings.json" "$sandbox/"  # optional: your theme, no welcome screen
 GENTLE_SHELL_GPUI_DATA_DIR="$sandbox" ./target/release/gentle-shell-gpui "$(mktemp -d)"
 ```
 
 The branch must contain `shared/data_dir.rs`: an older one ignores the variable and opens your real data (or hands off to your running app and exits). Merge `main` into a local copy first (`git switch -c try-<N> pr-<N> && git merge origin/main`), or use a temporary `HOME` instead.
 
-On Linux the settings are in `~/.local/share/gentle-shell-gpui/`; on Windows (PowerShell) `$env:APPDATA\gentle-shell-gpui\`, with `$env:GENTLE_SHELL_GPUI_DATA_DIR = "<folder>"` before running the exe. Unlike a temporary `HOME`, this also isolates the app on Windows.
+On Linux the settings are in `~/.local/share/osdy-code-desktop/`; on Windows (PowerShell) `$env:APPDATA\osdy-code-desktop\`, with `$env:GENTLE_SHELL_GPUI_DATA_DIR = "<folder>"` before running the exe. Unlike a temporary `HOME`, this also isolates the app on Windows.
 
-What stays shared: agent tabs run your real Gentle Shell, so sessions, memories and sign-ins are the real ones, and an agent edits the folder you open (hence the empty `mktemp -d` folder above). The toolchain the app installs (Maestro, Java, music, the diagram renderer) isn't in the new folder; link it if a test needs it: `ln -s "$HOME/Library/Application Support/gentle-shell-gpui/toolchain" "$sandbox/toolchain"`.
+What stays shared: agent tabs run your real Gentle Shell, so sessions, memories and sign-ins are the real ones, and an agent edits the folder you open (hence the empty `mktemp -d` folder above). The toolchain the app installs (Maestro, Java, music, the diagram renderer) isn't in the new folder; link it if a test needs it: `ln -s "$HOME/Library/Application Support/osdy-code-desktop/toolchain" "$sandbox/toolchain"`.
 
 ### Temporary HOME (first run)
 
@@ -236,7 +236,7 @@ To measure, run the release build in an isolated `HOME` and sample it: `ps -o %c
 
 ### Diagnostics
 
-For a report from someone else's machine ("it eats CPU with many agents", "this theme is heavy"), the app records itself. In **Configuration › General › Diagnostics** the person presses *Start recording*, reproduces the problem, and presses *Stop and show file*, which reveals the file in Finder or Explorer to drag into the issue (`features/settings/diagnostics.rs`). To record from launch instead, quit the app and start it with `GENTLE_SHELL_GPUI_DIAGNOSTICS=1` or `--diagnostics` (a launch while it runs is forwarded and records nothing). Every second `features/diagnostics/` appends one JSON line to `<data dir>/gentle-shell-gpui/diagnostics/diagnostics-<UTC>.jsonl`:
+For a report from someone else's machine ("it eats CPU with many agents", "this theme is heavy"), the app records itself. In **Configuration › General › Diagnostics** the person presses *Start recording*, reproduces the problem, and presses *Stop and show file*, which reveals the file in Finder or Explorer to drag into the issue (`features/settings/diagnostics.rs`). To record from launch instead, quit the app and start it with `GENTLE_SHELL_GPUI_DIAGNOSTICS=1` or `--diagnostics` (a launch while it runs is forwarded and records nothing). Every second `features/diagnostics/` appends one JSON line to `<data dir>/osdy-code-desktop/diagnostics/diagnostics-<UTC>.jsonl`:
 
 - **The app process:** CPU, memory, windows, the active theme and its scene motion.
 - **Frames requested by source line:** `ui::request_animation_frame` (call it instead of `window.request_animation_frame`), `ui::request_frame_in`, `ui::request_slow_frame` and the live indicators (`ui::pulse`, `ui::spinner`, `ui::shimmer`, `ui::orbit`), counted with `#[track_caller]` (an indicator on an agent's live layer counts under the line that builds it); renders of `Workspace`, `SessionView`, `LiveLayer` and `TerminalView`; wakeups of the poll loops that call `shared::diagnostics::tick()`. A repeating `with_animation` isn't counted by line; it shows in the renders.
@@ -299,8 +299,8 @@ Assets produced by `release.yml` (the updater consumes these names):
 Workflow steps:
 
 1. `version`: reads `[workspace.package] version` from `Cargo.toml`. On a tag, it fails if `GITHUB_REF_NAME != v<version>`; on `workflow_dispatch`, the optional `version` input must match.
-2. `build`: restores the `dist-<target>` cache (`save-if: false`), installs libraries on Linux and packages: `packaging/macos/bundle.sh <target> <v>` (with `MACOSX_DEPLOYMENT_TARGET=11.0`, ad hoc signing `codesign --sign -`, zip with `ditto` without `._*`, DMG with a shortcut to `/Applications`), `packaging/linux/package.sh <target> <v>` (binary, `.desktop`, `icon-512.png`), and on Windows `cargo build --profile dist`, `Compress-Archive` and `ISCC` on `packaging/windows/installer.iss` (installs Inno Setup with `choco` if missing).
-3. `release`: checks that all seven assets are present, writes `SHA256SUMS` and, only on `push`, publishes with `gh release create --verify-tag --generate-notes`, title `Gentle Shell <v>`. A version with `-` (`0.2.0-rc.1`) is published as `--prerelease`. On `workflow_dispatch` it uploads everything as a `release-dry-run-<v>` artifact without publishing.
+2. `build`: restores the `dist-<target>` cache (`save-if: false`), installs libraries on Linux and packages: `packaging/macos/bundle.sh <target> <v>` (with `MACOSX_DEPLOYMENT_TARGET=11.0`, ad hoc signing `codesign --sign -`, zip with `ditto` without `._*`, DMG with a shortcut to `/Applications`), `packaging/linux/package.sh <target> <v>` (binary, `osdy-code-desktop.desktop`, `osdy-code-desktop.png`), and on Windows `cargo build --profile dist`, `Compress-Archive` and `ISCC` on `packaging/windows/installer.iss` (installs Inno Setup with `choco` if missing).
+3. `release`: checks that all seven assets are present, writes `SHA256SUMS` and, only on `push`, publishes with `gh release create --verify-tag --generate-notes`, title `Osdy Code Desktop <v>`. A version with `-` (`0.2.0-rc.1`) is published as `--prerelease`. On `workflow_dispatch` it uploads everything as a `release-dry-run-<v>` artifact without publishing.
 
 ### Cutting a release
 
@@ -318,7 +318,7 @@ Workflow steps:
 
 | Module | Role |
 | --- | --- |
-| `network.rs` | `GET https://api.github.com/repos/Gentleman-Programming/gentle-shell-gpui/releases/latest`, download with SHA-256 and progress. |
+| `network.rs` | `GET https://api.github.com/repos/OsdyOrtiz/osdy-code-desktop/releases/latest`, download with SHA-256 and progress. |
 | `release.rs` | Only counts published releases, not `draft`, not `prerelease`, with a stable `vX.Y.Z`. `asset_name(version, os, arch)` picks `macos-<arch>.zip`, `windows-x86_64.zip` or `linux-x86_64.tar.gz` (there is no asset for Linux/Windows aarch64). `expected_digest` reads `SHA256SUMS`. `is_dev`: `0.0.0` or a non-stable version does not check at startup. |
 | `cache.rs` | `app-update.json`: 6 h cache (`TTL_MS`) and skipped version. |
 | `archive.rs` | Safe zip and tar.gz extraction. |
@@ -331,7 +331,7 @@ Therefore: renaming an asset, changing the `SHA256SUMS` format or the binary nam
 
 ### macOS
 
-- `packaging/macos/Info.plist` (identifier `io.github.ismaelosuna7824.gentle-shell-gpui`, `@VERSION@` and `@MIN_MACOS@` replaced by `bundle.sh`; the identifier predates the move to Gentleman-Programming and stays, since changing it makes macOS treat the app as a different one: its permissions and saved state). `GENTLE_BIN=<path>` packages an already built binary.
+- `packaging/macos/Info.plist` uses `io.github.osdyortiz.osdy-code-desktop` so macOS treats the fork as a separate app with its own permissions and saved state. `bundle.sh` substitutes `@VERSION@` and `@MIN_MACOS@` and builds `Osdy Code Desktop.app`. `GENTLE_BIN=<path>` packages an already built binary.
 - Outside a `.app` (`cargo run`), `platform/icons.rs` (`set_dock_icon`) sets the Dock icon at runtime from `icon-512.png`; inside the bundle it uses `AppIcon.icns`.
 - Ad hoc signing, not notarized: Gatekeeper blocks the first launch (README). `bundle.sh` clears xattrs before signing because they would break the seal.
 
@@ -340,11 +340,11 @@ Therefore: renaming an asset, changing the `SHA256SUMS` format or the binary nam
 - `main.rs`: `#![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]`. A release build has no console (no visible `stderr`); a debug build does.
 - Every child process goes through `pi_rpc::command` (`CREATE_NO_WINDOW`) so it does not open console windows.
 - `crates/app/build.rs` embeds `packaging/icons/icon.ico` (resource 1, the one GPUI uses for the window) and the package version with `embed-resource`.
-- `installer.iss`: per user (`PrivilegesRequired=lowest`), in `{localappdata}\Programs\Gentle Shell`, `CloseApplications=yes`, `RestartApplications=yes`. Do not change `AppId`: Windows identifies updates and the uninstaller by it.
+- `installer.iss`: per user (`PrivilegesRequired=lowest`), in `{localappdata}\Programs\Osdy Code Desktop`, `CloseApplications=yes`, `RestartApplications=yes`. Do not change `AppId`: Windows identifies updates and the uninstaller by it.
 
 ### Linux
 
-- GPUI only applies the window icon on X11: `platform/icons.rs` (`window_icon`) scales it down to 128 px because of `_NET_WM_ICON` limits. `app_id` is `dev.gentle-shell.gpui`, the same as `StartupWMClass` in `packaging/linux/gentle-shell-gpui.desktop`.
+- GPUI only applies the window icon on X11: `platform/icons.rs` (`window_icon`) scales it down to 128 px because of `_NET_WM_ICON` limits. `app_id` is `io.github.osdyortiz.osdy-code-desktop`, the same as `StartupWMClass` in `packaging/linux/osdy-code-desktop.desktop`.
 - The built-in browser uses WebKitGTK as a child of the X11 window (`wry` with `x11`, `gtk`); Wayland has no child windows.
 - At runtime `libwebkit2gtk-4.1-0` is required.
 

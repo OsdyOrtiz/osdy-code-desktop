@@ -1,6 +1,6 @@
 //! Named workspaces (Tern calls them sessions): each has a root folder and its
 //! own tabs. The list, with every tab's pane layout, is kept as JSON in
-//! `<data dir>/gentle-shell-gpui/workspaces.json` and restored on launch.
+//! `<data dir>/osdy-code-desktop/workspaces.json` and restored on launch.
 //!
 //! This module holds the serialized model; `store` reads and writes the file.
 
@@ -368,7 +368,7 @@ pub const VERSION: u32 = 1;
 
 /// How a workspace root is compared: canonical, so a folder reached through
 /// a symlink, `..` or another drive-letter case finds the same workspace as
-/// `gsd` (which passes canonical paths). Unresolvable paths stay as given.
+/// `ocd` (which passes canonical paths). Unresolvable paths stay as given.
 pub fn root_key(path: PathBuf) -> PathBuf {
     dunce::canonicalize(&path).unwrap_or(path)
 }

@@ -883,7 +883,7 @@ pub(super) fn new_tab_menu(
             item(
                 IconName::Bot,
                 "Agent tab",
-                "Gentle Shell in this folder",
+                "Osdy Code Desktop in this folder",
                 ui::platform_shortcut("⌘T", "Ctrl+T"),
             )
             .on_click(move |_, window, cx| {

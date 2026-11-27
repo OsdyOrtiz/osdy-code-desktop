@@ -4,22 +4,24 @@
   <img src="packaging/icons/icon-512.png" width="160" alt="Gentle Shell's pixel rose">
 </div>
 
-<h1 align="center">gentle-shell-gpui</h1>
+<h1 align="center">Osdy Code Desktop</h1>
+
+<p align="center">A personal fork of <a href="https://github.com/Gentleman-Programming/gentle-shell-gpui">Gentleman-Programming/gentle-shell-gpui</a>.</p>
 
 <p align="center"><strong>Gentle Shell in a native window: your agents, terminals, files and previews in one desktop app.</strong></p>
 
 <p align="center">
-  <a href="https://github.com/Gentleman-Programming/gentle-shell-gpui/releases/latest"><img src="https://img.shields.io/github/v/release/Gentleman-Programming/gentle-shell-gpui?style=for-the-badge&labelColor=1A1218&color=F095C8" alt="Latest release"></a>
-  <a href="https://github.com/Gentleman-Programming/gentle-shell-gpui/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/Gentleman-Programming/gentle-shell-gpui/ci.yml?branch=main&style=for-the-badge&labelColor=1A1218&label=CI" alt="CI"></a>
+  <a href="https://github.com/OsdyOrtiz/osdy-code-desktop/releases/latest"><img src="https://img.shields.io/github/v/release/OsdyOrtiz/osdy-code-desktop?style=for-the-badge&labelColor=1A1218&color=F095C8" alt="Latest release"></a>
+  <a href="https://github.com/OsdyOrtiz/osdy-code-desktop/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/OsdyOrtiz/osdy-code-desktop/ci.yml?branch=main&style=for-the-badge&labelColor=1A1218&label=CI" alt="CI"></a>
   <a href="#get-started"><img src="https://img.shields.io/badge/macOS%20·%20Windows%20·%20Linux-F095C8?style=for-the-badge&labelColor=1A1218" alt="macOS, Windows and Linux"></a>
   <img src="https://img.shields.io/badge/license-MIT-F095C8?style=for-the-badge&labelColor=1A1218" alt="MIT license">
-  <a href="https://github.com/Gentleman-Programming/gentle-shell-gpui/stargazers"><img src="https://img.shields.io/github/stars/Gentleman-Programming/gentle-shell-gpui?style=for-the-badge&labelColor=1A1218&color=F095C8" alt="GitHub stars"></a>
-  <a href="https://github.com/Gentleman-Programming/gentle-shell-gpui"><img src="https://img.shields.io/github/last-commit/Gentleman-Programming/gentle-shell-gpui?style=for-the-badge&labelColor=1A1218&color=D7A0B8" alt="Last commit"></a>
+  <a href="https://github.com/OsdyOrtiz/osdy-code-desktop/stargazers"><img src="https://img.shields.io/github/stars/OsdyOrtiz/osdy-code-desktop?style=for-the-badge&labelColor=1A1218&color=F095C8" alt="GitHub stars"></a>
+  <a href="https://github.com/OsdyOrtiz/osdy-code-desktop"><img src="https://img.shields.io/github/last-commit/OsdyOrtiz/osdy-code-desktop?style=for-the-badge&labelColor=1A1218&color=D7A0B8" alt="Last commit"></a>
 </p>
 
 <p align="center">
   <strong>
-    <a href="https://github.com/Gentleman-Programming/gentle-shell-gpui/releases/latest">Download</a>
+    <a href="https://github.com/OsdyOrtiz/osdy-code-desktop/releases/latest">Download</a>
     &nbsp;·&nbsp;
     <a href="#get-started">Quickstart</a>
     &nbsp;·&nbsp;
@@ -33,7 +35,7 @@
 
 <br>
 
-<p align="center">Your agents shouldn't live in a scrollback.<br><strong>gentle-shell-gpui gives <a href="https://github.com/Gentleman-Programming/gentle-shell">Gentle Shell</a> a native desktop home, built in Rust with <a href="https://gpui.rs">GPUI</a>.</strong></p>
+<p align="center">Your agents shouldn't live in a scrollback.<br><strong>Osdy Code Desktop gives <a href="https://github.com/Gentleman-Programming/gentle-shell">Gentle Shell</a> a native desktop home, built in Rust with <a href="https://gpui.rs">GPUI</a>.</strong></p>
 
 <p align="center"><sub><strong>If the app made your agents easier to lead, a star helps other people find it.</strong></sub></p>
 
@@ -94,19 +96,19 @@ The app does not reimplement Gentle Shell. Each tab starts `gentle-shell --mode 
 
 ### Workspaces and tiling — Every project in its place
 
-Manage Desktop workspaces from your terminal with the installed `gsd` command:
+Manage Osdy Code Desktop workspaces from your terminal with the installed `ocd` command:
 
 ```sh
-gsd workspace list --json
-gsd workspace current
-gsd workspace create frontend .
-gsd workspace switch frontend
-gsd workspace rename frontend web
-gsd workspace set-root web ./src
-gsd workspace remove web --force
+ocd workspace list --json
+ocd workspace current
+ocd workspace create frontend .
+ocd workspace switch frontend
+ocd workspace rename frontend web
+ocd workspace set-root web ./src
+ocd workspace remove web --force
 ```
 
-`gsd workspace --help` lists the commands. Relative paths are resolved from the calling terminal. List and current read the live state when Desktop is open, otherwise the last saved state; mutations start Desktop if needed. Switching keeps other agents running. Changing a root only affects Files and future tabs; existing tabs keep their own working folders. Removing a workspace closes its tabs and stops its agents, but keeps files and conversations; `--force` explicitly confirms this. Each workspace still has one root. Use `gsd ./workspace` to open a directory literally named `workspace`.
+`ocd workspace --help` lists the commands. Relative paths are resolved from the calling terminal. List and current read the live state when the app is open, otherwise the last saved state; mutations start the app if needed. Switching keeps other agents running. Changing a root only affects Files and future tabs; existing tabs keep their own working folders. Removing a workspace closes its tabs and stops its agents, but keeps files and conversations; `--force` explicitly confirms this. Each workspace still has one root. Use `ocd ./workspace` to open a directory literally named `workspace`.
 
 Named workspaces (each with its own folder and tabs), saved and restored; agents in other workspaces keep running while you switch. A dot on the title bar's workspace chip says an agent in another workspace is working (accent) or needs you (amber) (with vertical tabs, each project row also carries its own dot), and the switcher (⌃⌘K) shows which: "working" or "needs you" on each workspace.
 
@@ -139,18 +141,18 @@ Each project's badge shows its initials or an icon you choose, in a color from t
 
 ---
 
-### `gsd` and the folder explorer (⌘O) — Open any folder, fast
+### `ocd` and the folder explorer (⌘O) — Open any folder, fast
 
-`gsd` in a terminal opens the folder you're in as a workspace, like `gs` opens Gentle Shell there; `gsd <folder>` opens that folder. In the app, ⌘O (Ctrl+O elsewhere) opens an explorer in the style of [oil.nvim](https://github.com/stevearc/oil.nvim) to pick a folder from the keyboard and open Gentle Shell in it.
+`ocd` in a terminal opens the folder you're in as a workspace, like `gs` opens Gentle Shell there; `ocd <folder>` opens that folder. In the app, ⌘O (Ctrl+O elsewhere) opens an explorer in the style of [oil.nvim](https://github.com/stevearc/oil.nvim) to pick a folder from the keyboard and open it in Osdy Code Desktop.
 
 <details>
-<summary><kbd>More</kbd> <strong>The <code>gsd</code> command and the explorer's keys</strong></summary>
+<summary><kbd>More</kbd> <strong>The <code>ocd</code> command and the explorer's keys</strong></summary>
 
 <br>
 
-With the app already running, `gsd` switches the window to that workspace (creating it, with an agent tab) instead of starting a second app, and returns to your prompt at once. The Windows installer puts `gsd` on your user PATH (the uninstaller takes it off); elsewhere, or for a build from source, ⌘K → **Install `gsd` command** writes it to `~/.local/bin` (macOS, Linux) or adds it to your user PATH (Windows). On Windows `gsd` is a `.cmd`: it runs from cmd and PowerShell, not Git Bash. Launching the app itself (Start menu, Finder, Dock) still restores the last workspace.
+With the app already running, `ocd` switches the window to that workspace (creating it, with an agent tab) instead of starting a second app, and returns to your prompt at once. The Windows installer puts `ocd` on your user PATH (the uninstaller takes it off); elsewhere, or for a build from source, ⌘K → **Install `ocd` command** writes `~/.local/bin/ocd` (macOS, Linux) or adds it to your user PATH (Windows). On Windows `ocd.cmd` runs from cmd and PowerShell, not Git Bash. Launching the app itself (Start menu, Finder, Dock) still restores the last workspace.
 
-The explorer starts at the focused pane's folder and lists one folder at a time, folders first, git repositories marked `repo`: ↵ or → enters a folder (↵ on a file opens it), `-`, ← or ⌫ goes to the parent and selects the folder you came from, `~` goes home, and typing filters (start with `.` for dotfiles). Click a segment of the path to jump there. ⌘↵ (Ctrl+↵ elsewhere) opens the selected folder (or the one shown, when a file is selected) as a workspace with an agent tab, the same as `gsd <folder>`; **Open Gentle Shell here** opens the folder shown; ⌥↵ (Alt+↵) also opens a terminal tab there. A folder that already has a workspace switches to it, however it was reached (symlink, `..`, drive-letter case). It is also in ⌘K and the workspace switcher as **Browse folders**.
+The explorer starts at the focused pane's folder and lists one folder at a time, folders first, git repositories marked `repo`: ↵ or → enters a folder (↵ on a file opens it), `-`, ← or ⌫ goes to the parent and selects the folder you came from, `~` goes home, and typing filters (start with `.` for dotfiles). Click a segment of the path to jump there. ⌘↵ (Ctrl+↵ elsewhere) opens the selected folder (or the one shown, when a file is selected) as a workspace with an agent tab, the same as `ocd <folder>`; **Open Osdy Code Desktop here** opens the folder shown; ⌥↵ (Alt+↵) also opens a terminal tab there. A folder that already has a workspace switches to it, however it was reached (symlink, `..`, drive-letter case). It is also in ⌘K and the workspace switcher as **Browse folders**.
 
 </details>
 
@@ -258,7 +260,7 @@ Extension notices go to a notification center instead of piling up as toasts; on
 
 ### Start screen — The rose, written in
 
-Gentle Shell's rose and pixel wordmark, written in like the terminal intro. It follows `banner.json` (`showRose`, `showTextLogo`, `color`).
+The rose from Gentle Shell and the Osdy Code Desktop pixel wordmark, written in like the terminal intro. It follows `banner.json` (`showRose`, `showTextLogo`, `color`).
 
 ---
 
@@ -603,7 +605,7 @@ A loopback dev-server URL printed by a shell tool (`http://localhost:5173`, `127
 
 **Agents drive pages too**, like Tern's browser: `gentle-browser` (and the `browser` tool every agent gets) opens a named page in a card, reads it as an outline with refs, clicks, fills, types, presses keys, waits for text, runs JavaScript and takes screenshots that show in the conversation. The card says when an agent is driving it; **Take over** hands it back. Its profile button picks where the page keeps cookies and sign-ins: Shared (yours), the repository, Agent (the default for pages agents open), Private, or a profile you name; **Clear website data…** signs a profile out.
 
-**And desktop apps**: `gentle-screen` (and the `screen` tool) launches an app an agent built, lists its windows, takes screenshots that show in the conversation, and clicks, types, presses keys and scrolls in it, so the agent checks its own work. Input only reaches apps `gentle-screen launch` started (and their child processes), never one you're using. macOS asks once to let Gentle Shell record the screen and control the computer (Accessibility); Linux needs X11 (or XWayland).
+**And desktop apps**: `gentle-screen` (and the `screen` tool) launches an app an agent built, lists its windows, takes screenshots that show in the conversation, and clicks, types, presses keys and scrolls in it, so the agent checks its own work. Input only reaches apps `gentle-screen launch` started (and their child processes), never one you're using. macOS asks once to let Osdy Code Desktop record the screen and control the computer (Accessibility); Linux needs X11 (or XWayland).
 
 ---
 
@@ -688,7 +690,7 @@ Like Claude Desktop's custom themes: an app theme can put an animated scene behi
 
 <br>
 
-13 themes ship with scenes (Aurora, Petals, and Moonlit, Koi Pond, Sakura Dusk, Neon Rain, Jellyfish, Lantern Night, Fireflies, Snow Cabin, Star Voyage, Honu Lagoon and Cloud Drift adapted from [claude-desktop-themes](https://github.com/0toshigami/claude-desktop-themes), MIT), whose live wallpapers also run unchanged. Ask any agent for one ("a theme with koi in a pond, in my colors"): every agent is pointed at `<data dir>/gentle-shell-gpui/themes/GUIDE.md` and writes the theme and its scene there; a failing scene leaves `scene-error.txt` with the error and line. Theme folders are watched, so new or edited themes appear within seconds. **Share** saves a theme as one `.gentletheme` file (scene and image inside); import one with **Import…**, a link, or by dropping it on Configuration › Appearance › Theme. Cost: a scene's script runs on its own thread and is held under 8% of one core (heavier scenes show fewer frames, down to 8 fps); scenes move only while the window is in front and hold still with reduced motion. **Scene motion**: Calm (default, up to 12 fps; about 10% of one core on an M-series Mac, measured), Smooth (up to 24 fps; about 16%), Still (no cost).
+13 themes ship with scenes (Aurora, Petals, and Moonlit, Koi Pond, Sakura Dusk, Neon Rain, Jellyfish, Lantern Night, Fireflies, Snow Cabin, Star Voyage, Honu Lagoon and Cloud Drift adapted from [claude-desktop-themes](https://github.com/0toshigami/claude-desktop-themes), MIT), whose live wallpapers also run unchanged. Ask any agent for one ("a theme with koi in a pond, in my colors"): every agent is pointed at `<data dir>/osdy-code-desktop/themes/GUIDE.md` and writes the theme and its scene there; a failing scene leaves `scene-error.txt` with the error and line. Theme folders are watched, so new or edited themes appear within seconds. **Share** saves a theme as one `.gentletheme` file (scene and image inside); import one with **Import…**, a link, or by dropping it on Configuration › Appearance › Theme. Cost: a scene's script runs on its own thread and is held under 8% of one core (heavier scenes show fewer frames, down to 8 fps); scenes move only while the window is in front and hold still with reduced motion. **Scene motion**: Calm (default, up to 12 fps; about 10% of one core on an M-series Mac, measured), Smooth (up to 24 fps; about 16%), Still (no cost).
 
 </details>
 
@@ -745,11 +747,11 @@ On first launch, or whenever something required is missing, a setup screen check
 
 ### Easiest: download a release
 
-Download the asset for your system from [Releases](https://github.com/Gentleman-Programming/gentle-shell-gpui/releases) (names under [Packages and releases](#packages-and-releases)).
+Download the asset for your system from [Releases](https://github.com/OsdyOrtiz/osdy-code-desktop/releases) (names under [Packages and releases](#packages-and-releases)).
 
-- **macOS:** open `gentle-shell-gpui-<version>-macos-aarch64.dmg` (Apple silicon) or `…-macos-x86_64.dmg` (Intel) and drag **Gentle Shell** onto **Applications**. The app is ad-hoc signed, not notarized, so the first launch is blocked: right-click the app → **Open** → **Open**, or allow it in System Settings → Privacy & Security → **Open Anyway**. From a terminal, `xattr -dr com.apple.quarantine /Applications/"Gentle Shell.app"` does the same. Later versions install from inside the app ([Updating the app](#updating-the-app)).
-- **Windows:** run `gentle-shell-gpui-<version>-windows-x86_64-setup.exe`. It installs for your user only (no admin rights) into `%LOCALAPPDATA%\Programs\Gentle Shell`, adds Gentle Shell to the Start menu (and the desktop if you tick it) and to Apps → Installed apps for uninstalling, and puts the `gsd` command on your user PATH; installing a newer setup over it upgrades in place. SmartScreen may warn about an unknown publisher: **More info** → **Run anyway**. The `…-windows-x86_64.zip` holds the bare exe (the in-app updater uses it). Windows release builds link the MSVC C runtime statically, so the installer, portable executable and in-app updates do not need a separate Visual C++ Redistributable. The in-app browser uses the Microsoft Edge WebView2 Runtime, which Windows 11 and updated Windows 10 already have.
-- **Linux:** extract the tarball and run `gentle-shell-gpui-<version>/gentle-shell-gpui`. Copy the `.desktop` file to `~/.local/share/applications/` (and fix its `Exec=` path) to get a launcher entry. The app links WebKitGTK 4.1 for its in-app browser: on Debian or Ubuntu (22.04 or newer) `sudo apt install libwebkit2gtk-4.1-0` if it isn't installed yet.
+- **macOS:** open `gentle-shell-gpui-<version>-macos-aarch64.dmg` (Apple silicon) or `…-macos-x86_64.dmg` (Intel) and drag **Osdy Code Desktop** onto **Applications**. The app is ad-hoc signed, not notarized, so the first launch is blocked: right-click the app → **Open** → **Open**, or allow it in System Settings → Privacy & Security → **Open Anyway**. From a terminal, `xattr -dr com.apple.quarantine /Applications/"Osdy Code Desktop.app"` does the same. Later versions install from inside the app ([Updating the app](#updating-the-app)).
+- **Windows:** run `gentle-shell-gpui-<version>-windows-x86_64-setup.exe`. It installs for your user only (no admin rights) into `%LOCALAPPDATA%\Programs\Osdy Code Desktop`, adds Osdy Code Desktop to the Start menu (and the desktop if you tick it) and to Apps → Installed apps for uninstalling, and puts the `ocd` command on your user PATH; installing a newer setup over it upgrades in place. SmartScreen may warn about an unknown publisher: **More info** → **Run anyway**. The `…-windows-x86_64.zip` holds the bare exe (the in-app updater uses it). Windows release builds link the MSVC C runtime statically, so the installer, portable executable and in-app updates do not need a separate Visual C++ Redistributable. The in-app browser uses the Microsoft Edge WebView2 Runtime, which Windows 11 and updated Windows 10 already have.
+- **Linux:** extract the tarball and run `gentle-shell-gpui-<version>/gentle-shell-gpui`. Copy `osdy-code-desktop.desktop` to `~/.local/share/applications/` and `osdy-code-desktop.png` to `~/.local/share/icons/`. Set the launcher's `Exec=` to the absolute path of this copy of `gentle-shell-gpui` (keep `%f`) so it won't launch another installation. The app links WebKitGTK 4.1 for its in-app browser: on Debian or Ubuntu (22.04 or newer) `sudo apt install libwebkit2gtk-4.1-0` if it isn't installed yet.
 
 ### From source (no release installed)
 
@@ -757,8 +759,8 @@ Download the asset for your system from [Releases](https://github.com/Gentleman-
 2. Build and run:
 
    ```bash
-   git clone https://github.com/Gentleman-Programming/gentle-shell-gpui.git
-   cd gentle-shell-gpui
+   git clone https://github.com/OsdyOrtiz/osdy-code-desktop.git
+   cd osdy-code-desktop
    cargo run --release -- .
    ```
 
@@ -767,8 +769,8 @@ Download the asset for your system from [Releases](https://github.com/Gentleman-
 
    ```bash
    packaging/macos/bundle.sh aarch64-apple-darwin 0.1.0   # x86_64-apple-darwin on Intel
-   cp -R "dist/Gentle Shell.app" ~/Applications/
-   open ~/Applications/"Gentle Shell.app"
+   cp -R "dist/Osdy Code Desktop.app" ~/Applications/
+   open ~/Applications/"Osdy Code Desktop.app"
    ```
 
 A build from source never updates itself; `git pull` and run `cargo run --release` again.
@@ -784,7 +786,7 @@ cargo run --release -- [FOLDER] [--prompt "first message"]
 | `GENTLE_SHELL_BIN` | Path of the launcher to use instead of `gentle-shell` on `PATH`. |
 | `GENTLE_SHELL_ARGS` | Launcher options placed before `--mode rpc`, such as `--link` or `--home "<dir>"` (quote paths with spaces). The app also uses them to find `auth.json` and the config home. |
 
-Only one app runs per user, whatever the build: a second launch hands its folder and `--prompt` to the running window and exits.
+Only one Osdy Code Desktop instance runs per app data directory: a second launch hands its folder and `--prompt` to the running window and exits. It can run next to the official Gentle Shell desktop app: workspaces, settings and toolchains use a separate `osdy-code-desktop` data directory, with no automatic migration. Both apps can use the same Gentle Shell agent configuration and sign-ins.
 
 Gentle Shell's own variables (`GENTLE_PI_CONFIG_HOME`, `GENTLE_SHELL_NO_AUTO_SETUP`, provider API keys, and the rest) pass through to the backend.
 
@@ -796,7 +798,7 @@ On startup (at most every 6 hours) the app checks this repo's GitHub releases an
 - Windows: the old exe is kept as `gentle-shell-gpui.exe.old` until the next start.
 - Linux: the binary is replaced in place, keeping its permissions.
 
-The check cache and the skipped version are in `<data dir>/gentle-shell-gpui/app-update.json`.
+The check cache and the skipped version are in `<data dir>/osdy-code-desktop/app-update.json`.
 
 <p align="right"><a href="#top">Back to top ↑</a></p>
 
@@ -875,7 +877,7 @@ The app icon (the Gentle Shell pixel rose) lives in `packaging/icons/`. `generat
 
 Build packages locally:
 
-- macOS: `packaging/macos/bundle.sh aarch64-apple-darwin 0.1.0` → `dist/Gentle Shell.app`, `dist/gentle-shell-gpui-0.1.0-macos-aarch64.zip` and `.dmg` (`x86_64-apple-darwin` for Intel; it cross-compiles from Apple silicon). `GENTLE_BIN=<path>` packages an existing build instead.
+- macOS: `packaging/macos/bundle.sh aarch64-apple-darwin 0.1.0` → `dist/Osdy Code Desktop.app`, `dist/gentle-shell-gpui-0.1.0-macos-aarch64.zip` and `.dmg` (`x86_64-apple-darwin` for Intel; it cross-compiles from Apple silicon). `GENTLE_BIN=<path>` packages an existing build instead.
 - Linux: `packaging/linux/package.sh x86_64-unknown-linux-gnu 0.1.0` → `dist/gentle-shell-gpui-0.1.0-linux-x86_64.tar.gz`.
 - Windows: the icon and version info are embedded in the exe by `crates/app/build.rs`; the installer is `packaging/windows/installer.iss` (Inno Setup 6: `ISCC /DAppVersion=<v> /DSourceExe=<exe> /DOutputDir=dist /DIconFile=packaging\icons\icon.ico packaging\windows\installer.iss`).
 
@@ -889,7 +891,7 @@ Cut a release:
 2. Optional dry run: Actions → Release → Run workflow. It builds all four targets and uploads the assets and `SHA256SUMS` as an artifact without publishing.
 3. `git tag v0.2.0 && git push origin main v0.2.0`. The Release workflow checks the tag against the workspace version, builds macOS (arm64 and x86_64), Windows and Linux, writes `SHA256SUMS` and publishes the GitHub release with generated notes. A version with `-` (`0.2.0-rc.1`) is a prerelease.
 
-Assets: `gentle-shell-gpui-<v>-macos-aarch64.dmg` / `.zip` and `…-macos-x86_64.dmg` / `.zip` (the same ad-hoc signed `Gentle Shell.app`: the DMG to install by dragging, the zip for the in-app updater), `…-windows-x86_64-setup.exe` (the installer) and `…-windows-x86_64.zip` (the bare exe, for the in-app updater), `…-linux-x86_64.tar.gz` (binary, `.desktop`, icon) and `SHA256SUMS`. The in-app updater relies on these names.
+Assets: `gentle-shell-gpui-<v>-macos-aarch64.dmg` / `.zip` and `…-macos-x86_64.dmg` / `.zip` (the same ad-hoc signed `Osdy Code Desktop.app`: the DMG to install by dragging, the zip for the in-app updater), `…-windows-x86_64-setup.exe` (the installer) and `…-windows-x86_64.zip` (the bare exe, for the in-app updater), `…-linux-x86_64.tar.gz` (binary, `.desktop`, icon) and `SHA256SUMS`. The in-app updater relies on these names.
 
 </details>
 
@@ -906,7 +908,7 @@ Assets: `gentle-shell-gpui-<v>-macos-aarch64.dmg` / `.zip` and `…-macos-x86_64
 Built in public. Bring a real workflow, a bug report, or a small improvement that makes the next person's work clearer. Before you take an issue or open a pull request, read [CONTRIBUTING.md](CONTRIBUTING.md): how to claim an issue, when a PR is ready for review, and what each state means.
 
 <p align="center">
-  <a href="https://github.com/Gentleman-Programming/gentle-shell-gpui/issues"><img src="https://img.shields.io/badge/Issues-join%20the%20conversation-F095C8?style=for-the-badge&labelColor=1A1218" alt="GitHub issues"></a>
+  <a href="https://github.com/OsdyOrtiz/osdy-code-desktop/issues"><img src="https://img.shields.io/badge/Issues-join%20the%20conversation-F095C8?style=for-the-badge&labelColor=1A1218" alt="GitHub issues"></a>
   <a href="https://github.com/Gentleman-Programming/gentle-shell-gpui/graphs/contributors"><img src="https://img.shields.io/badge/Contributors-thank%20you-D7A0B8?style=for-the-badge&labelColor=1A1218" alt="Contributors"></a>
   <a href="https://discord.com/invite/gentleman-programming-769863833996754944"><img src="https://img.shields.io/badge/Discord-Gentleman%20Programming-F095C8?style=for-the-badge&labelColor=1A1218" alt="Gentleman Programming Discord"></a>
 </p>
@@ -916,12 +918,12 @@ Built in public. Bring a real workflow, a bug report, or a small improvement tha
 </p>
 
 <p align="center">
-  <a href="https://github.com/Gentleman-Programming/gentle-shell-gpui/stargazers"><strong>★ Star gentle-shell-gpui on GitHub</strong></a>
+  <a href="https://github.com/OsdyOrtiz/osdy-code-desktop/stargazers"><strong>★ Star Osdy Code Desktop on GitHub</strong></a>
 </p>
 
 Everyone who has committed to this repository is credited in [CREDITS.md](CREDITS.md), generated from the git history by `scripts/credits.sh`; the app shows it in Configuration › About.
 
-- Open an [issue](https://github.com/Gentleman-Programming/gentle-shell-gpui/issues) with what's needed to reproduce or understand the idea.
+- Open an [issue](https://github.com/OsdyOrtiz/osdy-code-desktop/issues) with what's needed to reproduce or understand the idea.
 - Before a pull request, read [`docs/development.md`](docs/development.md) and [`AGENTS.md`](AGENTS.md).
 - Follow [Gentleman Programming](https://github.com/Gentleman-Programming) for the wider ecosystem: [Gentle Shell](https://github.com/Gentleman-Programming/gentle-shell), Gentle AI and Engram.
 

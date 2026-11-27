@@ -200,6 +200,6 @@ jobs:
           gh release create "$GITHUB_REF_NAME" dist/* \
             --repo "$GITHUB_REPOSITORY" \
             --verify-tag \
-            --title "Gentle Shell $VERSION" \
+            --title "Osdy Code Desktop $VERSION" \
             --generate-notes \
             "${flags[@]}"

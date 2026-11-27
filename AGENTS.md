@@ -4,7 +4,7 @@ Short context for anyone working in this repository, person or AI agent. The det
 
 ## What it is
 
-A desktop app in Rust (GPUI + gpui-kit) for Gentle Shell's coding agents. Each agent tab is a `gentle-shell --mode rpc` process the app talks to over JSONL (`crates/pi-rpc`). It runs on macOS, Windows and Linux.
+Osdy Code Desktop is a desktop app in Rust (GPUI + gpui-kit) for Gentle Shell's coding agents. Each agent tab is a `gentle-shell --mode rpc` process the app talks to over JSONL (`crates/pi-rpc`). It runs on macOS, Windows and Linux.
 
 ## Commands
 

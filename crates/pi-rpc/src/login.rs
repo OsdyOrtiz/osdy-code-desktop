@@ -141,7 +141,7 @@ impl LoginHelper {
             None => resolve_node(&spec.cwd)?,
         };
         let script = std::env::temp_dir().join(format!(
-            "gentle-shell-gpui-login-{}.mjs",
+            "osdy-code-desktop-login-{}.mjs",
             env!("CARGO_PKG_VERSION")
         ));
         if std::fs::read_to_string(&script).ok().as_deref() != Some(SCRIPT) {

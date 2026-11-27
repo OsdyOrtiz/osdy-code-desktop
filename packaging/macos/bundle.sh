@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Builds dist/Gentle Shell.app, dist/gentle-shell-gpui-<version>-macos-<arch>.zip
+# Builds dist/Osdy Code Desktop.app, dist/gentle-shell-gpui-<version>-macos-<arch>.zip
 # (what the in-app updater downloads) and a .dmg of the same signed app with an
 # Applications shortcut (what people download to install by dragging).
 #
@@ -35,7 +35,7 @@ else
 fi
 [[ -x "$binary" ]] || { echo "missing binary: $binary" >&2; exit 1; }
 
-app="dist/Gentle Shell.app"
+app="dist/Osdy Code Desktop.app"
 rm -rf "$app"
 mkdir -p "$app/Contents/MacOS" "$app/Contents/Resources"
 cp "$binary" "$app/Contents/MacOS/gentle-shell-gpui"
@@ -58,10 +58,10 @@ ditto -c -k --norsrc --noextattr --noacl --keepParent "$app" "$zip"
 dmg="dist/gentle-shell-gpui-$version-macos-$arch.dmg"
 stage="$(mktemp -d)"
 trap 'rm -rf "$stage"' EXIT
-ditto --norsrc --noextattr --noacl "$app" "$stage/Gentle Shell.app"
+ditto --norsrc --noextattr --noacl "$app" "$stage/Osdy Code Desktop.app"
 ln -s /Applications "$stage/Applications"
 rm -f "$dmg"
-hdiutil create -quiet -volname "Gentle Shell" -srcfolder "$stage" -ov -format UDZO "$dmg"
+hdiutil create -quiet -volname "Osdy Code Desktop" -srcfolder "$stage" -ov -format UDZO "$dmg"
 
 echo "$app"
 echo "$zip"

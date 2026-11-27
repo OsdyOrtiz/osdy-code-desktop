@@ -7,7 +7,7 @@
 //! app, and "Restart now" relaunches it once this process has quit.
 //!
 //! The cache and the "Skip this version" choice live in
-//! `<data dir>/gentle-shell-gpui/app-update.json`.
+//! `<data dir>/osdy-code-desktop/app-update.json`.
 
 use std::io;
 use std::path::PathBuf;
@@ -30,8 +30,7 @@ use relaunch::{remove_leftovers, spawn_relaunch};
 use release::{Outcome, platform_asset};
 
 pub const CURRENT: &str = env!("CARGO_PKG_VERSION");
-pub const RELEASES_URL: &str =
-    "https://github.com/Gentleman-Programming/gentle-shell-gpui/releases";
+pub const RELEASES_URL: &str = "https://github.com/OsdyOrtiz/osdy-code-desktop/releases";
 const SUMS: &str = "SHA256SUMS";
 /// The executable inside every archive (`.exe` on Windows).
 const BINARY: &str = "gentle-shell-gpui";
@@ -141,16 +140,17 @@ pub fn status(cx: &App) -> &Status {
 /// The title-bar pill: `(label, tooltip)` while an update waits for the user.
 pub fn badge(cx: &App) -> Option<(&'static str, String)> {
     match &cx.try_global::<AppUpdate>()?.status {
-        Status::Available(r) => {
-            Some(("Update", format!("Gentle Shell {} is available", r.version)))
-        }
+        Status::Available(r) => Some((
+            "Update",
+            format!("Osdy Code Desktop {} is available", r.version),
+        )),
         Status::Downloading { release: r, .. } | Status::Installing(r) => Some((
             "Updating…",
-            format!("Installing Gentle Shell {}", r.version),
+            format!("Installing Osdy Code Desktop {}", r.version),
         )),
         Status::Ready { release: r, .. } => Some((
             "Restart to update",
-            format!("Gentle Shell {} is installed", r.version),
+            format!("Osdy Code Desktop {} is installed", r.version),
         )),
         _ => None,
     }
@@ -272,7 +272,7 @@ pub fn restart(cx: &mut App) {
         Err(e) => set_status(
             Status::Failed {
                 problem: Problem::new(format!(
-                    "Gentle Shell {} is installed, but the restart couldn't be scheduled ({e}). Quit and reopen the app.",
+                    "Osdy Code Desktop {} is installed, but the restart couldn't be scheduled ({e}). Quit and reopen the app.",
                     release.version
                 )),
                 release: None,

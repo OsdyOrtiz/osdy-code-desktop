@@ -130,7 +130,7 @@ fn own_shell(choice: &Backend) -> Option<String> {
 
 /// A file the app gives every agent (its instructions, its extensions),
 /// copied into `choice`, which may not see this computer's files (a
-/// container): its path there, `~/.cache/gentle-shell-gpui/<hash>-<name>`.
+/// container): its path there, `~/.cache/osdy-code-desktop/<hash>-<name>`.
 /// Named by content, so app versions side by side never mix; copied once.
 fn stage(choice: &Backend, file: &Path) -> Option<String> {
     static STAGED: LazyLock<Mutex<HashSet<(Backend, String)>>> = LazyLock::new(Mutex::default);
@@ -143,7 +143,7 @@ fn stage(choice: &Backend, file: &Path) -> Option<String> {
     };
     let home = remote_home(choice)?;
     let name = file.file_name()?.to_string_lossy();
-    let there = format!("{home}/.cache/gentle-shell-gpui/{hash:016x}-{name}");
+    let there = format!("{home}/.cache/osdy-code-desktop/{hash:016x}-{name}");
     let key = (choice.clone(), there.clone());
     if STAGED.lock().ok()?.contains(&key) {
         return Some(there);
@@ -251,10 +251,10 @@ pub fn in_folder(cwd: &Path, argv: &[&str]) -> Option<Command> {
 }
 
 /// Where the app keeps what it installs in `choice` (Java, Maestro):
-/// `~/.local/share/gentle-shell-gpui` there.
+/// `~/.local/share/osdy-code-desktop` there.
 pub fn toolchain(choice: &Backend) -> Option<String> {
     Some(format!(
-        "{}/.local/share/gentle-shell-gpui",
+        "{}/.local/share/osdy-code-desktop",
         remote_home(choice)?
     ))
 }

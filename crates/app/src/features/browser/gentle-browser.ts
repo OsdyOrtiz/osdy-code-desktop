@@ -1,4 +1,4 @@
-// Gentle Shell GPUI: the `browser` tool. Agents drive pages in the app's own
+// Osdy Code Desktop: the `browser` tool. Agents drive pages in the app's own
 // browser (the floating cards the user watches) through `gentle-browser`,
 // the app's command; a screenshot comes back as an image the conversation
 // shows. Written by the app; edits here are overwritten.
@@ -39,7 +39,7 @@ export default function gentleBrowser(pi: ExtensionAPI) {
 		name: "browser",
 		label: "Browser",
 		description:
-			"Drive a web page in the Gentle Shell app's browser, where the user watches it. " +
+			"Drive a web page in the Osdy Code Desktop browser, where the user watches it. " +
 			"open {url, name?, profile?, hidden?} opens a page (named so later calls find it; profile agent by default, shared for the user's sign-ins). " +
 			"tabs lists every page. snapshot {tab, text?, root?} is an outline with refs (e12) to act on. " +
 			"click / hover / focus / check / uncheck {tab, target}; fill {tab, target, text}; type {tab, target?, text}; select {tab, target, text: option}; " +

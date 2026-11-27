@@ -97,7 +97,10 @@ pub(super) fn app_section(cx: &App) -> Div {
                                 .text_sm()
                                 .font_weight(FontWeight::MEDIUM)
                                 .text_color(ui::fg())
-                                .child(format!("Gentle Shell {} is available", release.version)),
+                                .child(format!(
+                                    "Osdy Code Desktop {} is available",
+                                    release.version
+                                )),
                         )
                         .child(
                             div()
@@ -173,12 +176,10 @@ pub(super) fn app_section(cx: &App) -> Div {
                         .gap_2()
                         .text_xs()
                         .child(Spinner::new().xsmall().color(ui::accent()))
-                        .child(
-                            div()
-                                .flex_1()
-                                .text_color(ui::fg())
-                                .child(format!("Downloading Gentle Shell {}…", release.version)),
-                        )
+                        .child(div().flex_1().text_color(ui::fg()).child(format!(
+                            "Downloading Osdy Code Desktop {}…",
+                            release.version
+                        )))
                         .child(
                             div()
                                 .text_size(ui::code_rems(12.))
@@ -215,7 +216,7 @@ pub(super) fn app_section(cx: &App) -> Div {
             .text_color(ui::muted())
             .child(Spinner::new().xsmall().color(ui::accent()))
             .child(format!(
-                "Verified. Installing Gentle Shell {}…",
+                "Verified. Installing Osdy Code Desktop {}…",
                 release.version
             ))
             .into_any_element(),
@@ -238,7 +239,10 @@ pub(super) fn app_section(cx: &App) -> Div {
                             .text_sm()
                             .font_weight(FontWeight::MEDIUM)
                             .text_color(ui::fg())
-                            .child(format!("Gentle Shell {} is installed", release.version)),
+                            .child(format!(
+                                "Osdy Code Desktop {} is installed",
+                                release.version
+                            )),
                     ),
             )
             .child(div().text_xs().text_color(ui::muted()).child(

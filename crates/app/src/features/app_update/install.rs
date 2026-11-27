@@ -66,7 +66,7 @@ pub(super) fn install_target(exe: &Path, os: &str) -> Result<Target, Problem> {
                 .any(|c| c.as_os_str() == "AppTranslocation")
             {
                 return Err(Problem::new(
-                    "macOS is running Gentle Shell from a temporary read-only copy. Move Gentle Shell.app to Applications, open it from there, then update.",
+                    "macOS is running Osdy Code Desktop from a temporary read-only copy. Move Osdy Code Desktop.app to Applications, open it from there, then update.",
                 ));
             }
             Ok(Target::Bundle(bundle))
@@ -81,7 +81,7 @@ pub(super) fn install_target(exe: &Path, os: &str) -> Result<Target, Problem> {
 
 fn not_writable(dir: &Path) -> Problem {
     Problem::with_releases(format!(
-        "Gentle Shell can't write to {}. Move the app to a folder you own (e.g. ~/Applications) or install the update from GitHub yourself.",
+        "Osdy Code Desktop can't write to {}. Move the app to a folder you own (e.g. ~/Applications) or install the update from GitHub yourself.",
         dir.display()
     ))
 }
@@ -231,7 +231,8 @@ pub(super) fn install_blocking(
             release.version
         ))
     })?;
-    let work = std::env::temp_dir().join(format!("{BINARY}-update-{}", std::process::id()));
+    let work =
+        std::env::temp_dir().join(format!("osdy-code-desktop-update-{}", std::process::id()));
     let _ = fs::remove_dir_all(&work);
     fs::create_dir_all(&work).map_err(fail("Couldn't create a download folder"))?;
     let result = (|| {
@@ -259,14 +260,14 @@ mod tests {
 
     #[test]
     fn finds_bundles_and_targets() {
-        let exe = Path::new("/Applications/Gentle Shell.app/Contents/MacOS/gentle-shell-gpui");
+        let exe = Path::new("/Applications/Osdy Code Desktop.app/Contents/MacOS/gentle-shell-gpui");
         assert_eq!(
             bundle_of(exe).as_deref(),
-            Some(Path::new("/Applications/Gentle Shell.app"))
+            Some(Path::new("/Applications/Osdy Code Desktop.app"))
         );
         assert_eq!(
             install_target(exe, "macos"),
-            Ok(Target::Bundle("/Applications/Gentle Shell.app".into()))
+            Ok(Target::Bundle("/Applications/Osdy Code Desktop.app".into()))
         );
         let dev = Path::new("/src/gentle-shell-gpui/target/debug/gentle-shell-gpui");
         assert_eq!(bundle_of(dev), None);
@@ -287,7 +288,7 @@ mod tests {
         }
         assert!(bundle_of(Path::new("/x/App/Contents/MacOS/bin")).is_none());
         let translocated = Path::new(
-            "/private/var/folders/x/AppTranslocation/ABC/d/Gentle Shell.app/Contents/MacOS/gentle-shell-gpui",
+            "/private/var/folders/x/AppTranslocation/ABC/d/Osdy Code Desktop.app/Contents/MacOS/gentle-shell-gpui",
         );
         assert!(install_target(translocated, "macos").is_err());
         let installed = Path::new("/opt/gentle/gentle-shell-gpui");
@@ -300,8 +301,8 @@ mod tests {
     #[test]
     fn swaps_bundles() {
         let dir = temp_dir("swap");
-        let old = fake_bundle(&dir, "Gentle Shell.app", "old");
-        let new = fake_bundle(&dir.join("download"), "Gentle Shell.app", "new");
+        let old = fake_bundle(&dir, "Osdy Code Desktop.app", "old");
+        let new = fake_bundle(&dir.join("download"), "Osdy Code Desktop.app", "new");
         let staged = stage_beside(&new, &old).unwrap();
         assert_eq!(staged.parent(), old.parent());
         swap_dir(&old, &staged).unwrap();
@@ -316,14 +317,14 @@ mod tests {
             .map(|e| e.unwrap().file_name().to_string_lossy().into_owned())
             .collect();
         left.sort();
-        assert_eq!(left, ["Gentle Shell.app", "download"]);
+        assert_eq!(left, ["Osdy Code Desktop.app", "download"]);
         fs::remove_dir_all(&dir).unwrap();
     }
 
     #[test]
     fn failed_swap_keeps_the_original() {
         let dir = temp_dir("swap-fail");
-        let old = fake_bundle(&dir, "Gentle Shell.app", "old");
+        let old = fake_bundle(&dir, "Osdy Code Desktop.app", "old");
         assert!(swap_dir(&old, &dir.join("missing.app")).is_err());
         assert_eq!(
             fs::read_to_string(old.join("Contents/MacOS").join(BINARY)).unwrap(),

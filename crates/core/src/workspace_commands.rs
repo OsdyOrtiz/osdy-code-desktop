@@ -4,7 +4,7 @@ use std::path::PathBuf;
 
 use serde::{Deserialize, Serialize};
 
-pub const HELP: &str = "Usage: gsd workspace <command>\n\
+pub const HELP: &str = "Usage: ocd workspace <command>\n\
   list [--json]                      List workspaces\n\
   current [--json]                   Show the current workspace\n\
   create <name> [folder]             Create and switch (default: .)\n\
@@ -105,7 +105,7 @@ pub fn parse(args: &[String]) -> Result<Parsed, String> {
             },
             false,
         ),
-        _ => return Err("Invalid workspace command. Run gsd workspace --help.".into()),
+        _ => return Err("Invalid workspace command. Run ocd workspace --help.".into()),
     };
     Ok(Parsed::Run { command, json })
 }

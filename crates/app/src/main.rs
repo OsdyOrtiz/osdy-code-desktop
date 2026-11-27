@@ -24,7 +24,7 @@ fn main() {
         ),
         _ => {}
     }
-    // An explicit folder (or `--cwd`, which `gsd` passes) selects or creates
+    // An explicit folder (or `--cwd`, which `ocd` passes) selects or creates
     // the workspace rooted there; without one the last workspace is restored.
     let cli = cli::parse_cli();
     let folder = cli::requested_folder(&cli);

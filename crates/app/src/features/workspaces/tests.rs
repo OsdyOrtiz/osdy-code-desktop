@@ -250,7 +250,7 @@ fn a_folder_reached_another_way_keys_the_same_workspace() {
     let base = std::env::temp_dir().join(format!("ws-key-test-{}", std::process::id()));
     std::fs::create_dir_all(base.join("a")).unwrap();
     let canonical = dunce::canonicalize(base.join("a")).unwrap();
-    // The explorer builds `dir.join(name)`; `gsd` passes a canonical path.
+    // The explorer builds `dir.join(name)`; `ocd` passes a canonical path.
     assert_eq!(
         super::root_key(base.join("a").join("..").join("a")),
         canonical

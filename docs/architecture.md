@@ -1,6 +1,6 @@
 # Architecture
 
-Gentle Shell GPUI is a native desktop application written in Rust. Its architecture is a **modular monolith by feature**: it ships as a single application, but keeps explicit boundaries between the UI, pure logic and external integrations.
+Osdy Code Desktop is a native desktop application written in Rust. Its architecture is a **modular monolith by feature**: it ships as a single application, but keeps explicit boundaries between the UI, pure logic and external integrations.
 
 ## Goals
 

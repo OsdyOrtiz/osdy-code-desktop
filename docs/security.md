@@ -49,7 +49,7 @@ These checks run code from the PR itself, so a PR that edits `.github/` can also
 
 ## Repository settings (admins)
 
-Files can't enforce these; an admin of `Gentleman-Programming/gentle-shell-gpui` sets them once. Without them, the checks above are advice.
+Files can't enforce these; an admin of `OsdyOrtiz/osdy-code-desktop` sets them once. Without them, the checks above are advice.
 
 **Settings → Actions → General**
 

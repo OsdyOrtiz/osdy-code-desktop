@@ -99,7 +99,7 @@ fn execute(command: &Command) -> Reply {
         .stdout(Stdio::null())
         .stderr(Stdio::null())
         .spawn()
-        .map_err(|e| format!("Could not start Gentle Shell Desktop: {e}"))?;
+        .map_err(|e| format!("Could not start Osdy Code Desktop: {e}"))?;
     // The window outlives the command; don't block waiting for it to close.
     std::thread::spawn(move || {
         let _ = child.wait();
@@ -111,7 +111,7 @@ fn execute(command: &Command) -> Reply {
             return reply;
         }
     }
-    Err("Gentle Shell Desktop did not start in time; open it and retry.".into())
+    Err("Osdy Code Desktop did not start in time; open it and retry.".into())
 }
 
 fn print_output(output: Output, json: bool) -> Result<(), String> {
@@ -148,7 +148,7 @@ mod tests {
 
     #[test]
     fn invalid_folder_is_not_a_fallback() {
-        let path = std::env::temp_dir().join(format!("gsd-missing-{}", std::process::id()));
+        let path = std::env::temp_dir().join(format!("ocd-missing-{}", std::process::id()));
         assert!(
             prepare(Command::Create {
                 name: "demo".into(),

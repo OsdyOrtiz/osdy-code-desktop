@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Builds dist/gentle-shell-gpui-<version>-linux-<arch>.tar.gz containing
-# gentle-shell-gpui-<version>/{gentle-shell-gpui,gentle-shell-gpui.desktop,gentle-shell-gpui.png}.
+# gentle-shell-gpui-<version>/{gentle-shell-gpui,osdy-code-desktop.desktop,osdy-code-desktop.png}.
 #
 #   packaging/linux/package.sh x86_64-unknown-linux-gnu 0.1.0
 #
@@ -36,8 +36,8 @@ stage="dist/$name"
 rm -rf "$stage"
 mkdir -p "$stage"
 install -m 755 "$binary" "$stage/gentle-shell-gpui"
-install -m 644 packaging/linux/gentle-shell-gpui.desktop "$stage/gentle-shell-gpui.desktop"
-install -m 644 packaging/icons/icon-512.png "$stage/gentle-shell-gpui.png"
+install -m 644 packaging/linux/osdy-code-desktop.desktop "$stage/osdy-code-desktop.desktop"
+install -m 644 packaging/icons/icon-512.png "$stage/osdy-code-desktop.png"
 
 tarball="dist/$name-linux-$arch.tar.gz"
 rm -f "$tarball"

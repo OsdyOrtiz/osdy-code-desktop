@@ -1,4 +1,4 @@
-//! The app's own folder: `<data dir>/gentle-shell-gpui/` (workspaces,
+//! The app's own folder: `<data dir>/osdy-code-desktop/` (workspaces,
 //! settings, the single-instance record, the toolchain it installs).
 //!
 //! `GENTLE_SHELL_GPUI_DATA_DIR` replaces it. A build started with it is a
@@ -20,6 +20,18 @@ pub fn overridden() -> bool {
 pub fn app() -> Option<PathBuf> {
     match std::env::var_os(OVERRIDE) {
         Some(dir) if !dir.is_empty() => Some(PathBuf::from(dir)),
-        _ => dirs::data_dir().map(|dir| dir.join("gentle-shell-gpui")),
+        _ => dirs::data_dir().map(|dir| dir.join("osdy-code-desktop")),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn fork_identity_uses_its_own_app_data_directory() {
+        let expected = std::env::var_os("GENTLE_SHELL_GPUI_DATA_DIR")
+            .filter(|dir| !dir.is_empty())
+            .map(std::path::PathBuf::from)
+            .or_else(|| dirs::data_dir().map(|dir| dir.join("osdy-code-desktop")));
+        assert_eq!(super::app(), expected);
     }
 }

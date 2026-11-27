@@ -1,5 +1,5 @@
 name: Bug report
-description: Report a reproducible problem in Gentle Shell GPUI, the desktop app.
+description: Report a reproducible problem in Osdy Code Desktop.
 title: "bug(area): "
 labels:
   - bug
@@ -91,7 +91,7 @@ body:
   - type: input
     id: app_version
     attributes:
-      label: Gentle Shell GPUI version
+      label: Osdy Code Desktop version
       description: Shown in Configuration › App. If you run from source, give the commit.
       placeholder: "0.1.21"
     validations:

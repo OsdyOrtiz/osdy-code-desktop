@@ -7,7 +7,7 @@ use std::path::{Path, PathBuf};
 pub struct Cli {
     pub folder: Option<PathBuf>,
     /// `--cwd`: without `FOLDER`, open the folder the app was launched in
-    /// (what `gsd` passes). A plain launch doesn't: the Start menu or Finder
+    /// (what `ocd` passes). A plain launch doesn't: the Start menu or Finder
     /// start in some unrelated folder, and the last workspace is restored.
     pub here: bool,
     pub prompt: Option<String>,
@@ -120,18 +120,18 @@ mod tests {
 
     #[test]
     fn here_flag_uses_the_launch_folder_only_without_a_folder() {
-        let base = std::env::temp_dir().join(format!("gsd-cli-test-{}", std::process::id()));
+        let base = std::env::temp_dir().join(format!("ocd-cli-test-{}", std::process::id()));
         let (here, there) = (base.join("here"), base.join("there"));
         std::fs::create_dir_all(&here).unwrap();
         std::fs::create_dir_all(&there).unwrap();
         let canon = |p: &Path| dunce::canonicalize(p).unwrap();
 
-        // `gsd` in a folder: that folder.
+        // `ocd` in a folder: that folder.
         assert_eq!(
             resolve_folder(None, true, Some(here.clone())),
             Some(canon(&here))
         );
-        // `gsd <folder>`: the folder wins over the launch folder.
+        // `ocd <folder>`: the folder wins over the launch folder.
         assert_eq!(
             resolve_folder(Some(there.clone()), true, Some(here.clone())),
             Some(canon(&there))

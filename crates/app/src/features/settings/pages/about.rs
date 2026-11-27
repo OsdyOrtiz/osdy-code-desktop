@@ -16,16 +16,16 @@ use super::super::{
 };
 use crate::shared::ui;
 
-const REPOSITORY: &str = "https://github.com/Gentleman-Programming/gentle-shell-gpui";
-const ISSUES: &str = "https://github.com/Gentleman-Programming/gentle-shell-gpui/issues";
+const REPOSITORY: &str = "https://github.com/OsdyOrtiz/osdy-code-desktop";
+const ISSUES: &str = "https://github.com/OsdyOrtiz/osdy-code-desktop/issues";
 /// The README's license notice: MIT, and the trademark terms that go with it.
-const LICENSE: &str = "https://github.com/Gentleman-Programming/gentle-shell-gpui#license";
+const LICENSE: &str = "https://github.com/OsdyOrtiz/osdy-code-desktop#license";
 /// The animated scenes' license, the one third-party license file in the
 /// repository.
-const SCENES_LICENSE: &str = "https://github.com/Gentleman-Programming/gentle-shell-gpui/blob/main/crates/app/themes/scenes/LICENSE";
+const SCENES_LICENSE: &str =
+    "https://github.com/OsdyOrtiz/osdy-code-desktop/blob/main/crates/app/themes/scenes/LICENSE";
 /// Every crate built into the app, each under the license crates.io lists.
-const DEPENDENCIES: &str =
-    "https://github.com/Gentleman-Programming/gentle-shell-gpui/blob/main/Cargo.lock";
+const DEPENDENCIES: &str = "https://github.com/OsdyOrtiz/osdy-code-desktop/blob/main/Cargo.lock";
 
 static CREDITS: LazyLock<Vec<Group>> =
     LazyLock::new(|| credits::parse(include_str!("../../../../../../CREDITS.md")));
@@ -48,9 +48,10 @@ fn link(id: &'static str, label: &'static str, url: &'static str) -> Button {
 }
 
 fn about_section() -> Div {
-    section(IconName::Info, "Gentle Shell")
+    section(IconName::Info, "Osdy Code Desktop")
         .child(row("Version", app::version()))
         .child(row("License", "MIT"))
+        .child(row("Fork of", "Gentleman-Programming/gentle-shell-gpui"))
         .child(
             h_flex()
                 .pt_2()

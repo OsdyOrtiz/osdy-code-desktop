@@ -37,7 +37,7 @@ fn sound_path(sound: &str) -> Option<PathBuf> {
     }
     let id = sound.strip_prefix("builtin:")?;
     let bytes = builtin_wav(id)?;
-    let dir = dirs::cache_dir()?.join("gentle-shell-gpui").join("sounds");
+    let dir = dirs::cache_dir()?.join("osdy-code-desktop").join("sounds");
     let path = dir.join(format!("{id}.wav"));
     let current = std::fs::metadata(&path).is_ok_and(|m| m.len() == bytes.len() as u64);
     if !current {
