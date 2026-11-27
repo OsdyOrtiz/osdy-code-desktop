@@ -19,6 +19,7 @@ use super::attachments;
 use super::state::BackendStatus;
 use super::{CONTEXT, SessionView};
 use crate::shared::banner;
+use crate::shared::i18n;
 use crate::shared::overlay::LiveSlots;
 use crate::shared::ui;
 use gentle_core::input_style::InputStyle;
@@ -776,20 +777,20 @@ impl SessionView {
                             div().text_size(rems(14. / 16.))
                                 .font_weight(FontWeight::SEMIBOLD)
                                 .text_color(ui::fg())
-                                .child("Sign in to start cooking"),
+                                .child(i18n::t("Sign in to start cooking")),
                         )
                         .child(
                             div().text_size(rems(12. / 16.))
                                 .text_center()
                                 .text_color(ui::muted())
-                                .child("No models are available yet. Sign in with a subscription or add an API key."),
+                                .child(i18n::t("No models are available yet. Sign in with a subscription or add an API key.")),
                         )
                         .child(
                             Button::new("hero-sign-in")
                                 .primary()
                                 .small()
                                 .icon(Icon::new(IconName::LogIn))
-                                .label("Sign in to a provider")
+                                .label(i18n::t("Sign in to a provider"))
                                 .on_click(cx.listener(|_, _, _, cx| cx.emit(super::SessionEvent::OpenProviders))),
                         ),
                 ))

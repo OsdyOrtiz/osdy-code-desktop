@@ -23,6 +23,12 @@ fn common(en: &str) -> Option<&'static str> {
         "Only the app's interface changes; the agent keeps answering in the language you write to it. Saved in the app's settings.json (language)." => {
             "Solo cambia la interfaz de la app; el agente sigue respondiendo en el idioma en que le escribes. Se guarda en el settings.json de la app (language)."
         }
+        // Session start screen.
+        "Sign in to start cooking" => "Inicia sesión para empezar",
+        "No models are available yet. Sign in with a subscription or add an API key." => {
+            "Todavía no hay modelos disponibles. Inicia sesión con una suscripción o agrega una API key."
+        }
+        "Sign in to a provider" => "Iniciar sesión en un proveedor",
         _ => return None,
     })
 }
