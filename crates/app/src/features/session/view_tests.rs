@@ -4255,3 +4255,20 @@ fn backend_exit_clears_the_background_light(cx: &mut TestAppContext) {
         assert!(view.chrome.as_ref().unwrap().background.is_idle());
     });
 }
+
+#[cfg(unix)]
+#[gpui::test]
+fn reduced_motion_keeps_the_empty_hero_quiet(cx: &mut TestAppContext) {
+    let (view, cx, backend) = typing_pane(cx, true, true);
+    cx.update(|_, cx| {
+        view.update(cx, |view, cx| {
+            view.banner = crate::shared::banner::BannerConfig::default();
+            cx.notify();
+        });
+    });
+    cx.run_until_parked();
+    frames_for(std::time::Duration::from_millis(600), cx);
+    assert!(view.read_with(cx, |view, _| view.hero_shown()));
+    assert_eq!(frames_for(std::time::Duration::from_millis(200), cx), 0);
+    backend.stop(&view, cx);
+}
