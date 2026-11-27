@@ -23,7 +23,7 @@ use super::layout::{or_dash, row, section};
 use super::snapshot::Snapshot;
 use super::{SettingsEvent, SettingsView};
 use crate::features::session::{ReadOutcome, ReadRequest, ReadSupport, ReadTicket};
-use crate::shared::i18n::t;
+use crate::shared::i18n::{Message, t};
 use crate::shared::ui;
 
 /// Which source decided the background-subagents policy, in Gentle Shell's
@@ -150,7 +150,7 @@ enum Asked {
 #[derive(Default)]
 pub(super) struct BackgroundUiState {
     pub(super) pending: bool,
-    pub(super) note: Option<(String, bool)>,
+    pub(super) note: Option<(Message, bool)>,
     /// The policy as Gentle Shell reported it (RPC path only).
     pub(super) shell: Option<BackgroundSubagents>,
     /// The dialog Gentle Shell asked to show, for the policy asked.
@@ -201,7 +201,7 @@ impl SettingsView {
             Err(failure) => {
                 self.background.pending = false;
                 if matches!(asked, Asked::Set(_)) {
-                    self.background.note = Some((failure.message(), true));
+                    self.background.note = Some((Message::raw(failure.message()), true));
                 }
             }
         }
@@ -241,11 +241,14 @@ impl SettingsView {
                     SetBackgroundSubagentsOutcome::Applied { changed } => {
                         self.background.note = Some((
                             if changed {
-                                t("Gentle Shell applied it. Helpers launched from now on use it.")
+                                Message::new(
+                                    "Gentle Shell applied it. Helpers launched from now on use it.",
+                                )
                             } else {
-                                t("Gentle Shell applied it; what decides here did not change.")
-                            }
-                            .into(),
+                                Message::new(
+                                    "Gentle Shell applied it; what decides here did not change.",
+                                )
+                            },
                             false,
                         ));
                     }
@@ -256,7 +259,7 @@ impl SettingsView {
             (Asked::Set(_), ReadOutcome::Failed(failure)) => {
                 self.background.pending = false;
                 self.background.note = Some((
-                    t("Not changed: {error}").replace("{error}", &failure.message()),
+                    Message::with_error("Not changed: {error}", failure.message()),
                     true,
                 ));
                 self.ask_background(cx);
@@ -325,12 +328,13 @@ impl SettingsView {
 
     /// The shell's answer to a [`SettingsEvent::ShellCommand`]; re-reads the
     /// files so the row shows what the shell actually wrote.
-    pub fn shell_done(&mut self, result: Result<(), String>, cx: &mut Context<Self>) {
+    pub fn shell_done(&mut self, result: Result<(), Message>, cx: &mut Context<Self>) {
         self.background.pending = false;
         self.background.note = Some(match result {
             Ok(()) => (
-                t("Gentle Shell applied it; its report is in 🔔. Helpers launched from now on use it.")
-                    .into(),
+                Message::new(
+                    "Gentle Shell applied it; its report is in 🔔. Helpers launched from now on use it.",
+                ),
                 false,
             ),
             Err(error) => (error, true),
@@ -474,7 +478,7 @@ impl SettingsView {
                                 } else {
                                     ui::success()
                                 })
-                                .child(text),
+                                .child(text.render()),
                         )
                     }),
             )

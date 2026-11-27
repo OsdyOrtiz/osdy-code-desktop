@@ -208,7 +208,7 @@ impl SettingsView {
         };
         let ios = match &status.ios {
             Ok(()) => t("Ready (Xcode)").to_string(),
-            Err(why) => why.clone(),
+            Err(why) => t(why).to_string(),
         };
         let android = match &status.android_sdk {
             Some(sdk) => sdk.display().to_string(),

@@ -28,10 +28,11 @@ pub(in crate::features::settings) fn load(cwd: &Path, shell_updates: bool) -> Sn
         let label = choice.label();
         snapshot.launcher = crate::features::backend::gentle_shell_path(&choice).map(|path| {
             if gentle_core::backend::is_windows_file(&path) {
-                t("not found in {label} (only Windows' {path})")
-                    .replace("{label}", &label)
-                    .replace("{path}", &path)
-                    .into()
+                gentle_core::i18n::fill(
+                    t("not found in {label} (only Windows' {path})"),
+                    &[("label", &label), ("path", &path)],
+                )
+                .into()
             } else {
                 format!("{path} ({label})").into()
             }
