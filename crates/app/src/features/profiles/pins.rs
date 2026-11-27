@@ -13,6 +13,7 @@ use pi_rpc::desktop_rpc::{ConfigLayerSource, ConfigState, ConfigStatus, ConfigWr
 use serde_json::Value;
 
 use super::files::{restore_bytes, write_atomic};
+use super::{ProfileText, profile_msg};
 
 fn read_pin(path: &Path) -> PinRead {
     match fs::read_to_string(path) {
@@ -22,11 +23,14 @@ fn read_pin(path: &Path) -> PinRead {
     }
 }
 
-pub(super) fn write_pin(path: &Path, profile: &str) -> Result<(), String> {
+pub(super) fn write_pin(path: &Path, profile: &str) -> Result<(), ProfileText> {
     if !is_valid_profile_name(profile) {
-        return Err(format!("Invalid profile name: {profile:?}."));
+        return Err(profile_msg!(
+            "Invalid profile name: {profile}.",
+            profile = format!("{profile:?}")
+        ));
     }
-    write_atomic(path, &serialize_pin(profile)).map_err(|e| e.to_string())
+    write_atomic(path, &serialize_pin(profile)).map_err(|e| e.to_string().into())
 }
 
 pub(super) fn clear_pin(path: &Path) -> io::Result<()> {
@@ -104,7 +108,7 @@ const REPO_PIN_LABEL: &str = ".pi/gentle-ai/profile.json";
 /// worktree. The store names a layer's profile only when it wins or is
 /// stale, so a declaration shadowed by a winning clone pin is reported as a
 /// note instead of being shown as absent.
-pub(super) fn rpc_pin_status(state: &ConfigState) -> (Option<PinStatus>, Option<String>) {
+pub(super) fn rpc_pin_status(state: &ConfigState) -> (Option<PinStatus>, Option<ProfileText>) {
     let value = state.value.as_ref();
     if state.layers.is_empty() || value.and_then(|v| v.get("reason")).is_some() {
         return (None, None);
@@ -148,9 +152,7 @@ pub(super) fn rpc_pin_status(state: &ConfigState) -> (Option<PinStatus>, Option<
         repo_path: PathBuf::from(REPO_PIN_LABEL),
     };
     let notice = shadowed.then(|| {
-        format!(
-            "This repository also has a committed declaration ({REPO_PIN_LABEL}); the clone pin takes precedence, so Gentle Shell does not report which profile it declares."
-        )
+        profile_msg!("This repository also has a committed declaration ({path}); the clone pin takes precedence, so Gentle Shell does not report which profile it declares.", path = REPO_PIN_LABEL.to_string())
     });
     (Some(status), notice)
 }
@@ -160,9 +162,9 @@ pub(super) fn rpc_pin_status(state: &ConfigState) -> (Option<PinStatus>, Option<
 pub(super) fn local_pin_write(
     status: Option<&PinStatus>,
     name: &str,
-) -> Result<(ConfigWrite, bool), String> {
+) -> Result<(ConfigWrite, bool), ProfileText> {
     let Some(status) = status else {
-        return Err("This folder is not inside a Git worktree, so nothing was pinned.".to_string());
+        return Err("This folder is not inside a Git worktree, so nothing was pinned.".into());
     };
     let pinned = status.local == PinRead::Valid(name.to_string());
     let write = if pinned {
@@ -180,11 +182,9 @@ pub(super) fn local_pin_write(
 pub(super) fn repo_pin_write(
     status: Option<&PinStatus>,
     name: &str,
-) -> Result<(ConfigWrite, bool), String> {
+) -> Result<(ConfigWrite, bool), ProfileText> {
     let Some(status) = status else {
-        return Err(
-            "This folder is not inside a Git worktree, so nothing was published.".to_string(),
-        );
+        return Err("This folder is not inside a Git worktree, so nothing was published.".into());
     };
     let declared = status.repo == PinRead::Valid(name.to_string());
     let write = if declared {

@@ -2,8 +2,7 @@
 //! the route table.
 
 use gentle_core::profiles::{
-    ORCHESTRATOR, OrchestratorMode, PinRead, format_selection, is_review_role, pin_notes,
-    unmatched_notes,
+    ORCHESTRATOR, OrchestratorMode, PinRead, RouteEntry, evaluate_pin, is_review_role,
 };
 use gpui_kit::assets::IconName;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
@@ -12,17 +11,21 @@ use gpui_kit::component::{Disableable as _, Icon, Selectable as _, Sizable as _,
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
 
+use crate::features::profiles::profile_msg;
 use crate::features::profiles::{ALL_ROW, ProfilesView};
-use crate::shared::ui;
+use crate::shared::{
+    i18n::{language, t},
+    ui,
+};
 
 use super::{EFFORT_W, TIER_W, route_cells, route_columns, route_name_column};
 
 impl ProfilesView {
     fn render_row(&self, key: &str, cx: &mut Context<Self>) -> AnyElement {
         let (label, hint) = match key {
-            ORCHESTRATOR => ("orchestrator".to_string(), Some("settings.json")),
-            ALL_ROW => ("every agent".to_string(), Some("sets all rows")),
-            k if is_review_role(k) => (k.to_string(), Some("review role")),
+            ORCHESTRATOR => (t("orchestrator").to_string(), Some("settings.json")),
+            ALL_ROW => (t("every agent").to_string(), Some(t("sets all rows"))),
+            k if is_review_role(k) => (k.to_string(), Some(t("review role"))),
             k => (k.to_string(), None),
         };
         let custom = self.custom_target.as_deref() == Some(key);
@@ -84,7 +87,7 @@ impl ProfilesView {
                                 .small()
                                 .outline()
                                 .icon(Icon::new(IconName::Check))
-                                .label("Set")
+                                .label(t("Set"))
                                 .on_click(cx.listener(|this, _, window, cx| {
                                     this.submit_custom(window, cx)
                                 })),
@@ -93,7 +96,7 @@ impl ProfilesView {
                             Button::new("custom-cancel")
                                 .small()
                                 .ghost()
-                                .label("Cancel")
+                                .label(t("Cancel"))
                                 .on_click(cx.listener(|this, _, _, cx| {
                                     this.custom_target = None;
                                     cx.notify();
@@ -119,8 +122,8 @@ impl ProfilesView {
             .when(on, |b| b.outline().selected(true))
             .when(!on, |b| b.ghost())
             .when(on && edited, |b| b.text_color(ui::warning()))
-            .label(label)
-            .tooltip(tooltip)
+            .label(t(label))
+            .tooltip(t(tooltip))
             .disabled(self.busy)
     }
 
@@ -155,7 +158,7 @@ impl ProfilesView {
             .gap_2()
             .text_xs()
             .text_color(ui::muted())
-            .child("Orchestrator")
+            .child(t("Orchestrator"))
             .child(organic)
             .child(delegation)
     }
@@ -187,14 +190,14 @@ impl ProfilesView {
             .gap_2()
             .text_xs()
             .text_color(ui::muted())
-            .child("Controlled Engineering")
+            .child(t("Controlled Engineering"))
             .child(off)
             .child(on)
     }
 
     fn render_scope(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let name = self.selected.clone().unwrap_or_default();
-        let mut parts: Vec<(&str, Hsla)> = Vec::new();
+        let mut parts: Vec<(&'static str, Hsla)> = Vec::new();
         if self.in_session.as_deref() == Some(name.as_str()) {
             parts.push(("Used in this session", ui::success()));
         }
@@ -205,22 +208,23 @@ impl ProfilesView {
             parts.push(("Used in this repo", ui::warning()));
         }
         let default_line = match &self.file.active {
-            Some(active) => format!("Global default: {active}"),
-            None => "No global default profile".into(),
+            Some(active) => t("Global default: {active}").replace("{active}", active),
+            None => t("No global default profile").into(),
         };
         let pin_line = match &self.pin {
-            None => "Repo pin: none (not inside a Git worktree)".to_string(),
+            None => t("Repo pin: none (not inside a Git worktree)").to_string(),
             Some(status) => {
                 let layer = |read: &PinRead| match read {
-                    PinRead::Missing => "none".to_string(),
-                    PinRead::Invalid => "invalid file".to_string(),
+                    PinRead::Missing => t("none").to_string(),
+                    PinRead::Invalid => t("invalid file").to_string(),
                     PinRead::Valid(p) => p.clone(),
                 };
-                format!(
-                    "Repo pin: local {} · declaration {}",
-                    layer(&status.local),
-                    layer(&status.repo)
+                profile_msg!(
+                    "Repo pin: local {local} · declaration {repo}",
+                    local = layer(&status.local),
+                    repo = layer(&status.repo)
                 )
+                .render()
             }
         };
         ui::card()
@@ -244,10 +248,14 @@ impl ProfilesView {
                             div()
                                 .text_xs()
                                 .text_color(ui::muted())
-                                .child("Not in use. Pick a button below to use it."),
+                                .child(t("Not in use. Pick a button below to use it.")),
                         )
                     })
-                    .children(parts.into_iter().map(|(part, color)| ui::chip(part, color))),
+                    .children(
+                        parts
+                            .into_iter()
+                            .map(|(part, color)| ui::chip(t(part), color)),
+                    ),
             )
             .child(
                 h_flex()
@@ -264,12 +272,13 @@ impl ProfilesView {
     }
 
     pub(super) fn render_table(&self, cx: &mut Context<Self>) -> impl IntoElement {
+        let language = language();
         let notes: Vec<String> = self
             .notices
             .iter()
-            .cloned()
-            .chain(pin_notes(self.pin.as_ref(), &self.file))
-            .chain(unmatched_notes(&self.draft, &self.names))
+            .map(|note| note.render())
+            .chain(evaluate_pin(self.pin.as_ref(), &self.file).notes_in(language))
+            .chain(self.draft.unmatched_notes_in(&self.names, language))
             .collect();
         let orchestrator_now = self.pi_default.clone();
         v_flex()
@@ -293,15 +302,15 @@ impl ProfilesView {
                 h_flex()
                     .px_1()
                     .gap_2()
-                    .child(ui::section_label("Routes"))
+                    .child(ui::section_label(t("Routes")))
                     .child(div().flex_1())
                     .child(
                         Button::new("all-fast")
                             .small()
                             .ghost()
                             .icon(Icon::new(IconName::Zap))
-                            .label("All Fast")
-                            .tooltip("Set every compatible OpenAI route to Fast (draft only)")
+                            .label(t("All Fast"))
+                            .tooltip(t("Set every compatible OpenAI route to Fast (draft only)"))
                             .disabled(self.busy)
                             .on_click(cx.listener(|this, _, _, cx| this.all_fast(cx))),
                     ),
@@ -315,23 +324,23 @@ impl ProfilesView {
                             .px_2()
                             .pt_1p5()
                             .pb_1()
-                            .child(route_name_column().child(ui::section_label("Route")))
+                            .child(route_name_column().child(ui::section_label(t("Route"))))
                             .child(
                                 route_cells()
-                                    .child(div().flex_1().min_w_0().px_1().child(ui::section_label("Model")))
+                                    .child(div().flex_1().min_w_0().px_1().child(ui::section_label(t("Model"))))
                                     .child(
                                         div()
                                             .w(rems(EFFORT_W / 16.))
                                             .flex_shrink_0()
                                             .px_1()
-                                            .child(ui::section_label("Effort")),
+                                            .child(ui::section_label(t("Effort"))),
                                     )
                                     .child(
                                         div()
                                             .w(rems(TIER_W / 16.))
                                             .flex_shrink_0()
                                             .px_1()
-                                            .child(ui::section_label("Tier")),
+                                            .child(ui::section_label(t("Tier"))),
                                     ),
                             ),
                     )
@@ -344,7 +353,7 @@ impl ProfilesView {
                                     .px_2()
                                     .pt_0p5()
                                     .gap_2()
-                                    .child(ui::section_label("Agents"))
+                                    .child(ui::section_label(t("Agents")))
                                     .child(
                                         div()
                                             .text_xs()
@@ -360,10 +369,8 @@ impl ProfilesView {
                     .px_1()
                     .text_xs()
                     .text_color(ui::faint())
-                    .child(format!(
-                        "Pi default orchestrator now: {}. Fast applies only to openai / openai-codex GPT-5.6 / 6 / 6.1 models; the selector is a request, not a billing guarantee.",
-                        orchestrator_now.map_or_else(|| "not set".to_string(), |e| format_selection(Some(&e)))
-                    )),
+                    .child(t("Pi default orchestrator now: {model}. Fast applies only to openai / openai-codex GPT-5.6 / 6 / 6.1 models; the selector is a request, not a billing guarantee.")
+                        .replace("{model}", &orchestrator_now.map_or_else(|| t("not set").to_string(), |e| RouteEntry::format_selection_in(Some(&e), language)))),
             )
     }
 }

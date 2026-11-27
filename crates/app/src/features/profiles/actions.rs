@@ -8,10 +8,8 @@
 //! `clear_profile_binding` where advertised, else `/gentle:profiles clear`.
 
 use gentle_core::profiles::{
-    PROFILE_EXPORT_FILE, PinRead, ProfileExport, ProfilesFile, Routing, create_profile,
-    delete_profile, duplicate_profile, normalize_routing, parse_model_ref, parse_profile_export,
-    parse_profiles, rename_profile, serialize_profile_export, serialize_profiles,
-    set_controlled_engineering, set_orchestrator_mode, update_profile,
+    PROFILE_EXPORT_FILE, PinRead, ProfileExport, ProfilesFile, Routing, normalize_routing,
+    parse_model_ref, parse_profile_export, parse_profiles, serialize_profiles,
 };
 use gpui_kit::*;
 use pi_rpc::desktop_rpc::{
@@ -29,7 +27,10 @@ use super::pins::{
     clear_pin, follow_renamed_pin, local_pin_write, read_pin_status, renamed_pin_write,
     repo_pin_write, write_pin,
 };
-use super::{Backend, Confirm, Leave, NameMode, ProfilesEvent, ProfilesView, Tone};
+use super::{
+    Backend, Confirm, Leave, NameMode, ProfileText, ProfilesEvent, ProfilesView, Tone, profile_msg,
+};
+use crate::shared::i18n::t;
 
 /// The committed declaration, as the RPC path names it.
 const DECLARATION: &str = ".pi/gentle-ai/profile.json";
@@ -65,7 +66,9 @@ impl ProfilesView {
         if self.is_rpc() {
             let write = match profiles_write(&next) {
                 Ok(write) => write,
-                Err(error) => return self.say(format!("Not saved: {error}"), Tone::Bad),
+                Err(error) => {
+                    return self.say(profile_msg!("Not saved: {error}", error = error), Tone::Bad);
+                }
             };
             self.rpc_write(write, cx, move |this, result, cx| {
                 // The Shell's normalized store is the truth; the draft it was
@@ -93,9 +96,10 @@ impl ProfilesView {
                     cx.emit(ProfilesEvent::Changed);
                     done(this, cx);
                 }
-                Err(error) => {
-                    this.say(format!("profiles.json was not written: {error}"), Tone::Bad)
-                }
+                Err(error) => this.say(
+                    profile_msg!("profiles.json was not written: {error}", error = error),
+                    Tone::Bad,
+                ),
             },
         );
     }
@@ -103,7 +107,7 @@ impl ProfilesView {
     /// The draft (routing, orchestrator mode and Controlled Engineering) as
     /// the store would hold it
     /// (create or update), or `None` when it already matches.
-    fn saved_draft(&self) -> Result<Option<ProfilesFile>, String> {
+    fn saved_draft(&self) -> Result<Option<ProfilesFile>, ProfileText> {
         let Some(name) = &self.selected else {
             return Ok(None);
         };
@@ -118,12 +122,14 @@ impl ProfilesView {
             return Ok(None);
         }
         let next = if self.file.has(name) {
-            update_profile(&self.file, name, self.draft.clone())?
+            self.file.update(name, self.draft.clone())
         } else {
-            create_profile(&self.file, name, self.draft.clone())?
+            self.file.create(name, self.draft.clone())
         };
-        let next = set_orchestrator_mode(&next, name, self.draft_mode)?;
-        set_controlled_engineering(&next, name, self.draft_controlled).map(Some)
+        next.and_then(|next| next.with_orchestrator_mode(name, self.draft_mode))
+            .and_then(|next| next.with_controlled_engineering(name, self.draft_controlled))
+            .map(Some)
+            .map_err(|error| ProfileText::store_error(error.into_parts()))
     }
 
     /// Save pending edits, then continue with `then` (told whether it saved).
@@ -133,7 +139,7 @@ impl ProfilesView {
         then: impl FnOnce(&mut Self, bool, &mut Context<Self>) + 'static,
     ) {
         match self.saved_draft() {
-            Err(error) => self.say(format!("Not saved: {error}"), Tone::Bad),
+            Err(error) => self.say(profile_msg!("Not saved: {error}", error = error), Tone::Bad),
             Ok(None) => then(self, false, cx),
             Ok(Some(next)) => self.write_store(next, cx, move |this, cx| {
                 this.stored = this.draft.clone();
@@ -155,7 +161,7 @@ impl ProfilesView {
             let name = this.selected.clone().unwrap_or_default();
             this.say(
                 if saved {
-                    format!("Saved \"{name}\".")
+                    profile_msg!("Saved \"{name}\".", name = name)
                 } else {
                     "Nothing to save.".into()
                 },
@@ -171,7 +177,10 @@ impl ProfilesView {
         if self.shell_applies(cx) {
             self.save_then(cx, move |this, saved, cx| {
                 if saved {
-                    this.say(format!("Saved \"{name}\"."), Tone::Good);
+                    this.say(
+                        profile_msg!("Saved \"{name}\".", name = name.clone()),
+                        Tone::Good,
+                    );
                 }
                 this.shell_apply(ProfileApply::new(name, ProfileApplyMode::Session), cx);
             });
@@ -185,19 +194,22 @@ impl ProfilesView {
             let thinking = model
                 .as_ref()
                 .and_then(|_| orchestrator.and_then(|e| e.thinking.clone()));
-            let prefix = if saved {
-                format!("Saved \"{name}\". ")
-            } else {
-                String::new()
-            };
-            let live = match &model {
-                Some((provider, id)) => format!(" Switching this session to {provider}/{id}."),
-                None => " The orchestrator is left untouched.".into(),
-            };
-            this.say(
-                format!("{prefix}Using \"{name}\" in this session.{live}"),
-                Tone::Good,
-            );
+            let mut lines = Vec::new();
+            if saved {
+                lines.push(profile_msg!("Saved \"{name}\".", name = name.clone()));
+            }
+            lines.push(profile_msg!(
+                "Using \"{name}\" in this session.",
+                name = name.clone()
+            ));
+            lines.push(match &model {
+                Some((provider, id)) => profile_msg!(
+                    "Switching this session to {model}.",
+                    model = format!("{provider}/{id}")
+                ),
+                None => "The orchestrator is left untouched.".into(),
+            });
+            this.say(ProfileText::Joined(lines, " "), Tone::Good);
             cx.emit(ProfilesEvent::UseInSession {
                 profile: name,
                 model,
@@ -213,7 +225,10 @@ impl ProfilesView {
         if self.shell_applies(cx) {
             self.save_then(cx, move |this, saved, cx| {
                 if saved {
-                    this.say(format!("Saved \"{name}\"."), Tone::Good);
+                    this.say(
+                        profile_msg!("Saved \"{name}\".", name = name.clone()),
+                        Tone::Good,
+                    );
                 }
                 this.shell_apply(ProfileApply::new(name, ProfileApplyMode::Default), cx);
             });
@@ -224,7 +239,10 @@ impl ProfilesView {
             let file = this.file.clone();
             let config = file.get(&name).cloned().unwrap_or_default();
             if saved {
-                this.say(format!("Saved \"{name}\"."), Tone::Good);
+                this.say(
+                    profile_msg!("Saved \"{name}\".", name = name.clone()),
+                    Tone::Good,
+                );
             }
             this.run_io(
                 cx,
@@ -310,9 +328,16 @@ impl ProfilesView {
         let name = request.profile.clone();
         let sent = self.with_remote(cx, |remote, port| remote.apply(port, request));
         match sent {
-            Some(Ok(_)) => self.say(format!("Applying \"{name}\" in Gentle Shell…"), Tone::Info),
+            Some(Ok(_)) => self.say(
+                profile_msg!("Applying \"{name}\" in Gentle Shell…", name = name),
+                Tone::Info,
+            ),
             Some(Err(failure)) => self.say(
-                format!("\"{name}\" was not applied: {}", failure.message()),
+                profile_msg!(
+                    "\"{name}\" was not applied: {error}",
+                    name = name,
+                    error = failure.text()
+                ),
                 Tone::Bad,
             ),
             None => {}
@@ -348,9 +373,9 @@ impl ProfilesView {
                 let text = notes_text(&notes);
                 if applied {
                     let text = if text.is_empty() {
-                        format!("Applied \"{name}\".")
+                        profile_msg!("Applied \"{name}\".", name = name)
                     } else {
-                        text
+                        text.into()
                     };
                     self.say(text, Tone::Good);
                     cx.emit(ProfilesEvent::Changed);
@@ -359,9 +384,9 @@ impl ProfilesView {
                     }
                 } else {
                     let text = if text.is_empty() {
-                        format!("Gentle Shell did not apply \"{name}\".")
+                        profile_msg!("Gentle Shell did not apply \"{name}\".", name = name)
                     } else {
-                        text
+                        text.into()
                     };
                     let failed = notes
                         .iter()
@@ -395,11 +420,9 @@ impl ProfilesView {
                     Err(error) => return this.say(error, Tone::Bad),
                 };
                 let message = if pinned {
-                    "Removed the clone pin. This clone falls back to the repository declaration, then to the global routing.".to_string()
+                    "Removed the clone pin. This clone falls back to the repository declaration, then to the global routing.".into()
                 } else {
-                    format!(
-                        "Pinned \"{name}\" for this clone. Subagent launches here resolve it; the orchestrator and other repositories keep their global routing."
-                    )
+                    profile_msg!("Pinned \"{name}\" for this clone. Subagent launches here resolve it; the orchestrator and other repositories keep their global routing.", name = name.clone())
                 };
                 this.rpc_write(write, cx, move |this, _, _| this.say(message, Tone::Good));
             });
@@ -410,22 +433,16 @@ impl ProfilesView {
                 cx,
                 move || {
                     let Some(status) = read_pin_status(&env.cwd) else {
-                        return (Err("This folder is not inside a Git worktree, so nothing was pinned.".to_string()), None);
+                        return (Err("This folder is not inside a Git worktree, so nothing was pinned.".into()), None);
                     };
                     let pinned = status.local == PinRead::Valid(name.clone());
                     let result = if pinned {
-                        clear_pin(&status.local_path).map_err(|e| e.to_string()).map(|_| {
-                            format!(
-                                "Removed the local pin from {}. This clone falls back to the repository declaration, then to the global routing.",
-                                status.local_path.display()
-                            )
+                        clear_pin(&status.local_path).map_err(|e| ProfileText::from(e.to_string())).map(|_| {
+                            profile_msg!("Removed the local pin from {path}. This clone falls back to the repository declaration, then to the global routing.", path = status.local_path.display().to_string())
                         })
                     } else {
                         write_pin(&status.local_path, &name).map(|_| {
-                            format!(
-                                "Pinned \"{name}\" for this clone in {}. Subagent launches here resolve it; the orchestrator and other repositories keep their global routing.",
-                                status.local_path.display()
-                            )
+                            profile_msg!("Pinned \"{name}\" for this clone in {path}. Subagent launches here resolve it; the orchestrator and other repositories keep their global routing.", name = name, path = status.local_path.display().to_string())
                         })
                     };
                     (result, read_pin_status(&env.cwd))
@@ -456,15 +473,11 @@ impl ProfilesView {
                 };
                 this.rpc_write(write, cx, move |this, result, _| {
                     let message = if !result.changed {
-                        format!("The repository declaration ({DECLARATION}) already said that; nothing changed.")
+                        profile_msg!("The repository declaration ({path}) already said that; nothing changed.", path = DECLARATION.to_string())
                     } else if declared {
-                        format!(
-                            "Removed the repository declaration ({DECLARATION}). This worktree falls back to the global routing; a clone pin still outranks it."
-                        )
+                        profile_msg!("Removed the repository declaration ({path}). This worktree falls back to the global routing; a clone pin still outranks it.", path = DECLARATION.to_string())
                     } else {
-                        format!(
-                            "Declared \"{name}\" for this worktree in {DECLARATION}. Subagent launches resolve it; commit the file to share the routing. A clone pin takes precedence over it."
-                        )
+                        profile_msg!("Declared \"{name}\" for this worktree in {path}. Subagent launches resolve it; commit the file to share the routing. A clone pin takes precedence over it.", name = name, path = DECLARATION.to_string())
                     };
                     this.say(message, Tone::Good);
                 });
@@ -473,7 +486,10 @@ impl ProfilesView {
         }
         self.save_then(cx, move |this, _, cx| {
             this.say(
-                format!("Sent /gentle:profiles publish {name}. Refresh to see the declaration."),
+                profile_msg!(
+                    "Sent /gentle:profiles publish {name}. Refresh to see the declaration.",
+                    name = name.clone()
+                ),
                 Tone::Info,
             );
             cx.emit(ProfilesEvent::RunCommand(format!(
@@ -492,7 +508,7 @@ impl ProfilesView {
                     self.clearing = Some(ticket);
                     self.say("Clearing this session's profile binding…", Tone::Info);
                 }
-                Err(failure) => self.say(failure.message(), Tone::Bad),
+                Err(failure) => self.say(failure.text(), Tone::Bad),
             }
             cx.notify();
             return;
@@ -514,28 +530,26 @@ impl ProfilesView {
             ConfigOutcome::Cleared(result) => match result.status {
                 ClearBindingStatus::Cleared => (
                     match result.binding.profile {
-                        Some(profile) => format!(
-                            "Cleared the session binding. This session is back on \"{profile}\"."
-                        ),
-                        None => "Cleared the session binding. This session is back on the routing without a session profile.".to_string(),
+                        Some(profile) => profile_msg!("Cleared the session binding. This session is back on \"{profile}\".", profile = profile),
+                        None => "Cleared the session binding. This session is back on the routing without a session profile.".into(),
                     },
                     Tone::Good,
                 ),
                 ClearBindingStatus::Unchanged => (
-                    "This session had no profile binding to clear.".to_string(),
+                    "This session had no profile binding to clear.".into(),
                     Tone::Info,
                 ),
                 ClearBindingStatus::NotCleared => (
-                    "Gentle Shell could not confirm the clear; run /gentle:profiles in the terminal to see why.".to_string(),
+                    "Gentle Shell could not confirm the clear; run /gentle:profiles in the terminal to see why.".into(),
                     Tone::Bad,
                 ),
             },
             ConfigOutcome::Failed(failure) => (
-                format!("The session binding was not cleared: {}", failure.message()),
+                profile_msg!("The session binding was not cleared: {error}", error = failure.text()),
                 Tone::Bad,
             ),
             _ => (
-                "The answer to the clear did not match it.".to_string(),
+                "The answer to the clear did not match it.".into(),
                 Tone::Bad,
             ),
         };
@@ -557,7 +571,7 @@ impl ProfilesView {
         match leave {
             Leave::Switch(name) => {
                 self.select(Some(name.clone()), false);
-                self.say(format!("Showing \"{name}\"."), Tone::Info);
+                self.say(profile_msg!("Showing \"{name}\".", name = name), Tone::Info);
             }
             Leave::Close => cx.emit(ProfilesEvent::Close),
             Leave::New => self.open_name(NameMode::New, window, cx),
@@ -586,25 +600,33 @@ impl ProfilesView {
         let current = self.selected.clone().unwrap_or_default();
         let result = match mode {
             NameMode::New if answer.is_empty() => {
-                Err("No profile created: no name entered.".to_string())
+                Err("No profile created: no name entered.".into())
             }
-            NameMode::New => {
-                create_profile(&self.file, &answer, Routing::default()).map(|f| (f, answer.clone()))
-            }
+            NameMode::New => self
+                .file
+                .create(&answer, Routing::default())
+                .map(|f| (f, answer.clone()))
+                .map_err(|error| ProfileText::store_error(error.into_parts())),
             NameMode::Duplicate => {
                 let to = if answer.is_empty() {
                     format!("{current}-copy")
                 } else {
                     answer.clone()
                 };
-                duplicate_profile(&self.file, &current, &to).map(|f| (f, to))
+                self.file
+                    .duplicate(&current, &to)
+                    .map(|f| (f, to))
+                    .map_err(|error| ProfileText::store_error(error.into_parts()))
             }
-            NameMode::Rename if answer.is_empty() => Err(format!(
-                "Profile \"{current}\" unchanged: no new name entered."
+            NameMode::Rename if answer.is_empty() => Err(profile_msg!(
+                "Profile \"{name}\" unchanged: no new name entered.",
+                name = current.clone()
             )),
-            NameMode::Rename => {
-                rename_profile(&self.file, &current, &answer).map(|f| (f, answer.clone()))
-            }
+            NameMode::Rename => self
+                .file
+                .rename(&current, &answer)
+                .map(|f| (f, answer.clone()))
+                .map_err(|error| ProfileText::store_error(error.into_parts())),
         };
         self.name_input
             .update(cx, |s, cx| s.set_value("", window, cx));
@@ -618,7 +640,7 @@ impl ProfilesView {
                         NameMode::Rename => {
                             let keep = this.change_count() > 0;
                             this.select(Some(name.clone()), keep);
-                            this.say(format!("Profile \"{from}\" renamed to \"{name}\"."), Tone::Good);
+                            this.say(profile_msg!("Profile \"{from}\" renamed to \"{name}\".", from = from.clone(), name = name.clone()), Tone::Good);
                             if this.is_rpc() {
                                 this.follow_rename_rpc(&from, &name, cx);
                             } else if let Some(env) = this.env.clone() {
@@ -632,25 +654,26 @@ impl ProfilesView {
                                     },
                                     move |this, ((followed, declared), pin), _| {
                                         this.pin = pin;
-                                        let mut message = format!("Profile \"{from}\" renamed to \"{name}\".");
+                                        let mut messages = vec![profile_msg!("Profile \"{from}\" renamed to \"{name}\".", from = from.clone(), name = name)];
                                         for path in followed {
-                                            message.push_str(&format!(" Updated the clone pin {}.", path.display()));
+                                            messages.push(profile_msg!("Updated the clone pin {path}.", path = path.display().to_string()));
                                         }
                                         for path in declared {
-                                            message.push_str(&format!(
-                                                " The committed declaration {} still names \"{from}\"; Publish to repo republishes it.",
-                                                path.display()
-                                            ));
+                                            messages.push(profile_msg!("The committed declaration {path} still names \"{from}\"; Publish to repo republishes it.", path = path.display().to_string(), from = from.clone()));
                                         }
-                                        this.say(message, Tone::Good);
+                                        this.say(ProfileText::Joined(messages, " "), Tone::Good);
                                     },
                                 );
                             }
                         }
                         NameMode::New | NameMode::Duplicate => {
                             this.select(Some(name.clone()), false);
-                            let verb = if mode == NameMode::New { "created".to_string() } else { format!("duplicated from \"{from}\"") };
-                            this.say(format!("Profile \"{name}\" {verb}."), Tone::Good);
+                            let message = if mode == NameMode::New {
+                                profile_msg!("Profile \"{name}\" created.", name = name)
+                            } else {
+                                profile_msg!("Profile \"{name}\" duplicated from \"{from}\".", name = name, from = from)
+                            };
+                            this.say(message, Tone::Good);
                         }
                     }
                 });
@@ -665,25 +688,31 @@ impl ProfilesView {
         };
         if self.file.active.as_deref() == Some(name.as_str()) {
             self.say(
-                format!("Profile {name} is active. Apply another profile before deleting it."),
+                profile_msg!(
+                    "Profile {name} is active. Apply another profile before deleting it.",
+                    name = name
+                ),
                 Tone::Bad,
             );
         } else if let Some(status) = &self.pin
             && let layers = [
-                ("local", &status.local, &status.local_path),
-                ("repo", &status.repo, &status.repo_path),
+                ("local pin", &status.local, &status.local_path),
+                ("repo pin", &status.repo, &status.repo_path),
             ]
             .into_iter()
             .filter(|(_, read, _)| **read == PinRead::Valid(name.clone()))
-            .map(|(layer, _, path)| format!("{layer} pin at {}", path.display()))
+            .map(|(layer, _, path)| {
+                profile_msg!(
+                    "{pin} at {path}",
+                    pin = layer,
+                    path = path.display().to_string()
+                )
+            })
             .collect::<Vec<_>>()
             && !layers.is_empty()
         {
             self.say(
-                format!(
-                    "Profile \"{name}\" is pinned for this repository ({}). Remove the pin first (Use in this repo for the clone pin, Publish to repo for the declaration), then delete it.",
-                    layers.join(" and ")
-                ),
+                profile_msg!("Profile \"{name}\" is pinned for this repository ({layers}). Remove the pin first (Use in this repo for the clone pin, Publish to repo for the declaration), then delete it.", name = name, layers = ProfileText::Joined(layers, " and ")),
                 Tone::Bad,
             );
         } else {
@@ -694,12 +723,21 @@ impl ProfilesView {
 
     pub(super) fn delete(&mut self, name: String, cx: &mut Context<Self>) {
         self.confirm = None;
-        match delete_profile(&self.file, &name) {
-            Err(error) => self.say(format!("Profile not deleted: {error}"), Tone::Bad),
+        match self.file.delete(&name) {
+            Err(error) => self.say(
+                profile_msg!(
+                    "Profile not deleted: {error}",
+                    error = ProfileText::store_error(error.into_parts())
+                ),
+                Tone::Bad,
+            ),
             Ok(next) => self.write_store(next, cx, move |this, cx| {
                 let first = this.file.names().next().map(str::to_string);
                 this.select(first, false);
-                this.say(format!("Deleted \"{name}\"."), Tone::Good);
+                this.say(
+                    profile_msg!("Deleted \"{name}\".", name = name.clone()),
+                    Tone::Good,
+                );
                 if this.is_rpc() {
                     this.follow_fallbacks_rpc(&name, None, cx);
                 } else if let Some(env) = this.env.clone() {
@@ -727,10 +765,16 @@ impl ProfilesView {
         let Some(config) = self.file.get(&name) else {
             return;
         };
-        let text = match serialize_profile_export(&name, config) {
+        let text = match ProfilesFile::export(&name, config) {
             Ok(text) => text,
             Err(error) => {
-                self.say(format!("Profile not exported: {error}"), Tone::Bad);
+                self.say(
+                    profile_msg!(
+                        "Profile not exported: {error}",
+                        error = ProfileText::store_error(error.into_parts())
+                    ),
+                    Tone::Bad,
+                );
                 cx.notify();
                 return;
             }
@@ -752,10 +796,17 @@ impl ProfilesView {
                     },
                     move |this, result, _| match result {
                         Ok(path) => this.say(
-                            format!("Exported \"{name}\" to {}.", path.display()),
+                            profile_msg!(
+                                "Exported \"{name}\" to {path}.",
+                                name = name,
+                                path = path.display().to_string()
+                            ),
                             Tone::Good,
                         ),
-                        Err(error) => this.say(format!("Profile not exported: {error}"), Tone::Bad),
+                        Err(error) => this.say(
+                            profile_msg!("Profile not exported: {error}", error = error),
+                            Tone::Bad,
+                        ),
                     },
                 );
             });
@@ -771,7 +822,7 @@ impl ProfilesView {
                 files: true,
                 directories: false,
                 multiple: false,
-                prompt: Some("Import".into()),
+                prompt: Some(t("Import").into()),
             });
             cx.spawn(async move |this, cx| {
                 let Ok(Ok(Some(paths))) = picked.await else {
@@ -789,14 +840,11 @@ impl ProfilesView {
                         },
                         |this, (path, text), cx| match text.map(|t| parse_profile_export(&t)) {
                             Err(error) => this.say(
-                                format!("Could not read {}: {error}", path.display()),
+                                profile_msg!("Could not read {path}: {error}", path = path.display().to_string(), error = error),
                                 Tone::Bad,
                             ),
                             Ok(None) => this.say(
-                                format!(
-                                    "{} is not a profile export (gentle-pi.agent_model_profile).",
-                                    path.display()
-                                ),
+                                profile_msg!("{path} is not a profile export (gentle-pi.agent_model_profile).", path = path.display().to_string()),
                                 Tone::Bad,
                             ),
                             Ok(Some(export)) if this.file.has(&export.name) => {
@@ -821,25 +869,36 @@ impl ProfilesView {
         } = export;
         let routes = config.iter().count();
         let next = if self.file.has(&name) {
-            update_profile(&self.file, &name, config)
+            self.file.update(&name, config)
         } else {
-            create_profile(&self.file, &name, config)
+            self.file.create(&name, config)
         };
         match next {
-            Err(error) => self.say(format!("Profile not imported: {error}"), Tone::Bad),
+            Err(error) => self.say(
+                profile_msg!(
+                    "Profile not imported: {error}",
+                    error = ProfileText::store_error(error.into_parts())
+                ),
+                Tone::Bad,
+            ),
             Ok(next) => self.write_store(next, cx, move |this, _| {
                 this.select(Some(name.clone()), false);
-                let mut message = format!(
-                    "Imported \"{name}\" ({routes} {}).",
-                    if routes == 1 { "route" } else { "routes" }
-                );
+                let mut messages = vec![profile_msg!(
+                    if routes == 1 {
+                        "Imported \"{name}\" ({count} route)."
+                    } else {
+                        "Imported \"{name}\" ({count} routes)."
+                    },
+                    name = name,
+                    count = routes.to_string()
+                )];
                 if !dropped.is_empty() {
-                    message.push_str(&format!(
-                        " Left out invalid entries: {}.",
-                        dropped.join(", ")
+                    messages.push(profile_msg!(
+                        "Left out invalid entries: {entries}.",
+                        entries = dropped.join(", ")
                     ));
                 }
-                this.say(message, Tone::Good);
+                this.say(ProfileText::Joined(messages, " "), Tone::Good);
             }),
         }
         cx.notify();
@@ -849,16 +908,19 @@ impl ProfilesView {
     /// committed declaration is only reported, like the direct-file path.
     fn follow_rename_rpc(&mut self, from: &str, to: &str, cx: &mut Context<Self>) {
         self.follow_fallbacks_rpc(from, Some(to), cx);
-        let mut message = format!("Profile \"{from}\" renamed to \"{to}\".");
+        let mut messages = vec![profile_msg!(
+            "Profile \"{from}\" renamed to \"{name}\".",
+            from = from.to_string(),
+            name = to.to_string()
+        )];
         if self.pin.as_ref().map(|pin| &pin.repo) == Some(&PinRead::Valid(from.to_string())) {
-            message.push_str(&format!(
-                " The committed declaration {DECLARATION} still names \"{from}\"; Publish to repo republishes it."
-            ));
+            messages.push(profile_msg!("The committed declaration {path} still names \"{from}\"; Publish to repo republishes it.", path = DECLARATION.to_string(), from = from.to_string()));
         }
-        self.say(message.clone(), Tone::Good);
+        self.say(ProfileText::Joined(messages.clone(), " "), Tone::Good);
         if let Some(write) = renamed_pin_write(self.pin.as_ref(), from, to) {
+            messages.push("Updated the clone pin.".into());
             self.rpc_write(write, cx, move |this, _, _| {
-                this.say(format!("{message} Updated the clone pin."), Tone::Good);
+                this.say(ProfileText::Joined(messages, " "), Tone::Good);
             });
         }
     }
@@ -873,7 +935,10 @@ impl ProfilesView {
         match write {
             None => {}
             Some(Err(error)) => self.say(
-                format!("The profile fallbacks were not updated: {error}"),
+                profile_msg!(
+                    "The profile fallbacks were not updated: {error}",
+                    error = error
+                ),
                 Tone::Bad,
             ),
             Some(Ok(write)) => {
@@ -887,7 +952,10 @@ impl ProfilesView {
         match leave {
             Leave::Switch(name) => {
                 self.select(Some(name.clone()), false);
-                self.say(format!("Saved. Showing \"{name}\"."), Tone::Info);
+                self.say(
+                    profile_msg!("Saved. Showing \"{name}\".", name = name),
+                    Tone::Info,
+                );
             }
             Leave::Close => cx.emit(ProfilesEvent::Close),
             Leave::New => self.name_mode = Some(NameMode::New),

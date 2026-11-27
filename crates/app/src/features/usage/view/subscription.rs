@@ -1,6 +1,6 @@
 //! Subscription tab: one card per signed-in provider, a meter per window.
 
-use gentle_core::usage::subscription::{UsageLimit, format_reset};
+use gentle_core::usage::subscription::{UsageLimit, format_reset_in};
 use gpui_kit::assets::IconName;
 use gpui_kit::component::spinner::Spinner;
 use gpui_kit::component::{Icon, Sizable as _, h_flex, v_flex};
@@ -10,8 +10,11 @@ use pi_rpc::desktop_rpc::UsageRefresh;
 
 use super::status_line;
 use crate::features::usage::credentials::{CardState, ProviderCard};
-use crate::features::usage::{UsageState, UsageView, now_ms};
-use crate::shared::ui;
+use crate::features::usage::{UsageMode, UsageState, UsageView, now_ms};
+use crate::shared::{
+    i18n::{language, t},
+    ui,
+};
 
 /// Meter fill by how much of the window is spent. The 80/95 thresholds are
 /// gentle-core's `limit_tone`, shared with the plan-limits chip and the
@@ -32,9 +35,9 @@ fn bar_color(percent: f64) -> Hsla {
 pub(crate) fn updated_ago(fetched_at: i64, now: i64) -> String {
     let minutes = (now - fetched_at) / 60_000;
     if minutes < 1 {
-        "updated just now".into()
+        t("updated just now").into()
     } else {
-        format!("updated {minutes}m ago")
+        t("updated {minutes}m ago").replace("{minutes}", &minutes.to_string())
     }
 }
 
@@ -47,7 +50,7 @@ impl UsageView {
                     .text_sm()
                     .text_color(ui::muted())
                     .child(Spinner::new().small().color(ui::muted()))
-                    .child("Reading subscription usage…")
+                    .child(t("Reading subscription usage…"))
                     .into_any_element();
             }
             UsageState::Failed(error) => {
@@ -63,13 +66,13 @@ impl UsageView {
                                     .small()
                                     .text_color(ui::danger()),
                             )
-                            .child(ui::section_label("Could not read subscription usage")),
+                            .child(ui::section_label(t("Could not read subscription usage"))),
                     )
                     .child(
                         div()
                             .text_sm()
                             .text_color(ui::danger())
-                            .child(error.clone()),
+                            .child(error.render()),
                     )
                     .into_any_element();
             }
@@ -82,14 +85,14 @@ impl UsageView {
         let now = now_ms();
         v_flex()
             .gap_3()
-            .child(ui::section_label("Subscriptions"))
+            .child(ui::section_label(t("Subscriptions")))
             .when(cards.is_empty(), |d| {
                 d.child(
                     ui::card().p_4().child(
                         div()
                             .text_sm()
                             .text_color(ui::muted())
-                            .child(empty.message()),
+                            .child(t(empty.message())),
                     ),
                 )
             })
@@ -97,20 +100,20 @@ impl UsageView {
                 cards
                     .iter()
                     .enumerate()
-                    .map(|(i, card)| ui::appear(("usage-card", i), Self::render_card(card, now))),
+                    .map(|(i, card)| ui::appear(("usage-card", i), self.render_card(card, now))),
             )
             .when(!others.is_empty(), |d| {
                 d.child(
-                    div()
-                        .text_xs()
-                        .text_color(ui::faint())
-                        .child(format!("No subscription usage for: {}", others.join(", "))),
+                    div().text_xs().text_color(ui::faint()).child(
+                        t("No subscription usage for: {providers}")
+                            .replace("{providers}", &others.join(", ")),
+                    ),
                 )
             })
             .into_any_element()
     }
 
-    fn render_card(card: &ProviderCard, now: i64) -> Div {
+    fn render_card(&self, card: &ProviderCard, now: i64) -> Div {
         let (plan, fetched_at) = match &card.state {
             CardState::Ready(usage) => (usage.plan.clone(), Some(usage.fetched_at)),
             CardState::Pending(Some(usage)) | CardState::Stale(Some(usage)) => {
@@ -119,12 +122,12 @@ impl UsageView {
             _ => (None, None),
         };
         let status = match &card.state {
-            CardState::Loading => Some(ui::chip("fetching", ui::info())),
-            CardState::SignIn(_) => Some(ui::chip("signed out", ui::warning())),
-            CardState::Failed(_) => Some(ui::chip("error", ui::danger())),
-            CardState::Pending(_) => Some(ui::chip("pending", ui::info())),
-            CardState::Stale(_) => Some(ui::chip("stale", ui::warning())),
-            CardState::Unavailable => Some(ui::chip("unavailable", ui::muted())),
+            CardState::Loading => Some(ui::chip(t("fetching"), ui::info())),
+            CardState::SignIn(_) => Some(ui::chip(t("signed out"), ui::warning())),
+            CardState::Failed(_) => Some(ui::chip(t("error"), ui::danger())),
+            CardState::Pending(_) => Some(ui::chip(t("pending"), ui::info())),
+            CardState::Stale(_) => Some(ui::chip(t("stale"), ui::warning())),
+            CardState::Unavailable => Some(ui::chip(t("unavailable"), ui::muted())),
             CardState::Note(_) | CardState::Ready(_) => None,
         };
         let body: AnyElement = match &card.state {
@@ -133,26 +136,26 @@ impl UsageView {
                 .text_xs()
                 .text_color(ui::muted())
                 .child(Spinner::new().xsmall().color(ui::muted()))
-                .child("Fetching usage…")
+                .child(t("Fetching usage…"))
                 .into_any_element(),
             CardState::Note(note) => {
-                status_line(ui::muted(), None, note.clone()).into_any_element()
+                status_line(ui::muted(), None, note.render()).into_any_element()
             }
             CardState::SignIn(note) => {
-                status_line(ui::warning(), Some(IconName::LogIn), note.clone()).into_any_element()
+                status_line(ui::warning(), Some(IconName::LogIn), note.render()).into_any_element()
             }
             CardState::Failed(error) => {
-                status_line(ui::danger(), Some(IconName::CircleAlert), error.clone())
+                status_line(ui::danger(), Some(IconName::CircleAlert), error.render())
                     .into_any_element()
             }
             CardState::Unavailable => status_line(
                 ui::muted(),
                 None,
-                "No subscription usage is available for this provider.",
+                t("No subscription usage is available for this provider."),
             )
             .into_any_element(),
             CardState::Stale(None) => {
-                status_line(ui::muted(), None, "No subscription usage reported yet.")
+                status_line(ui::muted(), None, t("No subscription usage reported yet."))
                     .into_any_element()
             }
             CardState::Ready(usage)
@@ -163,9 +166,14 @@ impl UsageView {
                     usage
                         .limits
                         .iter()
-                        .map(|limit| Self::render_limit(limit, now)),
+                        .map(|limit| self.render_limit(limit, now)),
                 )
                 .into_any_element(),
+        };
+        let title = if self.mode == UsageMode::Rpc && card.id == "claude-bridge" {
+            t("Claude Code · bridge").into()
+        } else {
+            card.title.clone()
         };
         ui::card()
             .gap_3()
@@ -180,7 +188,7 @@ impl UsageView {
                             .text_sm()
                             .font_weight(FontWeight::SEMIBOLD)
                             .text_color(ui::champagne())
-                            .child(card.title.clone()),
+                            .child(title),
                     )
                     .when_some(plan, |d, plan| {
                         d.child(ui::chip(plan, ui::accent()).flex_shrink_0())
@@ -207,12 +215,12 @@ impl UsageView {
     /// Whether the server can refresh this provider's usage on request.
     fn refresh_chip(refresh: UsageRefresh) -> Div {
         match refresh {
-            UsageRefresh::Unsupported => ui::chip("refresh unsupported", ui::muted()),
-            UsageRefresh::OutOfScope => ui::chip("refresh out of scope", ui::muted()),
+            UsageRefresh::Unsupported => ui::chip(t("refresh unsupported"), ui::muted()),
+            UsageRefresh::OutOfScope => ui::chip(t("refresh out of scope"), ui::muted()),
         }
     }
 
-    fn render_limit(limit: &UsageLimit, now: i64) -> AnyElement {
+    fn render_limit(&self, limit: &UsageLimit, now: i64) -> AnyElement {
         v_flex()
             .gap_2()
             .child(
@@ -226,17 +234,23 @@ impl UsageView {
                             .text_xs()
                             .font_weight(FontWeight::MEDIUM)
                             .text_color(ui::muted())
-                            .child(limit.name.clone()),
+                            .child(if self.mode == UsageMode::Legacy && limit.name == "limit" {
+                                t("limit").into()
+                            } else {
+                                limit.name.clone()
+                            }),
                     )
                     .when(limit.limit_reached, |d| {
-                        d.child(ui::chip("limit reached", ui::danger()).flex_shrink_0())
+                        d.child(ui::chip(t("limit reached"), ui::danger()).flex_shrink_0())
                     }),
             )
             .children(limit.windows.iter().map(|window| {
                 let percent = window.used_percent.max(0.0);
                 let color = bar_color(percent);
                 let label = if window.label.is_empty() {
-                    "period".to_string()
+                    t("period").to_string()
+                } else if window.label == "week" {
+                    t("week").to_string()
                 } else {
                     window.label.clone()
                 };
@@ -287,7 +301,7 @@ impl UsageView {
                             .truncate()
                             .text_xs()
                             .text_color(ui::faint())
-                            .child(format_reset(window.reset_at, now)),
+                            .child(format_reset_in(language(), window.reset_at, now)),
                     )
             }))
             .into_any_element()

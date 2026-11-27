@@ -10,7 +10,7 @@ use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
 
 use crate::features::profiles::{Leave, ProfilesView, Tone};
-use crate::shared::ui;
+use crate::shared::{i18n::t, ui};
 
 impl ProfilesView {
     pub(super) fn render_footer(&self, cx: &mut Context<Self>) -> impl IntoElement {
@@ -40,7 +40,7 @@ impl ProfilesView {
                         .text_xs()
                         .text_color(color)
                         .child(Icon::new(icon).xsmall().flex_shrink_0().mt(px(1.)))
-                        .child(div().flex_1().min_w_0().child(message.clone())),
+                        .child(div().flex_1().min_w_0().child(message.render())),
                 )
             })
             .child(
@@ -59,8 +59,8 @@ impl ProfilesView {
                                     .small()
                                     .ghost()
                                     .icon(Icon::new(IconName::GitBranch))
-                                    .label(if pinned_here { "Stop using in this repo" } else { "Use in this repo" })
-                                    .tooltip("Clone-local pin in the Git common dir; subagent launches here resolve it")
+                                    .label(t(if pinned_here { "Stop using in this repo" } else { "Use in this repo" }))
+                                    .tooltip(t("Clone-local pin in the Git common dir; subagent launches here resolve it"))
                                     .disabled(disabled || self.pin.is_none())
                                     .on_click(cx.listener(|this, _, _, cx| this.toggle_repo_pin(cx))),
                             )
@@ -69,8 +69,8 @@ impl ProfilesView {
                                     .small()
                                     .ghost()
                                     .icon(Icon::new(IconName::Upload))
-                                    .label(if declared_here { "Unpublish from repo" } else { "Publish to repo" })
-                                    .tooltip("Toggle the committed .pi/gentle-ai/profile.json declaration")
+                                    .label(t(if declared_here { "Unpublish from repo" } else { "Publish to repo" }))
+                                    .tooltip(t("Toggle the committed .pi/gentle-ai/profile.json declaration"))
                                     .disabled(disabled)
                                     .on_click(cx.listener(|this, _, _, cx| this.publish(cx))),
                             )
@@ -79,7 +79,7 @@ impl ProfilesView {
                                     .small()
                                     .ghost()
                                     .icon(Icon::new(IconName::Unlink))
-                                    .label("Clear session binding")
+                                    .label(t("Clear session binding"))
                                     .disabled(self.busy)
                                     .on_click(cx.listener(|this, _, _, cx| this.clear_session(cx))),
                             ),
@@ -90,14 +90,14 @@ impl ProfilesView {
                             .gap_2()
                             .flex_wrap()
                             .when(unsaved > 0, |d| {
-                                d.child(ui::chip(format!("{unsaved} unsaved"), ui::warning()))
+                                d.child(ui::chip(t("{count} unsaved").replace("{count}", &unsaved.to_string()), ui::warning()))
                             })
                             .child(
                                 Button::new("save")
                                     .small()
                                     .ghost()
                                     .icon(Icon::new(IconName::Check))
-                                    .label("Save")
+                                    .label(t("Save"))
                                     .disabled(disabled || unsaved == 0)
                                     .on_click(cx.listener(|this, _, _, cx| this.save(cx))),
                             )
@@ -106,8 +106,8 @@ impl ProfilesView {
                                     .small()
                                     .ghost()
                                     .icon(Icon::new(IconName::Star))
-                                    .label("Make default")
-                                    .tooltip("Default for new sessions: writes models.json, agent routing and settings.json")
+                                    .label(t("Make default"))
+                                    .tooltip(t("Default for new sessions: writes models.json, agent routing and settings.json"))
                                     .disabled(disabled)
                                     .on_click(cx.listener(|this, _, _, cx| this.request_make_default(cx))),
                             )
@@ -116,7 +116,7 @@ impl ProfilesView {
                                     .small()
                                     .ghost()
                                     .icon(Icon::new(IconName::X))
-                                    .label("Close")
+                                    .label(t("Close"))
                                     .on_click(cx.listener(|this, _, window, cx| this.leave(Leave::Close, window, cx))),
                             )
                             .child(
@@ -124,8 +124,8 @@ impl ProfilesView {
                                     .small()
                                     .primary()
                                     .icon(Icon::new(IconName::CircleCheck))
-                                    .label("Use in this session")
-                                    .tooltip("Switch this session's orchestrator to the profile (saves edits first)")
+                                    .label(t("Use in this session"))
+                                    .tooltip(t("Switch this session's orchestrator to the profile (saves edits first)"))
                                     .disabled(disabled)
                                     .on_click(cx.listener(|this, _, _, cx| this.use_in_session(cx))),
                             ),

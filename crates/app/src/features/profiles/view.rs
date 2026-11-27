@@ -9,7 +9,10 @@ use gpui_kit::component::{Disableable as _, Icon, Sizable as _, h_flex, v_flex};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
 
-use crate::shared::ui;
+use crate::shared::{
+    i18n::{sync_placeholder, t},
+    ui,
+};
 
 use super::{Leave, ProfilesView};
 
@@ -45,7 +48,21 @@ fn route_cells() -> Div {
 }
 
 impl Render for ProfilesView {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        sync_placeholder(
+            &self.name_input,
+            "profile-name",
+            &mut self.name_placeholder_lang,
+            window,
+            cx,
+        );
+        sync_placeholder(
+            &self.model_search,
+            "Search models or providers…",
+            &mut self.model_placeholder_lang,
+            window,
+            cx,
+        );
         let body: AnyElement = if self.loading {
             h_flex()
                 .p_4()
@@ -53,7 +70,7 @@ impl Render for ProfilesView {
                 .text_sm()
                 .text_color(ui::muted())
                 .child(Spinner::new().small().color(ui::muted()))
-                .child("Loading profiles…")
+                .child(t("Loading profiles…"))
                 .into_any_element()
         } else if let Some(error) = &self.error {
             v_flex()
@@ -63,14 +80,14 @@ impl Render for ProfilesView {
                     div()
                         .text_sm()
                         .text_color(ui::danger())
-                        .child(error.clone()),
+                        .child(error.render()),
                 )
                 .child(
                     Button::new("profiles-retry")
                         .small()
                         .ghost()
                         .icon(Icon::new(IconName::RefreshCw))
-                        .label("Retry")
+                        .label(t("Retry"))
                         .on_click(cx.listener(|this, _, _, cx| this.reload(cx))),
                 )
                 .into_any_element()
@@ -100,7 +117,7 @@ impl Render for ProfilesView {
                                     div()
                                         .text_sm()
                                         .text_color(ui::muted())
-                                        .child("No profiles left. Create one with New."),
+                                        .child(t("No profiles left. Create one with New.")),
                                 )
                                 .into_any_element()
                         }),
@@ -128,7 +145,7 @@ impl Render for ProfilesView {
                                 .text_base()
                                 .font_weight(FontWeight::SEMIBOLD)
                                 .text_color(ui::fg())
-                                .child("Profiles"),
+                                .child(t("Profiles")),
                         )
                         .child(
                             div()
@@ -137,7 +154,7 @@ impl Render for ProfilesView {
                                 .truncate()
                                 .text_xs()
                                 .text_color(ui::muted())
-                                .child("Agent-model routing snapshots, like /gentle:profiles."),
+                                .child(t("Agent-model routing snapshots, like /gentle:profiles.")),
                         )
                         .when(self.busy, |d| {
                             d.child(Spinner::new().small().color(ui::muted()))
@@ -147,7 +164,7 @@ impl Render for ProfilesView {
                                 .ghost()
                                 .xsmall()
                                 .icon(Icon::new(IconName::RefreshCw))
-                                .tooltip("Re-read profiles, agents and pins")
+                                .tooltip(t("Re-read profiles, agents and pins"))
                                 .disabled(self.busy)
                                 .on_click(cx.listener(|this, _, _, cx| this.reload(cx))),
                         )

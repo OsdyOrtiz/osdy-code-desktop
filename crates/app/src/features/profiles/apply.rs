@@ -10,8 +10,8 @@ use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 use gentle_core::profiles::{
     AgentEntry, AgentSource, ORCHESTRATOR, ProfilesFile, RouteEntry, Routing, evaluate_pin,
-    format_selection, is_review_role, model_profile_for, normalized_json, parse_model_ref, pretty,
-    serialize_profiles, set_active, update_frontmatter_routing, with_omitted_cleared, without_key,
+    is_review_role, model_profile_for, normalized_json, parse_model_ref, pretty,
+    serialize_profiles, update_frontmatter_routing, with_omitted_cleared, without_key,
 };
 use serde_json::{Map, Value, json};
 
@@ -20,6 +20,7 @@ use super::files::{
     RoutingRead, global_effective, read_optional, read_saved_routing, unique_token, write_atomic,
 };
 use super::pins::{read_pin_status, write_pin};
+use super::{ProfileText, profile_msg};
 
 // ---------------------------------------------------------------------------
 // Materialization (applyModelConfig) and Pi settings (profiles-orchestrator.ts)
@@ -76,7 +77,7 @@ struct ManagedLock {
 }
 
 impl ManagedLock {
-    fn acquire(agent_home: &Path) -> io::Result<Self> {
+    fn acquire(agent_home: &Path) -> Result<Self, ProfileText> {
         let parent = agent_home.join("gentle-ai");
         let path = parent.join("managed-assets.lock");
         fs::create_dir_all(&parent)?;
@@ -100,23 +101,23 @@ impl ManagedLock {
                 Err(e) if e.kind() == io::ErrorKind::AlreadyExists => {
                     match fs::symlink_metadata(&path) {
                         Ok(meta) if !meta.is_file() => {
-                            return Err(io::Error::other(format!(
-                                "Managed-assets lock path is unsafe and must be a regular file: {}",
-                                path.display()
-                            )));
+                            return Err(profile_msg!(
+                                "Managed-assets lock path is unsafe and must be a regular file: {path}",
+                                path = path.display().to_string()
+                            ));
                         }
                         Err(e) if e.kind() == io::ErrorKind::NotFound => continue,
                         _ => {}
                     }
                     if Instant::now() >= deadline {
-                        return Err(io::Error::other(format!(
-                            "Timed out acquiring managed-assets lock file {}. Verify no installer is active before removing this exact lock file.",
-                            path.display()
-                        )));
+                        return Err(profile_msg!(
+                            "Timed out acquiring managed-assets lock file {path}. Verify no installer is active before removing this exact lock file.",
+                            path = path.display().to_string()
+                        ));
                     }
                     std::thread::sleep(Duration::from_millis(25));
                 }
-                Err(e) => return Err(e),
+                Err(e) => return Err(e.into()),
             }
         }
     }
@@ -147,7 +148,7 @@ pub(super) fn update_managed_ownership(
     path: &Path,
     previous: &str,
     next: &str,
-) -> io::Result<bool> {
+) -> Result<bool, ProfileText> {
     let Ok(relative) = path.strip_prefix(agent_home.join("agents")) else {
         return Ok(false);
     };
@@ -196,12 +197,13 @@ pub(super) fn update_managed_ownership(
     })();
     if let Err(error) = result {
         write_atomic(path, previous).map_err(|rollback| {
-            io::Error::other(format!(
-                "Managed routing update failed and could not restore {}: {rollback}",
-                path.display()
-            ))
+            profile_msg!(
+                "Managed routing update failed and could not restore {path}: {error}",
+                path = path.display().to_string(),
+                error = rollback
+            )
         })?;
-        return Err(error);
+        return Err(error.into());
     }
     Ok(true)
 }
@@ -209,7 +211,11 @@ pub(super) fn update_managed_ownership(
 /// `applyModelConfig`: agent frontmatter and `subagents.json` for every
 /// discoverable agent the routing names; clear entries for unknown agents
 /// remove their user model profile. Returns (updated, skipped).
-fn apply_routing(env: &Env, agents: &[AgentEntry], config: &Routing) -> io::Result<(usize, usize)> {
+fn apply_routing(
+    env: &Env,
+    agents: &[AgentEntry],
+    config: &Routing,
+) -> Result<(usize, usize), ProfileText> {
     let (mut updated, mut skipped) = (0, 0);
     let mut count = |changed: bool| if changed { updated += 1 } else { skipped += 1 };
     let mut seen = HashSet::new();
@@ -271,19 +277,23 @@ pub enum SettingsWrite {
 pub fn apply_orchestrator_settings(
     path: &Path,
     entry: &RouteEntry,
-) -> Result<SettingsWrite, String> {
+) -> Result<SettingsWrite, ProfileText> {
     let Some(model) = &entry.model else {
         return Ok(SettingsWrite::Unchanged);
     };
-    let (provider, id) = parse_model_ref(model)
-        .ok_or_else(|| format!("model id {model:?} is not a provider/model pair"))?;
-    let previous = read_optional(path).map_err(|e| e.to_string())?;
+    let (provider, id) = parse_model_ref(model).ok_or_else(|| {
+        profile_msg!(
+            "model id {model} is not a provider/model pair",
+            model = format!("{model:?}")
+        )
+    })?;
+    let previous = read_optional(path)?;
     let mut next = match &previous {
         None => Map::new(),
         Some(text) => match serde_json::from_str::<Value>(text) {
             Ok(Value::Object(map)) => map,
             Ok(_) => return Err("the file is not a JSON object".into()),
-            Err(e) => return Err(e.to_string()),
+            Err(e) => return Err(e.to_string().into()),
         },
     };
     next.insert("defaultProvider".into(), json!(provider));
@@ -298,7 +308,7 @@ pub fn apply_orchestrator_settings(
     if previous.as_deref() == Some(text.as_str()) {
         return Ok(SettingsWrite::Unchanged);
     }
-    write_atomic(path, &text).map_err(|e| e.to_string())?;
+    write_atomic(path, &text)?;
     Ok(SettingsWrite::Written)
 }
 
@@ -310,8 +320,8 @@ pub fn apply_orchestrator_settings(
 #[derive(Clone, Debug)]
 pub struct DefaultPlan {
     pub name: String,
-    pub title: String,
-    pub lines: Vec<String>,
+    pub title: ProfileText,
+    pub lines: Vec<ProfileText>,
     /// A winning pin makes the apply repo-scoped: only the clone pin moves.
     pub pinned: bool,
 }
@@ -327,9 +337,9 @@ pub fn plan_make_default(
     {
         return DefaultPlan {
             name: name.to_string(),
-            title: format!("Use \"{name}\" for this repository?"),
+            title: profile_msg!("Use \"{name}\" for this repository?", name = name.to_string()),
             lines: vec![
-                format!("This repository pins \"{profile}\" ({layer} pin at {}).", path.display()),
+                profile_msg!("This repository pins \"{profile}\" ({pin} at {path}).", profile = profile, pin = if layer == "local" { "local pin" } else { "repo pin" }, path = path.display().to_string()),
                 "Make default re-pins this clone instead: no global routing, settings.json or active marker is written.".into(),
             ],
             pinned: true,
@@ -341,17 +351,19 @@ pub fn plan_make_default(
     if !has_roles {
         let (title, line) = match orchestrator {
             Some(_) => (
-                "Apply orchestrator-only profile?".to_string(),
-                format!(
-                    "Profile \"{name}\" has an orchestrator entry but no agent routing entries. Applying it will replace global routing in {} with the orchestrator entry alone, clear every materialized agent route so every agent returns to inherit its default model, set the configured orchestrator entry in settings.json, and switch this session to that orchestrator model.",
-                    models.display()
+                "Apply orchestrator-only profile?".into(),
+                profile_msg!(
+                    "Profile \"{name}\" has an orchestrator entry but no agent routing entries. Applying it will replace global routing in {path} with the orchestrator entry alone, clear every materialized agent route so every agent returns to inherit its default model, set the configured orchestrator entry in settings.json, and switch this session to that orchestrator model.",
+                    name = name.to_string(),
+                    path = models.display().to_string()
                 ),
             ),
             None => (
-                "Apply empty profile?".to_string(),
-                format!(
-                    "Profile \"{name}\" has no routing entries. Applying it will replace global routing in {} with an empty configuration and return every agent to inherit its default model.",
-                    models.display()
+                "Apply empty profile?".into(),
+                profile_msg!(
+                    "Profile \"{name}\" has no routing entries. Applying it will replace global routing in {path} with an empty configuration and return every agent to inherit its default model.",
+                    name = name.to_string(),
+                    path = models.display().to_string()
                 ),
             ),
         };
@@ -378,32 +390,26 @@ pub fn plan_make_default(
             let (mut replaced, mut cleared, mut added) = (Vec::new(), Vec::new(), Vec::new());
             for key in names {
                 match (current.get(key), config.get(key)) {
-                    (from, None) => cleared.push(format!("{key}: {} → inherit (cleared)", format_selection(from))),
-                    (None, Some(to)) => added.push(format!("{key}: {} (added)", format_selection(Some(to)))),
+                    (from, None) => cleared.push(profile_msg!("{role}: {from} → inherit (cleared)", role = key.to_string(), from = ProfileText::Selection(from.cloned()))),
+                    (None, Some(to)) => added.push(profile_msg!("{role}: {to} (added)", role = key.to_string(), to = ProfileText::Selection(Some(to.clone())))),
                     (Some(from), Some(to)) if from != to => {
-                        replaced.push(format!("{key}: {} → {}", format_selection(Some(from)), format_selection(Some(to))))
+                        replaced.push(profile_msg!("{role}: {from} → {to}", role = key.to_string(), from = ProfileText::Selection(Some(from.clone())), to = ProfileText::Selection(Some(to.clone()))))
                     }
                     _ => {}
                 }
             }
-            let changes: Vec<String> = replaced.into_iter().chain(cleared).chain(added).collect();
-            lines.push(format!(
-                "Applying \"{name}\" replaces global routing in {} with this profile's routes{effects}.",
-                models.display()
-            ));
+            let changes: Vec<_> = replaced.into_iter().chain(cleared).chain(added).collect();
+            lines.push(profile_msg!("Applying \"{name}\" replaces global routing in {path} with this profile's routes{effects}.", name = name.to_string(), path = models.display().to_string(), effects = effects));
             if changes.is_empty() {
                 lines.push("Its agent routes already match the current global routing.".into());
             }
             lines.extend(changes);
         }
-        _ => lines.push(format!(
-            "Profile \"{name}\" has agent routing entries, but the current global routing in {path} could not be read, so existing routes are not listed. Applying it will replace global routing in {path} with this profile's routes, so every existing agent route may be replaced or cleared back to inherit{effects}.",
-            path = models.display()
-        )),
+        _ => lines.push(profile_msg!("Profile \"{name}\" has agent routing entries, but the current global routing in {path} could not be read, so existing routes are not listed. Applying it will replace global routing in {path} with this profile's routes, so every existing agent route may be replaced or cleared back to inherit{effects}.", name = name.to_string(), path = models.display().to_string(), effects = effects)),
     }
     DefaultPlan {
         name: name.to_string(),
-        title: format!("Apply profile \"{name}\"?"),
+        title: profile_msg!("Apply profile \"{name}\"?", name = name.to_string()),
         lines,
         pinned: false,
     }
@@ -412,7 +418,7 @@ pub fn plan_make_default(
 #[derive(Debug)]
 pub struct DefaultOutcome {
     pub file: ProfilesFile,
-    pub message: String,
+    pub message: ProfileText,
     /// The orchestrator the live session should switch to (no pin won).
     pub orchestrator: Option<RouteEntry>,
 }
@@ -420,11 +426,15 @@ pub struct DefaultOutcome {
 /// The guarded global apply: claim the profile in the store, write
 /// `models.json`, materialize agent routes, then Pi's settings; anything that
 /// fails after the claim restores the previous claim and routing.
-pub fn make_default(env: &Env, file: &ProfilesFile, name: &str) -> Result<DefaultOutcome, String> {
+pub fn make_default(
+    env: &Env,
+    file: &ProfilesFile,
+    name: &str,
+) -> Result<DefaultOutcome, ProfileText> {
     let config = file
         .get(name)
         .cloned()
-        .ok_or_else(|| format!("Profile does not exist: {name}."))?;
+        .ok_or_else(|| profile_msg!("Profile does not exist: {name}.", name = name.to_string()))?;
     let pin = read_pin_status(&env.cwd);
     if let Some((layer, profile, path)) = evaluate_pin(pin.as_ref(), file).winner {
         let local = pin
@@ -432,68 +442,85 @@ pub fn make_default(env: &Env, file: &ProfilesFile, name: &str) -> Result<Defaul
             .map(|p| p.local_path.clone())
             .unwrap_or_default();
         write_pin(&local, name).map_err(|e| {
-            format!(
-                "Could not pin profile \"{name}\" in {}: {e}",
-                local.display()
+            profile_msg!(
+                "Could not pin profile \"{name}\" in {path}: {error}",
+                name = name.to_string(),
+                path = local.display().to_string(),
+                error = e
             )
         })?;
-        let mut message = format!(
-            "Applied \"{name}\" repo-scoped: this clone now pins it in {}. No global routing or orchestrator was written.",
-            local.display()
-        );
+        let mut messages = vec![profile_msg!(
+            "Applied \"{name}\" repo-scoped: this clone now pins it in {path}. No global routing or orchestrator was written.",
+            name = name.to_string(),
+            path = local.display().to_string()
+        )];
         if layer == "repo" && path != local {
-            message.push_str(&format!(
-                " The committed declaration {} still declares \"{profile}\"; the clone pin now takes precedence.",
-                path.display()
-            ));
+            messages.push(profile_msg!("The committed declaration {path} still declares \"{profile}\"; the clone pin now takes precedence.", path = path.display().to_string(), profile = profile));
         }
         return Ok(DefaultOutcome {
             file: file.clone(),
-            message,
+            message: ProfileText::Joined(messages, " "),
             orchestrator: None,
         });
     }
     let profiles_path = env.profiles_path();
-    let claimed = set_active(file, name)?;
-    write_atomic(&profiles_path, &serialize_profiles(&claimed))
-        .map_err(|e| format!("Could not update {}: {e}", profiles_path.display()))?;
+    let claimed = file
+        .with_active(name)
+        .map_err(|error| ProfileText::store_error(error.into_parts()))?;
+    write_atomic(&profiles_path, &serialize_profiles(&claimed)).map_err(|e| {
+        profile_msg!(
+            "Could not update {path}: {error}",
+            path = profiles_path.display().to_string(),
+            error = e
+        )
+    })?;
     let agents = discover_agents(env);
     let previous_active = file.active.as_deref().and_then(|a| file.get(a)).cloned();
     let models_path = env.models_path();
     let settings_path = env.settings_path();
     // Pi's settings are the last write, so a failure before them never has
     // settings to restore.
-    let revert = |routing_written: bool, error: String| -> String {
+    let revert = |routing_written: bool, error: ProfileText| -> ProfileText {
         let mut restored = Vec::new();
         if routing_written && let Some(previous) = &previous_active {
             let ok = write_atomic(&models_path, &pretty(&normalized_json(previous))).is_ok()
                 && apply_routing(env, &agents, &with_omitted_cleared(&agents, previous)).is_ok();
             if ok {
-                restored.push("routing");
+                restored.push("routing".into());
             }
         }
         if write_atomic(&profiles_path, &serialize_profiles(file)).is_ok() {
-            restored.push("active marker");
+            restored.push("active marker".into());
         }
         let restored = if restored.is_empty() {
-            "nothing".to_string()
+            "nothing".into()
         } else {
-            restored.join(" and ")
+            ProfileText::Joined(restored, " and ")
         };
         let unresolved = if routing_written && previous_active.is_none() {
-            format!(
-                " {} still holds this profile's routing because no previously active profile was recorded to restore.",
-                models_path.display()
+            profile_msg!(
+                " {path} still holds this profile's routing because no previously active profile was recorded to restore.",
+                path = models_path.display().to_string()
             )
         } else {
-            String::new()
+            "".into()
         };
-        format!("Could not apply profile \"{name}\": {error}. Restored: {restored}.{unresolved}")
+        profile_msg!(
+            "Could not apply profile \"{name}\": {error}. Restored: {restored}.{unresolved}",
+            name = name.to_string(),
+            error = error,
+            restored = restored,
+            unresolved = unresolved
+        )
     };
     if let Err(e) = write_atomic(&models_path, &pretty(&normalized_json(&config))) {
         return Err(revert(
             false,
-            format!("could not write {}: {e}", models_path.display()),
+            profile_msg!(
+                "could not write {path}: {error}",
+                path = models_path.display().to_string(),
+                error = e
+            ),
         ));
     }
     let (updated, _) = match apply_routing(env, &agents, &with_omitted_cleared(&agents, &config)) {
@@ -501,31 +528,37 @@ pub fn make_default(env: &Env, file: &ProfilesFile, name: &str) -> Result<Defaul
         Err(e) => {
             return Err(revert(
                 true,
-                format!("could not materialize the routing: {e}"),
+                profile_msg!("could not materialize the routing: {error}", error = e),
             ));
         }
     };
     let orchestrator = config.orchestrator().cloned();
-    let mut message = format!(
-        "Applied profile \"{name}\" — {updated} agent{} updated. New routing takes effect on the next subagent launch.",
-        if updated == 1 { "" } else { "s" }
-    );
+    let mut messages = vec![profile_msg!(
+        if updated == 1 {
+            "Applied profile \"{name}\" — {count} agent updated. New routing takes effect on the next subagent launch."
+        } else {
+            "Applied profile \"{name}\" — {count} agents updated. New routing takes effect on the next subagent launch."
+        },
+        name = name.to_string(),
+        count = updated.to_string()
+    )];
     if let Some(entry) = &orchestrator {
         match apply_orchestrator_settings(&settings_path, entry) {
             Err(reason) => {
                 return Err(revert(
                     true,
-                    format!(
-                        "could not set the orchestrator: {reason}; {} was left unchanged",
-                        settings_path.display()
+                    profile_msg!(
+                        "could not set the orchestrator: {reason}; {path} was left unchanged",
+                        reason = reason,
+                        path = settings_path.display().to_string()
                     ),
                 ));
             }
             Ok(SettingsWrite::Written) => {
-                message.push_str(&format!(
-                    " Orchestrator set to {} in {}.",
-                    format_selection(Some(entry)),
-                    settings_path.display()
+                messages.push(profile_msg!(
+                    "Orchestrator set to {model} in {path}.",
+                    model = ProfileText::Selection(Some(entry.clone())),
+                    path = settings_path.display().to_string()
                 ));
             }
             Ok(SettingsWrite::Unchanged) => {}
@@ -533,11 +566,11 @@ pub fn make_default(env: &Env, file: &ProfilesFile, name: &str) -> Result<Defaul
     }
     let eval = evaluate_pin(read_pin_status(&env.cwd).as_ref(), file);
     if !eval.stale.is_empty() || !eval.invalid.is_empty() {
-        message.push_str(" This repository also has a pin layer that does not resolve; the global routing governs its subagents until the pin is fixed.");
+        messages.push("This repository also has a pin layer that does not resolve; the global routing governs its subagents until the pin is fixed.".into());
     }
     Ok(DefaultOutcome {
         file: claimed,
-        message,
+        message: ProfileText::Joined(messages, " "),
         orchestrator,
     })
 }

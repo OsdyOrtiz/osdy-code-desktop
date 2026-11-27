@@ -626,7 +626,9 @@ fn rpc_screen_reads_every_store_by_name() {
     assert!(pin.local_path.is_relative() && pin.repo_path.is_relative());
     // Healthy read-only stores need no warning.
     assert!(
-        !notices.iter().any(|n| n.contains("read-only")),
+        !notices.iter().any(|n| n
+            .render_in(gentle_core::i18n::Language::English)
+            .contains("read-only")),
         "{notices:?}"
     );
 
@@ -642,10 +644,31 @@ fn rpc_screen_reads_every_store_by_name() {
     let RpcLoad::Ready { notices, .. } = rpc_load(&remote).unwrap() else {
         panic!()
     };
-    let summary = notices.join("\n");
+    let summary = notices
+        .iter()
+        .map(|n| n.render_in(gentle_core::i18n::Language::English))
+        .collect::<Vec<_>>()
+        .join("\n");
     assert!(summary.contains("subagent settings: invalid"), "{summary}");
     assert!(summary.contains("1 saved agent route"), "{summary}");
     assert!(summary.contains("1 installer-managed file"), "{summary}");
+    let summary_es = notices
+        .iter()
+        .map(|n| n.render_in(gentle_core::i18n::Language::Spanish))
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert!(
+        summary_es.contains("configuración de subagentes: no válido"),
+        "{summary_es}"
+    );
+    assert!(
+        summary_es.contains("1 asignación de agente guardada"),
+        "{summary_es}"
+    );
+    assert!(
+        summary_es.contains("1 archivo administrado por el instalador"),
+        "{summary_es}"
+    );
 }
 
 #[test]
@@ -1103,7 +1126,12 @@ fn rpc_pin_layers_map_without_paths_and_say_what_they_hide() {
     let state = pins_state(Some("deep"), Some("team"));
     let (status, notice) = rpc_pin_status(&state);
     assert_eq!(status.unwrap().local, PinRead::Valid("deep".into()));
-    assert!(notice.unwrap().contains("declaration"));
+    assert!(
+        notice
+            .unwrap()
+            .render_in(gentle_core::i18n::Language::English)
+            .contains("declaration")
+    );
 }
 
 #[test]

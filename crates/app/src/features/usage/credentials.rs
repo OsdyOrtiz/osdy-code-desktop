@@ -21,10 +21,10 @@ pub(super) enum CardState {
     Loading,
     Ready(ProviderUsage),
     /// Informational, nothing to fetch.
-    Note(String),
+    Note(super::UsageText),
     /// The stored credential cannot be used until the user signs in again.
-    SignIn(String),
-    Failed(String),
+    SignIn(super::UsageText),
+    Failed(super::UsageText),
     /// RPC: the server is still fetching; the last good data stays when present.
     Pending(Option<ProviderUsage>),
     /// RPC: the data is stale but still shown, marked stale.
@@ -317,15 +317,22 @@ pub(super) fn resolve_config_value(config: &str, env: &HashMap<String, String>) 
     Some(String::from_utf8_lossy(&output.stdout).trim().to_string()).filter(|v| !v.is_empty())
 }
 
-pub(super) fn read_auth(path: &Path) -> Result<Map<String, Value>, String> {
+pub(super) fn read_auth(path: &Path) -> Result<Map<String, Value>, super::UsageText> {
+    use super::UsageText;
     match std::fs::read_to_string(path) {
         Ok(text) if text.trim().is_empty() => Ok(Map::new()),
         Ok(text) => match serde_json::from_str::<Value>(&text) {
             Ok(Value::Object(map)) => Ok(map),
-            _ => Err(format!("{} is not a JSON object.", path.display())),
+            _ => Err(UsageText::Detail(
+                "{detail} is not a JSON object.",
+                path.display().to_string(),
+            )),
         },
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(Map::new()),
-        Err(error) => Err(format!("Could not read {}: {error}", path.display())),
+        Err(error) => Err(UsageText::PathError(
+            path.display().to_string(),
+            error.to_string(),
+        )),
     }
 }
 

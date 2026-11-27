@@ -11,7 +11,7 @@ use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
 
 use crate::features::profiles::ProfilesView;
-use crate::shared::ui;
+use crate::shared::{i18n::t, ui};
 
 /// What a row of the picker sets.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -259,9 +259,9 @@ impl ProfilesView {
                             }
                             Pick::Custom => (
                                 if matched {
-                                    "Custom model id…".into()
+                                    t("Custom model id…").into()
                                 } else {
-                                    "No model matches. Type a custom id…".into()
+                                    t("No model matches. Type a custom id…").into()
                                 },
                                 None,
                                 Some(IconName::Plus),

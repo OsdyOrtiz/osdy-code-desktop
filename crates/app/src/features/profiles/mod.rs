@@ -42,6 +42,7 @@ use gpui_kit::*;
 use pi_rpc::desktop_rpc::{ConfigStore, ConfigWrite, DesktopMethod, SetConfigResult};
 
 use crate::features::session::{ReadOutcome, ReadRequest, ReadSupport, ReadTicket, SessionView};
+use crate::shared::i18n::{language, t};
 
 mod actions;
 mod apply;
@@ -51,7 +52,10 @@ mod files;
 mod pins;
 #[cfg(test)]
 mod tests;
+mod text;
 mod view;
+
+use text::{ProfileText, profile_msg};
 
 pub(crate) use env::{
     ConfigChange, ConfigFailure, ConfigOutcome, ConfigSupport, ConfigTicket, ProfileApply,
@@ -204,11 +208,11 @@ pub struct ProfilesView {
     io_jobs: usize,
     models: Rc<Vec<ModelChoice>>,
     loading: bool,
-    error: Option<String>,
+    error: Option<ProfileText>,
     file: ProfilesFile,
     names: Vec<String>,
     pin: Option<PinStatus>,
-    notices: Vec<String>,
+    notices: Vec<ProfileText>,
     /// Pi's current `settings.json` default orchestrator.
     pi_default: Option<RouteEntry>,
     /// The profile the tab's session is bound to (see
@@ -224,10 +228,11 @@ pub struct ProfilesView {
     /// edited.
     stored_controlled: bool,
     draft_controlled: bool,
-    status: Option<(String, Tone)>,
+    status: Option<(ProfileText, Tone)>,
     busy: bool,
     name_mode: Option<NameMode>,
     name_input: Entity<InputState>,
+    name_placeholder_lang: gentle_core::i18n::Language,
     custom_target: Option<String>,
     custom_input: Entity<InputState>,
     confirm: Option<Confirm>,
@@ -235,6 +240,7 @@ pub struct ProfilesView {
     /// highlighted row and scroll.
     model_menu: Option<String>,
     model_search: Entity<InputState>,
+    model_placeholder_lang: gentle_core::i18n::Language,
     model_cursor: usize,
     model_scroll: ScrollHandle,
     /// The route row whose effort menu is open.
@@ -253,10 +259,10 @@ impl ProfilesView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
-        let name_input = cx.new(|cx| InputState::new(window, cx).placeholder("profile-name"));
+        let name_input = cx.new(|cx| InputState::new(window, cx).placeholder(t("profile-name")));
         let custom_input = cx.new(|cx| InputState::new(window, cx).placeholder("provider/model"));
         let model_search =
-            cx.new(|cx| InputState::new(window, cx).placeholder("Search models or providers…"));
+            cx.new(|cx| InputState::new(window, cx).placeholder(t("Search models or providers…")));
         let weak = cx.entity().downgrade();
         let mut subscriptions = vec![
             cx.subscribe(&model_search, |this, _, event: &InputEvent, cx| {
@@ -334,11 +340,13 @@ impl ProfilesView {
             busy: false,
             name_mode: None,
             name_input,
+            name_placeholder_lang: language(),
             custom_target: None,
             custom_input,
             confirm: None,
             model_menu: None,
             model_search,
+            model_placeholder_lang: language(),
             model_cursor: 0,
             model_scroll: ScrollHandle::new(),
             effort_menu: None,
@@ -472,7 +480,7 @@ impl ProfilesView {
                     // A `config_changed` (or a gap) reloads what moved.
                     let read = self.with_remote(cx, |remote, port| remote.changed(port, &changes));
                     if let Some(Err(failure)) = read {
-                        self.say(failure.message(), Tone::Bad);
+                        self.say(failure.text(), Tone::Bad);
                     }
                 }
                 self.sync_busy();
@@ -619,9 +627,12 @@ impl ProfilesView {
             Some(Err(failure)) => {
                 if self.loading {
                     self.loading = false;
-                    self.error = Some(format!("Cannot open agent profiles: {}", failure.message()));
+                    self.error = Some(profile_msg!(
+                        "Cannot open agent profiles: {error}",
+                        error = failure.text()
+                    ));
                 } else {
-                    self.say(failure.message(), Tone::Bad);
+                    self.say(failure.text(), Tone::Bad);
                 }
             }
             _ => {}
@@ -642,7 +653,10 @@ impl ProfilesView {
         let sent = self.with_remote(cx, |remote, port| remote.write(port, write, then));
         match &sent {
             Some(Err(failure)) if failure.is_legacy() => self.fall_back_to_files(failure, cx),
-            Some(Err(failure)) => self.say(format!("Not saved: {}", failure.message()), Tone::Bad),
+            Some(Err(failure)) => self.say(
+                profile_msg!("Not saved: {error}", error = failure.text()),
+                Tone::Bad,
+            ),
             _ => {}
         }
         self.sync_busy();
@@ -666,9 +680,10 @@ impl ProfilesView {
                 // state stays shown and the failure is said once.
                 if !self.loading {
                     self.say(
-                        format!(
-                            "The {store} store could not be re-read: {}",
-                            failure.message()
+                        profile_msg!(
+                            "The {store} store could not be re-read: {error}",
+                            store = store.to_string(),
+                            error = failure.text()
                         ),
                         Tone::Bad,
                     );
@@ -683,9 +698,7 @@ impl ProfilesView {
             Landed::Conflict(_, store) => {
                 self.seeding = false;
                 self.say(
-                    format!(
-                        "Not saved: the {store} store changed in Gentle Shell since Profiles read it. Nothing was overwritten; the latest is being read now, and your unsaved edits stay so you can review them and save again."
-                    ),
+                    profile_msg!("Not saved: the {store} store changed in Gentle Shell since Profiles read it. Nothing was overwritten; the latest is being read now, and your unsaved edits stay so you can review them and save again.", store = store.to_string()),
                     Tone::Bad,
                 );
             }
@@ -698,9 +711,7 @@ impl ProfilesView {
                     );
                 } else {
                     self.say(
-                        format!(
-                            "Not saved: Gentle Shell is applying a profile right now, so the {store} store was not written. Your unsaved edits stay; save again once the apply finishes."
-                        ),
+                        profile_msg!("Not saved: Gentle Shell is applying a profile right now, so the {store} store was not written. Your unsaved edits stay; save again once the apply finishes.", store = store.to_string()),
                         Tone::Bad,
                     );
                 }
@@ -708,12 +719,15 @@ impl ProfilesView {
             Landed::Rejected(_, failure) => {
                 if std::mem::take(&mut self.seeding) {
                     self.loading = false;
-                    self.error = Some(format!(
-                        "Could not create the profiles store: {}",
-                        failure.message()
+                    self.error = Some(profile_msg!(
+                        "Could not create the profiles store: {error}",
+                        error = failure.text()
                     ));
                 } else {
-                    self.say(format!("Not saved: {}", failure.message()), Tone::Bad);
+                    self.say(
+                        profile_msg!("Not saved: {error}", error = failure.text()),
+                        Tone::Bad,
+                    );
                 }
             }
             Landed::Legacy(failure) => self.fall_back_to_files(&failure, cx),
@@ -721,14 +735,13 @@ impl ProfilesView {
             // A timeout or a restart abandons the wait, not Shell's apply: it may
             // still finish, so the outcome is unknown rather than "not applied".
             Landed::ApplyFailed(request, failure) => {
-                let verdict = if matches!(failure, ConfigFailure::Timeout | ConfigFailure::Dropped)
-                {
-                    "is not confirmed"
+                let key = if matches!(failure, ConfigFailure::Timeout | ConfigFailure::Dropped) {
+                    "\"{name}\" is not confirmed: {error}"
                 } else {
-                    "was not applied"
+                    "\"{name}\" was not applied: {error}"
                 };
                 self.say(
-                    format!("\"{}\" {verdict}: {}", request.profile, failure.message()),
+                    profile_msg!(key, name = request.profile, error = failure.text()),
                     Tone::Bad,
                 );
             }
@@ -745,10 +758,7 @@ impl ProfilesView {
         self.backend = Backend::Legacy;
         self.seeding = false;
         self.say(
-            format!(
-                "{} Profiles edits the files directly from here on; a change Gentle Shell had not confirmed was not saved, so check it and save again.",
-                failure.message()
-            ),
+            profile_msg!("{error} Profiles edits the files directly from here on; a change Gentle Shell had not confirmed was not saved, so check it and save again.", error = failure.text()),
             Tone::Info,
         );
         self.reload_files(cx);
@@ -783,7 +793,10 @@ impl ProfilesView {
                 match profiles_write(&file) {
                     Err(error) => {
                         self.loading = false;
-                        self.error = Some(format!("Could not create the profiles store: {error}"));
+                        self.error = Some(profile_msg!(
+                            "Could not create the profiles store: {error}",
+                            error = error
+                        ));
                     }
                     Ok(write) => {
                         self.seeding = true;
@@ -900,7 +913,7 @@ impl ProfilesView {
         self.custom_target = None;
     }
 
-    fn say(&mut self, message: impl Into<String>, tone: Tone) {
+    fn say(&mut self, message: impl Into<ProfileText>, tone: Tone) {
         self.status = Some((message.into(), tone));
     }
 
@@ -960,11 +973,11 @@ impl ProfilesView {
         }
     }
 
-    fn row_label(key: &str) -> &str {
+    fn row_label(key: &str) -> ProfileText {
         match key {
-            ORCHESTRATOR => "the orchestrator",
-            ALL_ROW => "every agent",
-            other => other,
+            ORCHESTRATOR => "the orchestrator".into(),
+            ALL_ROW => "every agent".into(),
+            other => other.to_owned().into(),
         }
     }
 }

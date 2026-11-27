@@ -6,8 +6,8 @@ use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::{Icon, Sizable as _, h_flex, v_flex};
 use gpui_kit::*;
 
-use crate::features::profiles::{Confirm, ProfilesView};
-use crate::shared::ui;
+use crate::features::profiles::{Confirm, ProfilesView, profile_msg};
+use crate::shared::{i18n::t, ui};
 
 impl ProfilesView {
     pub(super) fn render_confirm(&self, cx: &mut Context<Self>) -> Option<AnyElement> {
@@ -18,14 +18,16 @@ impl ProfilesView {
                 let save_leave = leave.clone();
                 let discard_leave = leave.clone();
                 (
-                    format!("\"{name}\" has {} unsaved edit(s)", self.change_count()),
-                    vec!["Save them before leaving this profile, or discard them.".into()],
+                    t("\"{name}\" has {count} unsaved edit(s)")
+                        .replace("{count}", &self.change_count().to_string())
+                        .replace("{name}", &name),
+                    vec![t("Save them before leaving this profile, or discard them.").into()],
                     vec![
                         Button::new("unsaved-discard")
                             .small()
                             .danger()
                             .icon(Icon::new(IconName::Trash))
-                            .label("Discard")
+                            .label(t("Discard"))
                             .on_click(cx.listener(move |this, _, window, cx| {
                                 this.draft = this.stored.clone();
                                 this.draft_mode = this.stored_mode;
@@ -37,7 +39,7 @@ impl ProfilesView {
                             .small()
                             .primary()
                             .icon(Icon::new(IconName::Check))
-                            .label("Save and continue")
+                            .label(t("Save and continue"))
                             .on_click(cx.listener(move |this, _, _, cx| {
                                 let leave = save_leave.clone();
                                 this.confirm = None;
@@ -57,16 +59,14 @@ impl ProfilesView {
                     .map(|e| e.models_path().display().to_string())
                     .unwrap_or_default();
                 (
-                    "Delete profile?".into(),
-                    vec![format!(
-                        "Delete profile \"{name}\" from profiles.json? The routing in {models} is not changed."
-                    )],
+                    t("Delete profile?").into(),
+                    vec![profile_msg!("Delete profile \"{name}\" from profiles.json? The routing in {models} is not changed.", models = models, name = name.clone()).render()],
                     vec![
                         Button::new("delete-ok")
                             .small()
                             .danger()
                             .icon(Icon::new(IconName::Trash))
-                            .label("Delete")
+                            .label(t("Delete"))
                             .on_click(
                                 cx.listener(move |this, _, _, cx| this.delete(target.clone(), cx)),
                             )
@@ -77,8 +77,8 @@ impl ProfilesView {
             Confirm::MakeDefault(plan) => {
                 let target = plan.name.clone();
                 (
-                    plan.title.clone(),
-                    plan.lines.clone(),
+                    plan.title.render(),
+                    plan.lines.iter().map(|line| line.render()).collect(),
                     vec![
                         Button::new("default-ok")
                             .small()
@@ -88,11 +88,11 @@ impl ProfilesView {
                             } else {
                                 IconName::Star
                             }))
-                            .label(if plan.pinned {
+                            .label(t(if plan.pinned {
                                 "Pin this clone"
                             } else {
                                 "Apply"
-                            })
+                            }))
                             .on_click(cx.listener(move |this, _, _, cx| {
                                 this.confirm = None;
                                 this.make_default(target.clone(), cx);
@@ -104,17 +104,14 @@ impl ProfilesView {
             Confirm::ReplaceImport(export) => {
                 let import = export.clone();
                 (
-                    "Replace profile?".into(),
-                    vec![format!(
-                        "Profile \"{}\" already exists. Replace its routing with the import?",
-                        export.name
-                    )],
+                    t("Replace profile?").into(),
+                    vec![t("Profile \"{name}\" already exists. Replace its routing with the import?").replace("{name}", &export.name)],
                     vec![
                         Button::new("import-replace")
                             .small()
                             .danger()
                             .icon(Icon::new(IconName::Download))
-                            .label("Replace")
+                            .label(t("Replace"))
                             .on_click(cx.listener(move |this, _, _, cx| {
                                 this.add_import(import.clone(), cx)
                             }))
@@ -138,7 +135,7 @@ impl ProfilesView {
                             .small()
                             .primary()
                             .icon(Icon::new(IconName::Star))
-                            .label("Apply")
+                            .label(t("Apply"))
                             .on_click(cx.listener(move |this, _, _, cx| {
                                 this.confirm = None;
                                 this.shell_apply(retry.clone(), cx);
@@ -203,7 +200,7 @@ impl ProfilesView {
                                 Button::new("confirm-cancel")
                                     .small()
                                     .ghost()
-                                    .label("Cancel")
+                                    .label(t("Cancel"))
                                     .on_click(cx.listener(|this, _, _, cx| {
                                         this.confirm = None;
                                         cx.notify();
