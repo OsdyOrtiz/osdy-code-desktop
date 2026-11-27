@@ -35,6 +35,7 @@ pub fn run(
             gpui_kit::init(cx);
             Theme::change(ThemeMode::Dark, None, cx);
             themes::init(cx);
+            crate::shared::i18n::init(cx);
             crate::features::browser::init(cx);
             #[cfg(target_os = "macos")]
             crate::platform::icons::set_dock_icon();
@@ -231,28 +232,30 @@ fn bind_keys(cx: &mut App) {
     crate::features::canvas::bind_keys(cx);
 }
 
-fn set_menus(cx: &mut App) {
+pub(crate) fn set_menus(cx: &mut App) {
+    use crate::shared::i18n::t;
+
     cx.set_menus(vec![Menu {
         name: "Osdy Code Desktop".into(),
         items: vec![
-            MenuItem::action("New Tab", NewTab),
-            MenuItem::action("New Terminal Tab", NewTerminalTab),
-            MenuItem::action("New Canvas Tab", NewCanvasTab),
-            MenuItem::action("New Pane (Tiled)", TilePane),
-            MenuItem::action("Split Right", SplitRight),
-            MenuItem::action("Split Down", SplitDown),
-            MenuItem::action("Close Pane", ClosePane),
-            MenuItem::action("Close Tab", CloseTab),
-            MenuItem::action("Reopen Closed Pane", ReopenClosed),
+            MenuItem::action(t("New Tab"), NewTab),
+            MenuItem::action(t("New Terminal Tab"), NewTerminalTab),
+            MenuItem::action(t("New Canvas Tab"), NewCanvasTab),
+            MenuItem::action(t("New Pane (Tiled)"), TilePane),
+            MenuItem::action(t("Split Right"), SplitRight),
+            MenuItem::action(t("Split Down"), SplitDown),
+            MenuItem::action(t("Close Pane"), ClosePane),
+            MenuItem::action(t("Close Tab"), CloseTab),
+            MenuItem::action(t("Reopen Closed Pane"), ReopenClosed),
             MenuItem::separator(),
-            MenuItem::action("Toggle Sidebar", ToggleSidebar),
-            MenuItem::action("Configuration…", workspace::OpenSettings),
+            MenuItem::action(t("Toggle Sidebar"), ToggleSidebar),
+            MenuItem::action(t("Configuration…"), workspace::OpenSettings),
             MenuItem::separator(),
-            MenuItem::action("Zoom In", ZoomIn),
-            MenuItem::action("Zoom Out", ZoomOut),
-            MenuItem::action("Actual Size", ActualSize),
+            MenuItem::action(t("Zoom In"), ZoomIn),
+            MenuItem::action(t("Zoom Out"), ZoomOut),
+            MenuItem::action(t("Actual Size"), ActualSize),
             MenuItem::separator(),
-            MenuItem::action("Quit Osdy Code Desktop", Quit),
+            MenuItem::action(t("Quit Osdy Code Desktop"), Quit),
         ],
         disabled: false,
     }]);

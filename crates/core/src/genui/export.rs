@@ -158,6 +158,26 @@ pub fn file_name(title: &str, format: Format) -> String {
     format!("{slug}.{}", format.extension())
 }
 
+/// An export error before it is formatted for the caller.
+#[derive(Debug)]
+pub enum Error {
+    Unsupported { kind: String, format: Format },
+    InvalidSpec(Vec<String>),
+    NoDocsFormat(String),
+}
+
+impl std::fmt::Display for Error {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Unsupported { kind, format } => {
+                write!(f, "a {kind} can't be exported as {}", format.name())
+            }
+            Self::InvalidSpec(errors) => f.write_str(&errors.join("; ")),
+            Self::NoDocsFormat(kind) => write!(f, "a {kind} has no docs format"),
+        }
+    }
+}
+
 /// A surface's `spec` of `kind` as `format` (an SVG for [`Format::Png`]).
 pub fn render(
     kind: &str,
@@ -166,10 +186,24 @@ pub fn render(
     format: Format,
     palette: &Palette,
 ) -> Result<String, String> {
+    render_detailed(kind, title, spec, format, palette).map_err(|error| error.to_string())
+}
+
+/// As [`render`], retaining diagnostics for display in the app.
+pub fn render_detailed(
+    kind: &str,
+    title: &str,
+    spec: &Value,
+    format: Format,
+    palette: &Palette,
+) -> Result<String, Error> {
     if !formats(kind).contains(&format) {
-        return Err(format!("a {kind} can't be exported as {}", format.name()));
+        return Err(Error::Unsupported {
+            kind: kind.to_string(),
+            format,
+        });
     }
-    let errors = |e: Vec<String>| e.join("; ");
+    let errors = Error::InvalidSpec;
     Ok(match (kind, format) {
         ("diagram", Format::Mermaid) => mermaid(&Diagram::parse(spec).map_err(errors)?, title),
         ("diagram", Format::Svg) => diagram_svg(&Diagram::parse(spec).map_err(errors)?, palette),
@@ -200,8 +234,18 @@ pub const MAX_DOCS_TEXT: usize = 60_000;
 /// It carries no version, so the extension answers it as version 0, which
 /// no edit being sent waits for.
 pub fn docs_command(id: &str, kind: &str, title: &str, spec: &Value) -> Result<String, String> {
-    let format = docs_format(kind).ok_or_else(|| format!("a {kind} has no docs format"))?;
-    let text = render(kind, title, spec, format, &Palette::default())?;
+    docs_command_detailed(id, kind, title, spec).map_err(|error| error.to_string())
+}
+
+/// As [`docs_command`], retaining diagnostics separately from the wire command.
+pub fn docs_command_detailed(
+    id: &str,
+    kind: &str,
+    title: &str,
+    spec: &Value,
+) -> Result<String, Error> {
+    let format = docs_format(kind).ok_or_else(|| Error::NoDocsFormat(kind.to_string()))?;
+    let text = render_detailed(kind, title, spec, format, &Palette::default())?;
     let text = (text.len() <= MAX_DOCS_TEXT).then_some(text);
     let event = json!({
         "op": "docs",

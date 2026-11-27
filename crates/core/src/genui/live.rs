@@ -766,11 +766,34 @@ pub fn status_word(word: &str) -> Status {
     }
 }
 
+/// Data for the UI to render a parse failure without changing its English representation.
+#[derive(Debug)]
+pub struct OutputError {
+    pub error: serde_json::Error,
+    pub preview: String,
+}
+
+impl std::fmt::Display for OutputError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        write!(
+            f,
+            "the output isn't JSON ({}): {}",
+            self.error, self.preview
+        )
+    }
+}
+
 /// A command's output as data.
 pub fn parse_output(format: Format, text: &str) -> Result<Value, String> {
+    parse_output_with_details(format, text).map_err(|error| error.to_string())
+}
+
+pub fn parse_output_with_details(format: Format, text: &str) -> Result<Value, OutputError> {
     match format {
-        Format::Json => serde_json::from_str(text.trim())
-            .map_err(|e| format!("the output isn't JSON ({e}): {}", truncate(text.trim(), 80))),
+        Format::Json => serde_json::from_str(text.trim()).map_err(|error| OutputError {
+            error,
+            preview: truncate(text.trim(), 80),
+        }),
         Format::Lines => Ok(Value::Array(
             text.lines()
                 .map(str::trim_end)
@@ -837,12 +860,17 @@ fn csv_rows(text: &str) -> Vec<Vec<String>> {
 /// "Live · updated 5 s ago": how long ago, in steps of 5 s, then minutes
 /// and hours (so the label changes at most every 5 s).
 pub fn ago(seconds: u64) -> String {
-    match seconds {
-        0..5 => "just now".into(),
-        5..60 => format!("{} s ago", seconds / 5 * 5),
-        60..3600 => format!("{} min ago", seconds / 60),
-        _ => format!("{} h ago", seconds / 3600),
-    }
+    ago_in(seconds, crate::i18n::Language::English)
+}
+
+pub fn ago_in(seconds: u64, language: crate::i18n::Language) -> String {
+    let (key, count) = match seconds {
+        0..5 => return crate::i18n::tr(language, "just now").into(),
+        5..60 => ("{count} s ago", seconds / 5 * 5),
+        60..3600 => ("{count} min ago", seconds / 60),
+        _ => ("{count} h ago", seconds / 3600),
+    };
+    crate::i18n::tr(language, key).replace("{count}", &count.to_string())
 }
 
 /// What the user said about a command source.

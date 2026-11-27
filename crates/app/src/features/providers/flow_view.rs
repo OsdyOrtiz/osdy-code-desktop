@@ -11,7 +11,7 @@ use pi_rpc::AuthPrompt;
 
 use super::render::{badge, notice};
 use super::{Flow, ProvidersView};
-use crate::shared::ui;
+use crate::shared::{i18n::t, ui};
 
 impl ProvidersView {
     pub(super) fn render_flow(&self, flow: &Flow, cx: &mut Context<Self>) -> impl IntoElement {
@@ -22,7 +22,12 @@ impl ProvidersView {
                 .child(
                     v_flex()
                         .min_w_0()
-                        .child(div().text_xs().text_color(ui::muted()).child("Sign in to"))
+                        .child(
+                            div()
+                                .text_xs()
+                                .text_color(ui::muted())
+                                .child(t("Sign in to")),
+                        )
                         .child(
                             div()
                                 .truncate()
@@ -51,7 +56,7 @@ impl ProvidersView {
                                     .text_sm()
                                     .text_color(ui::muted())
                                     .child(instructions.clone().unwrap_or_else(|| {
-                                        "Your browser opened the sign-in page. Finish there; if it does not return here, paste the code or redirect URL below.".into()
+                                        t("Your browser opened the sign-in page. Finish there; if it does not return here, paste the code or redirect URL below.").into()
                                     })),
                             ),
                     )
@@ -61,7 +66,7 @@ impl ProvidersView {
                                 .small()
                                 .ghost()
                                 .icon(Icon::new(IconName::ExternalLink))
-                                .label("Open the sign-in page again")
+                                .label(t("Open the sign-in page again"))
                                 .on_click(move |_, _, cx| cx.open_url(&url)),
                         ),
                     ),
@@ -73,9 +78,9 @@ impl ProvidersView {
                 ui::card()
                     .gap_3()
                     .p_4()
-                    .child(div().text_sm().text_color(ui::muted()).child(
+                    .child(div().text_sm().text_color(ui::muted()).child(t(
                         "Enter this code on the verification page (copied to the clipboard):",
-                    ))
+                    )))
                     .child(
                         ui::well_box().items_center().py_3().child(
                             div()
@@ -91,7 +96,7 @@ impl ProvidersView {
                                 .small()
                                 .ghost()
                                 .icon(Icon::new(IconName::ExternalLink))
-                                .label("Open verification page")
+                                .label(t("Open verification page"))
                                 .on_click(move |_, _, cx| cx.open_url(&uri)),
                         ),
                     ),
@@ -172,7 +177,7 @@ impl ProvidersView {
                                 Button::new("auth-submit")
                                     .primary()
                                     .icon(Icon::new(IconName::ArrowRight))
-                                    .label("Continue")
+                                    .label(t("Continue"))
                                     .on_click(cx.listener(|this, _, window, cx| {
                                         this.submit_answer(window, cx)
                                     })),
@@ -189,13 +194,13 @@ impl ProvidersView {
                         .text_sm()
                         .text_color(ui::muted())
                         .child(Spinner::new().small().color(ui::accent()))
-                        .child("Waiting for the provider…"),
+                        .child(t("Waiting for the provider…")),
                 )
             }
             Some(Ok(())) => column = column.child(notice(
                 IconName::CircleCheck,
                 ui::success(),
-                "Signed in. Tabs without a conversation reload their models now; open a new tab for the others.".into(),
+                t("Signed in. Tabs without a conversation reload their models now; open a new tab for the others.").into(),
             )),
             Some(Err(error)) => {
                 column = column.child(notice(IconName::CircleAlert, ui::danger(), error.clone()))

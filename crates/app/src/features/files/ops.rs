@@ -5,6 +5,9 @@ use std::fs;
 use std::io;
 use std::path::{Component, Path, PathBuf};
 
+use super::Text;
+use crate::shared::i18n::t;
+
 /// What a paste does with the clipboard entry.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ClipMode {
@@ -71,19 +74,24 @@ pub fn paste_destination(
 ) -> Result<Option<PathBuf>, String> {
     let name = source
         .file_name()
-        .ok_or_else(|| format!("Can't paste {}", source.display()))?;
+        .ok_or_else(|| t("Can't paste {path}").replace("{path}", &source.display().to_string()))?;
     let shown = name.to_string_lossy();
     let dest = dir.join(name);
     if source_is_dir && dir.starts_with(source) {
-        return Err(format!("Can't paste “{shown}” into itself"));
+        return Err(t("Can't paste “{name}” into itself").replace("{name}", &shown));
     }
     match mode {
         ClipMode::Cut if dest == source => Ok(None),
-        ClipMode::Cut if exists(&dest) => Err(format!(
-            "“{shown}” already exists in {}",
-            dir.file_name()
-                .map_or_else(|| dir.display().to_string(), |n| n.to_string_lossy().into())
-        )),
+        ClipMode::Cut if exists(&dest) => Err(Text::from("“{name}” already exists in {folder}")
+            .with(
+                "{folder}",
+                dir.file_name().map_or_else(
+                    || dir.display().to_string(),
+                    |n| n.to_string_lossy().into_owned(),
+                ),
+            )
+            .with("{name}", shown)
+            .render()),
         ClipMode::Cut => Ok(Some(dest)),
         ClipMode::Copy if exists(&dest) => Ok(Some(copy_name(&dest, source_is_dir, exists))),
         ClipMode::Copy => Ok(Some(dest)),
@@ -95,11 +103,11 @@ pub fn paste_destination(
 pub fn check_name(name: &str) -> Result<&str, String> {
     let name = name.trim();
     if name.is_empty() {
-        return Err("A name is required".into());
+        return Err(t("A name is required").into());
     }
     if name == "." || name == ".." || name.contains('/') || name.contains(std::path::MAIN_SEPARATOR)
     {
-        return Err(format!("“{name}” is not a valid name"));
+        return Err(t("“{name}” is not a valid name").replace("{name}", name));
     }
     Ok(name)
 }
@@ -108,11 +116,11 @@ pub fn check_name(name: &str) -> Result<&str, String> {
 pub fn new_entry_path(dir: &Path, typed: &str) -> Result<PathBuf, String> {
     let typed = typed.trim().trim_end_matches('/');
     if typed.is_empty() {
-        return Err("A name is required".into());
+        return Err(t("A name is required").into());
     }
     let rel = Path::new(typed);
     if !rel.components().all(|c| matches!(c, Component::Normal(_))) {
-        return Err(format!("“{typed}” is not a valid name"));
+        return Err(t("“{name}” is not a valid name").replace("{name}", typed));
     }
     Ok(dir.join(rel))
 }
@@ -139,7 +147,7 @@ pub fn rename(from: &Path, to: &Path) -> io::Result<()> {
     if to != from && fs::symlink_metadata(to).is_ok() && !same_entry(from, to) {
         return Err(io::Error::new(
             io::ErrorKind::AlreadyExists,
-            "an entry with that name already exists",
+            t("an entry with that name already exists"),
         ));
     }
     fs::rename(from, to)

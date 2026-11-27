@@ -111,8 +111,15 @@ pub fn sort_devices(devices: &mut [Device]) {
 /// devices are left out. Booted devices are `Ready`: the hub reports no boot
 /// progress. The second list is what the hub couldn't read (no Xcode, …).
 pub fn hub_devices(json: &str, avds: &[String]) -> Result<(Vec<Device>, Vec<String>), String> {
-    let value: serde_json::Value = serde_json::from_str(json)
-        .map_err(|e| format!("The device hub's list is unreadable: {e}"))?;
+    parse_hub_devices(json, avds).map_err(|e| format!("The device hub's list is unreadable: {e}"))
+}
+
+/// As [`hub_devices`], with the raw JSON error for callers displaying their own message.
+pub fn parse_hub_devices(
+    json: &str,
+    avds: &[String],
+) -> Result<(Vec<Device>, Vec<String>), serde_json::Error> {
+    let value: serde_json::Value = serde_json::from_str(json)?;
     let mut devices = Vec::new();
     for (key, platform) in [
         ("simulators", Platform::Ios),

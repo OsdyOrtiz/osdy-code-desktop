@@ -89,7 +89,11 @@ pub(super) fn write_key(path: &Path, key: &str, value: Value) -> std::io::Result
         Ok(text) => serde_json::from_str::<Value>(&text)
             .ok()
             .filter(Value::is_object)
-            .ok_or_else(|| std::io::Error::other("the launcher config is not a JSON object"))?,
+            .ok_or_else(|| {
+                std::io::Error::other(crate::shared::i18n::t(
+                    "the launcher config is not a JSON object",
+                ))
+            })?,
         Err(e) if e.kind() == std::io::ErrorKind::NotFound => Value::Object(Default::default()),
         Err(e) => return Err(e),
     };

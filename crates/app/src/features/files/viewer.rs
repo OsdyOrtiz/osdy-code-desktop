@@ -29,7 +29,8 @@ use gpui_kit::component::{Disableable as _, Icon, Selectable as _, Sizable as _,
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
 
-use super::{file_icon, human_size, language, mermaid};
+use super::{Text, file_icon, human_size, language, mermaid};
+use crate::shared::i18n::{self, t};
 use crate::shared::pane::{CloseViewer, ShowInPane};
 use crate::shared::ui;
 
@@ -57,8 +58,8 @@ enum Body {
     Diff(Entity<DiffState>),
     Notice {
         icon: IconName,
-        title: SharedString,
-        detail: SharedString,
+        title: &'static str,
+        detail: Text,
         /// Over a soft size limit: offers to load it anyway.
         load_anyway: bool,
     },
@@ -148,6 +149,7 @@ static LAST_MD_MODE: AtomicU8 = AtomicU8::new(2);
 
 /// A Markdown file's rendered side.
 struct Markdown {
+    preview_language: gentle_core::i18n::Language,
     mode: MdMode,
     /// The buffer rendered by the same component as agent replies.
     preview: Entity<TextViewState>,
@@ -200,7 +202,7 @@ enum Banner {
     /// The file is gone from disk.
     Deleted,
     /// The last save failed with this error.
-    SaveFailed(SharedString),
+    SaveFailed(Text),
 }
 
 impl FileView {
@@ -327,6 +329,7 @@ impl FileView {
             _flash: Task::ready(()),
         });
         self.markdown = preview.map(|preview| Markdown {
+            preview_language: i18n::language(),
             mode: MdMode::last(),
             preview,
             dir: path.parent().unwrap_or(Path::new("")).into(),
@@ -485,7 +488,7 @@ impl FileView {
         if let Some(short) = &self.commit {
             format!("{name} · {short}").into()
         } else if self.diff {
-            format!("{name} · diff").into()
+            t("{name} · diff").replace("{name}", name.as_ref()).into()
         } else if self.edit.as_ref().is_some_and(|e| e.dirty) {
             format!("{name} •").into()
         } else {
@@ -718,7 +721,11 @@ impl FileView {
             }
             Err(err) => {
                 edit.just_saved = false;
-                edit.banner = Some(Banner::SaveFailed(err.to_string().into()));
+                let detail = err
+                    .get_ref()
+                    .and_then(|cause| cause.downcast_ref::<SaveError>())
+                    .map_or_else(|| Text::from(err.to_string()), |cause| Text::from(cause.0));
+                edit.banner = Some(Banner::SaveFailed(detail));
             }
         }
         self.refresh_dirty(cx);
@@ -777,6 +784,7 @@ impl FileView {
         let prepared =
             md.diagrams
                 .prepare(&text, mermaid::dark(cx), mermaid::ready_cli(cx).as_ref());
+        md.preview_language = i18n::language();
         md.diagram_blocks = prepared.blocks;
         let list = md.preview.read(cx).list_state().clone();
         md.restore
@@ -933,10 +941,14 @@ impl FileView {
             facts.push(human_size(size));
         }
         if let Some(lines) = self.meta.lines {
-            facts.push(format!(
-                "{lines} {}",
-                if lines == 1 { "line" } else { "lines" }
-            ));
+            facts.push(
+                t(if lines == 1 {
+                    "{count} line"
+                } else {
+                    "{count} lines"
+                })
+                .replace("{count}", &lines.to_string()),
+            );
         }
         let facts = facts.join(" · ");
 
@@ -961,9 +973,11 @@ impl FileView {
         // Split · Unified one.
         let mode = self.markdown.as_ref().map(|m| m.mode);
         let diff_mode = matches!(self.body, Body::Diff(_)).then_some(self.diff_mode);
+        let md_labels = MdMode::LABELS.map(t);
+        let diff_labels = DIFF_LABELS.map(t);
         let toggle_labels: &[&str] = match (mode, diff_mode) {
-            (Some(_), _) => &MdMode::LABELS,
-            (None, Some(_)) => &DIFF_LABELS,
+            (Some(_), _) => &md_labels,
+            (None, Some(_)) => &diff_labels,
             (None, None) => &[],
         };
         let toggle_width = if toggle_labels.is_empty() {
@@ -996,14 +1010,14 @@ impl FileView {
         };
         // Content too large for syntax colors says so in place of its language.
         let chip_label = if self.meta.plain {
-            PLAIN_NOTE
+            t(PLAIN_NOTE)
         } else {
-            self.meta.language
+            t(self.meta.language)
         };
         let show_language = fits(chars(chip_label) * 6. + 16.);
         let show_change = self.meta.change.is_some_and(|(status, added, removed)| {
             let counts = format!("+{added} −{removed}");
-            fits(chars(&counts) * 7. + chars(status) * 6. + 24.)
+            fits(chars(&counts) * 7. + chars(t(status)) * 6. + 24.)
         });
         let show_facts = !facts.is_empty() && fits(chars(&facts) * 6.6);
 
@@ -1079,7 +1093,7 @@ impl FileView {
                                 d.child(div().text_color(ui::danger()).child(format!("−{removed}")))
                             }),
                     )
-                    .child(ui::chip(status, status_tint(status)).flex_none())
+                    .child(ui::chip(t(status), status_tint(status)).flex_none())
                 },
             )
             .when(show_facts, |d| {
@@ -1092,18 +1106,18 @@ impl FileView {
                 )
             })
             .when(show_language && !self.meta.plain, |d| {
-                d.child(ui::chip(self.meta.language, ui::info()).flex_none())
+                d.child(ui::chip(t(self.meta.language), ui::info()).flex_none())
             })
             .when(show_language && self.meta.plain, |d| {
                 d.child(
-                    ui::chip(PLAIN_NOTE, ui::muted())
+                    ui::chip(t(PLAIN_NOTE), ui::muted())
                         .id("file-view-plain")
                         .flex_none()
                         .tooltip(|window, cx| {
-                            ui::tooltip(format!(
-                                "Syntax colors are off for content over {}",
-                                human_size(preview::COLOR_LIMIT)
-                            ))
+                            ui::tooltip(
+                                t("Syntax colors are off for content over {size}")
+                                    .replace("{size}", &human_size(preview::COLOR_LIMIT)),
+                            )
                             .build(window, cx)
                         }),
                 )
@@ -1112,7 +1126,7 @@ impl FileView {
                 let view = cx.entity().downgrade();
                 d.child(ui::segmented(
                     "file-view-mode",
-                    &MdMode::LABELS,
+                    &md_labels,
                     Some(mode.index()),
                     move |ix, window, cx| {
                         if let Some(&mode) = MdMode::ALL.get(*ix) {
@@ -1125,7 +1139,7 @@ impl FileView {
                 let view = cx.entity().downgrade();
                 d.child(ui::segmented(
                     "file-view-diff-mode",
-                    &DIFF_LABELS,
+                    &diff_labels,
                     DIFF_MODES.iter().position(|m| *m == current),
                     move |ix, _, cx| {
                         if let Some(&mode) = DIFF_MODES.get(*ix) {
@@ -1143,9 +1157,9 @@ impl FileView {
                         .icon(Icon::new(IconName::TextWrap))
                         .selected(wraps)
                         .tooltip(if wraps {
-                            "Don't wrap long lines (scroll sideways)"
+                            t("Don't wrap long lines (scroll sideways)")
                         } else {
-                            "Wrap long lines"
+                            t("Wrap long lines")
                         })
                         .on_click(cx.listener(move |this, _, _, cx| {
                             this.diff_wrap = Some(!wraps);
@@ -1162,7 +1176,7 @@ impl FileView {
                         .text_size(rems(12. / 16.))
                         .text_color(ui::success())
                         .child(Icon::new(IconName::Check).xsmall())
-                        .child("Saved"),
+                        .child(t("Saved")),
                 ))
             })
             .when(dirty, |d| {
@@ -1181,7 +1195,7 @@ impl FileView {
                         .ghost()
                         .xsmall()
                         .icon(Icon::new(IconName::Save))
-                        .tooltip(format!("Save ({SAVE_HINT})"))
+                        .tooltip(t("Save ({shortcut})").replace("{shortcut}", SAVE_HINT))
                         .loading(saving)
                         .disabled(!dirty || saving)
                         .on_click(cx.listener(|this, _, window, cx| this.save(&Save, window, cx))),
@@ -1192,7 +1206,7 @@ impl FileView {
                     .ghost()
                     .xsmall()
                     .icon(Icon::new(IconName::ExternalLink))
-                    .tooltip("Open with default app")
+                    .tooltip(t("Open with default app"))
                     .on_click(cx.listener(move |_, _, _, cx| cx.open_with_system(&path))),
             )
             .child({
@@ -1201,7 +1215,7 @@ impl FileView {
                     .ghost()
                     .xsmall()
                     .icon(Icon::new(IconName::X))
-                    .tooltip("Close pane")
+                    .tooltip(t("Close pane"))
                     .on_click(move |_, window, cx| {
                         window.dispatch_action(Box::new(CloseViewer { pane: view }), cx)
                     })
@@ -1224,13 +1238,14 @@ impl FileView {
                 Banner::Conflict(_) => (
                     ui::warning(),
                     IconName::TriangleAlert,
-                    "Changed on disk",
-                    "This file was changed outside the editor while you had unsaved edits.".into(),
+                    t("Changed on disk"),
+                    t("This file was changed outside the editor while you had unsaved edits.")
+                        .into(),
                     vec![
                         action(
                             "file-view-reload",
-                            "Reload",
-                            "Discard your edits and load the file from disk",
+                            t("Reload"),
+                            t("Discard your edits and load the file from disk"),
                         )
                         .icon(Icon::new(IconName::RefreshCw))
                         .on_click(
@@ -1238,8 +1253,8 @@ impl FileView {
                         ),
                         action(
                             "file-view-keep",
-                            "Keep mine",
-                            "Keep your edits; saving overwrites the file on disk",
+                            t("Keep mine"),
+                            t("Keep your edits; saving overwrites the file on disk"),
                         )
                         .on_click(cx.listener(|this, _, _, cx| this.keep_mine(cx))),
                     ],
@@ -1247,20 +1262,22 @@ impl FileView {
                 Banner::Deleted => (
                     ui::warning(),
                     IconName::TriangleAlert,
-                    "Deleted on disk",
-                    format!("Save ({SAVE_HINT}) to write it back.").into(),
+                    t("Deleted on disk"),
+                    t("Save ({shortcut}) to write it back.")
+                        .replace("{shortcut}", SAVE_HINT)
+                        .into(),
                     vec![
-                        action("file-view-dismiss", "Dismiss", "Hide this notice")
+                        action("file-view-dismiss", t("Dismiss"), t("Hide this notice"))
                             .on_click(cx.listener(|this, _, _, cx| this.dismiss_banner(cx))),
                     ],
                 ),
                 Banner::SaveFailed(err) => (
                     ui::danger(),
                     IconName::CircleAlert,
-                    "Couldn't save",
-                    err.clone(),
+                    t("Couldn't save"),
+                    err.render().into(),
                     vec![
-                        action("file-view-dismiss", "Dismiss", "Hide this notice")
+                        action("file-view-dismiss", t("Dismiss"), t("Hide this notice"))
                             .on_click(cx.listener(|this, _, _, cx| this.dismiss_banner(cx))),
                     ],
                 ),
@@ -1317,6 +1334,13 @@ impl Focusable for FileView {
 
 impl Render for FileView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        if self
+            .markdown
+            .as_ref()
+            .is_some_and(|md| md.preview_language != i18n::language())
+        {
+            self.sync_preview(cx);
+        }
         let pane = (self.focus.clone(), cx.entity_id());
         let body = match &self.body {
             Body::Loading => v_flex()
@@ -1388,14 +1412,14 @@ impl Render for FileView {
                                 .text_size(rems(14. / 16.))
                                 .font_weight(FontWeight::SEMIBOLD)
                                 .text_color(ui::fg())
-                                .child(title.clone()),
+                                .child(t(title)),
                         )
                         .child(
                             div()
                                 .text_size(rems(12. / 16.))
                                 .text_color(ui::muted())
                                 .text_center()
-                                .child(detail.clone()),
+                                .child(detail.render()),
                         )
                         .when(*load_anyway, |d| {
                             d.child(
@@ -1403,7 +1427,7 @@ impl Render for FileView {
                                     Button::new("file-view-load-anyway")
                                         .small()
                                         .outline()
-                                        .label("Load anyway")
+                                        .label(t("Load anyway"))
                                         .on_click(cx.listener(|this, _, window, cx| {
                                             this.load_anyway(window, cx)
                                         })),
@@ -1433,14 +1457,14 @@ impl Render for FileView {
 struct Notice {
     icon: IconName,
     title: &'static str,
-    detail: String,
+    detail: Text,
     size: Option<u64>,
     /// Over a soft size limit: the notice offers to load it anyway.
     load_anyway: bool,
 }
 
 impl Notice {
-    fn new(icon: IconName, title: &'static str, detail: impl Into<String>) -> Self {
+    fn new(icon: IconName, title: &'static str, detail: impl Into<Text>) -> Self {
         Self {
             icon,
             title,
@@ -1453,21 +1477,25 @@ impl Notice {
     /// Content of `size` bytes didn't load: over `limits`' soft one (the
     /// `kind` limit: preview, diff) it can still be asked for; over the hard
     /// one it can't.
-    fn too_large(title: &'static str, kind: &str, size: u64, limits: Limits, fit: Fit) -> Self {
+    fn too_large(
+        title: &'static str,
+        soft_detail: &'static str,
+        size: u64,
+        limits: Limits,
+        fit: Fit,
+    ) -> Self {
         let ask = fit == Fit::Ask;
-        let detail = if ask {
-            format!(
-                "{} is over the {} {kind} limit.",
-                human_size(size),
-                human_size(limits.soft)
-            )
+        let (key, limit) = if ask {
+            (soft_detail, limits.soft)
         } else {
-            format!(
-                "{} is over {}, the most the app loads.",
-                human_size(size),
-                human_size(limits.hard)
+            (
+                "{size} is over {limit}, the most the app loads.",
+                limits.hard,
             )
         };
+        let detail = Text::from(key)
+            .with("{size}", human_size(size))
+            .with("{limit}", human_size(limit));
         Self {
             load_anyway: ask,
             ..Self::new(IconName::TriangleAlert, title, detail)
@@ -1477,8 +1505,8 @@ impl Notice {
     fn into_body(self) -> Body {
         Body::Notice {
             icon: self.icon,
-            title: self.title.into(),
-            detail: self.detail.into(),
+            title: self.title,
+            detail: self.detail,
             load_anyway: self.load_anyway,
         }
     }
@@ -1504,7 +1532,7 @@ fn read_text(path: &Path, asked: bool) -> Result<(String, u64), Notice> {
             size: Some(meta.len()),
             ..Notice::too_large(
                 "Too large to preview",
-                "preview",
+                "{size} is over the {limit} preview limit.",
                 meta.len(),
                 preview::FILE,
                 fit,
@@ -1787,6 +1815,17 @@ fn save_rope(path: &Path, text: &Rope) -> io::Result<Option<Stamp>> {
 /// sibling temp file that takes the file's permissions and is renamed over
 /// it, so a failed write leaves the file as it was. A symlink is followed:
 /// the link stays and its target is replaced.
+#[derive(Debug)]
+struct SaveError(&'static str);
+
+impl std::fmt::Display for SaveError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(self.0)
+    }
+}
+
+impl std::error::Error for SaveError {}
+
 fn atomic_write(
     path: &Path,
     write: impl FnOnce(&mut dyn Write) -> io::Result<()>,
@@ -1797,7 +1836,7 @@ fn atomic_write(
         Ok(meta) if meta.permissions().readonly() => {
             return Err(io::Error::new(
                 io::ErrorKind::PermissionDenied,
-                "the file is read-only",
+                SaveError("the file is read-only"),
             ));
         }
         Ok(meta) => Some(meta.permissions()),
@@ -1806,7 +1845,7 @@ fn atomic_write(
     };
     let name = target
         .file_name()
-        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, "not a file path"))?;
+        .ok_or_else(|| io::Error::new(io::ErrorKind::InvalidInput, SaveError("not a file path")))?;
     let temp = target.with_file_name(format!(
         ".{}.{}-{}.saving",
         name.to_string_lossy(),
@@ -1839,7 +1878,7 @@ fn patch_fits(size: u64, asked: bool) -> Result<(), Notice> {
         Fit::Load => Ok(()),
         fit => Err(Notice::too_large(
             "Diff too large",
-            "diff",
+            "{size} is over the {limit} diff limit.",
             size,
             preview::PATCH,
             fit,

@@ -94,7 +94,7 @@ impl Workspace {
             files: false,
             directories: true,
             multiple: false,
-            prompt: Some("Create workspace".into()),
+            prompt: Some(crate::shared::i18n::t("Create workspace").into()),
         });
         cx.spawn_in(window, async move |this, cx| {
             let Ok(Ok(Some(mut paths))) = paths.await else {
@@ -134,7 +134,7 @@ impl Workspace {
             files: false,
             directories: true,
             multiple: false,
-            prompt: Some("Open folder".into()),
+            prompt: Some(crate::shared::i18n::t("Open folder").into()),
         });
         cx.spawn_in(window, async move |this, cx| {
             let Ok(Ok(Some(mut paths))) = paths.await else {
@@ -169,9 +169,11 @@ impl Workspace {
             return;
         }
         let folder = ui::split_path(&root).1;
-        let title = format!("Move this agent to \u{201c}{folder}\u{201d}?");
-        let description = "Its conversation ends and a new session starts in that folder. \
-             The previous conversation stays on disk.";
+        let title =
+            crate::shared::i18n::t("Move this agent to “{folder}”?").replace("{folder}", &folder);
+        let description = crate::shared::i18n::t(
+            "Its conversation ends and a new session starts in that folder. The previous conversation stays on disk.",
+        );
         let this = cx.entity().downgrade();
         window.open_alert_dialog(cx, move |alert, _, _| {
             let (this, agent, canvas, root) =
@@ -179,7 +181,8 @@ impl Workspace {
             alert
                 .title(title.clone())
                 .description(description)
-                .ok_text("Move")
+                .ok_text(crate::shared::i18n::t("Move"))
+                .cancel_text(crate::shared::i18n::t("Cancel"))
                 .show_cancel(true)
                 .on_ok(move |_, window, cx| {
                     let (agent, canvas, root) = (agent.clone(), canvas.clone(), root.clone());
@@ -242,19 +245,22 @@ impl Workspace {
         if self.spaces.len() < 2 {
             return;
         }
-        let title = format!("Delete workspace \u{201c}{}\u{201d}?", space.name);
+        let title =
+            crate::shared::i18n::t("Delete workspace “{name}”?").replace("{name}", &space.name);
         let tabs = space.tabs.len();
-        let description = format!(
-            "Its {tabs} {} close and any running agent in them stops. Files and conversations stay on disk.",
-            if tabs == 1 { "tab" } else { "tabs" }
-        );
+        let description = crate::shared::i18n::t(if tabs == 1 {
+            "Its 1 tab close and any running agent in them stops. Files and conversations stay on disk."
+        } else {
+            "Its {count} tabs close and any running agent in them stops. Files and conversations stay on disk."
+        }).replace("{count}", &tabs.to_string());
         let this = cx.entity().downgrade();
         window.open_alert_dialog(cx, move |alert, _, _| {
             let this = this.clone();
             alert
                 .title(title.clone())
                 .description(description.clone())
-                .ok_text("Delete")
+                .ok_text(crate::shared::i18n::t("Delete"))
+                .cancel_text(crate::shared::i18n::t("Cancel"))
                 .ok_variant(ButtonVariant::Danger)
                 .show_cancel(true)
                 .on_ok(move |_, window, cx| {
@@ -358,18 +364,28 @@ impl Workspace {
         cx: &mut Context<Self>,
     ) {
         let root = self.space().root.clone();
-        let title = format!("Switch to \u{201c}{branch}\u{201d}?");
-        let description = format!(
-            "Runs git switch {branch} in {}. Uncommitted changes that conflict make git refuse.",
-            ui::split_path(&root).1
+        let title = crate::shared::i18n::t("Switch to “{branch}”?").replace("{branch}", &branch);
+        let folder = ui::split_path(&root).1;
+        let description = crate::shared::i18n::t(
+            "Runs {command} in {folder}. Uncommitted changes that conflict make git refuse.",
         );
+        let description = if let Some((before, after)) = description.split_once("{command}") {
+            format!(
+                "{}git switch {branch}{}",
+                before.replace("{folder}", &folder),
+                after.replace("{folder}", &folder)
+            )
+        } else {
+            description.to_string()
+        };
         let this = cx.entity().downgrade();
         window.open_alert_dialog(cx, move |alert, _, _| {
             let (this, root, branch) = (this.clone(), root.clone(), branch.clone());
             alert
                 .title(title.clone())
                 .description(description.clone())
-                .ok_text("Switch")
+                .ok_text(crate::shared::i18n::t("Switch"))
+                .cancel_text(crate::shared::i18n::t("Cancel"))
                 .show_cancel(true)
                 .on_ok(move |_, window, cx| {
                     let (root, branch) = (root.clone(), branch.clone());
@@ -384,7 +400,10 @@ impl Workspace {
                                 .await;
                             let _ = cx.update(|window, cx| {
                                 let note = match result {
-                                    Ok(()) => Notification::success(format!("Switched to {label}")),
+                                    Ok(()) => Notification::success(
+                                        crate::shared::i18n::t("Switched to {branch}")
+                                            .replace("{branch}", &label),
+                                    ),
                                     Err(message) => Notification::error(message),
                                 };
                                 window.push_notification(note, cx);

@@ -86,6 +86,8 @@ pub fn refresh() {
 /// Palette → Install `ocd` command. Blocking (Windows edits the user PATH
 /// through PowerShell): call off the UI thread. The text says what happened.
 pub fn install() -> Result<String, String> {
+    use crate::shared::i18n::{Message, t};
+
     let exe = std::env::current_exe().map_err(|e| e.to_string())?;
     // The Windows installer ships `bin\ocd.cmd` next to the exe: only make
     // sure its folder is on PATH.
@@ -95,20 +97,31 @@ pub fn install() -> Result<String, String> {
     {
         return add_to_path(&bin);
     }
-    let path = shim_path().ok_or("This system has no home or app data folder.")?;
+    let path = shim_path().ok_or_else(|| t("This system has no home or app data folder."))?;
     if path.exists() && !is_ours(&path) {
-        return Err(format!(
-            "{} already exists and isn't Osdy Code Desktop's; remove it first.",
-            path.display()
-        ));
+        return Err(
+            t("{path} already exists and isn't Osdy Code Desktop's; remove it first.")
+                .replace("{path}", &path.display().to_string()),
+        );
     }
-    write_shim(&path, &exe).map_err(|e| format!("Could not write {}: {e}", path.display()))?;
+    write_shim(&path, &exe).map_err(|e| {
+        Message::with(
+            "Could not write {path}: {error}",
+            [
+                ("{path}", path.display().to_string()),
+                ("{error}", e.to_string()),
+            ],
+        )
+        .render()
+    })?;
     let dir = path.parent().unwrap_or(&path);
     add_to_path(dir)
 }
 
 #[cfg(windows)]
 fn add_to_path(dir: &Path) -> Result<String, String> {
+    use crate::shared::i18n::{Message, t};
+
     // Read and write the raw value: `[Environment]::SetEnvironmentVariable`
     // would expand `%USERPROFILE%`-style entries for good. Setting and
     // clearing a dummy variable through it broadcasts the change, so new
@@ -131,34 +144,40 @@ $value = (@($entries) + $dir) -join ';'
         .env("OCD_DIR", dir)
         .stdin(std::process::Stdio::null())
         .output()
-        .map_err(|e| format!("Could not run PowerShell: {e}"))?;
+        .map_err(|e| t("Could not run PowerShell: {error}").replace("{error}", &e.to_string()))?;
     if !out.status.success() {
-        return Err(format!(
-            "Could not add {} to your PATH: {}",
-            dir.display(),
-            String::from_utf8_lossy(&out.stderr).trim()
-        ));
+        return Err(Message::with(
+            "Could not add {path} to your PATH: {error}",
+            [
+                ("{path}", dir.display().to_string()),
+                (
+                    "{error}",
+                    String::from_utf8_lossy(&out.stderr).trim().to_string(),
+                ),
+            ],
+        )
+        .render());
     }
     Ok(
         if String::from_utf8_lossy(&out.stdout).trim() == "present" {
-            "ocd is installed. Type ocd in any folder to open it here.".into()
+            t("ocd is installed. Type ocd in any folder to open it here.").into()
         } else {
-            "ocd is installed. Open a new terminal and type ocd in any folder.".into()
+            t("ocd is installed. Open a new terminal and type ocd in any folder.").into()
         },
     )
 }
 
 #[cfg(not(windows))]
 fn add_to_path(dir: &Path) -> Result<String, String> {
+    use crate::shared::i18n::t;
+
     let on_path =
         std::env::var_os("PATH").is_some_and(|path| std::env::split_paths(&path).any(|p| p == dir));
     Ok(if on_path {
-        "ocd is installed. Type ocd in any folder to open it here.".into()
+        t("ocd is installed. Type ocd in any folder to open it here.").into()
     } else {
-        format!(
-            "ocd is installed in {}, which isn't on your PATH yet: add it in your shell profile.",
-            dir.display()
-        )
+        t("ocd is installed in {path}, which isn't on your PATH yet: add it in your shell profile.")
+            .replace("{path}", &dir.display().to_string())
     })
 }
 

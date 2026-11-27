@@ -173,7 +173,7 @@ impl Workspace {
             cell(
                 "badge-initials".into(),
                 badge.icon.is_none(),
-                "Initials".into(),
+                crate::shared::i18n::t("Initials").into(),
             )
             .on_click(cx.listener(move |this, _, _, cx| {
                 this.set_space_badge(
@@ -204,7 +204,7 @@ impl Workspace {
                 cell(
                     ("badge-icon", i).into(),
                     selected,
-                    format!("{icon:?}").into(),
+                    crate::shared::i18n::t(icon.label()).into(),
                 )
                 .on_click(cx.listener(move |this, _, _, cx| {
                     let badge = Badge {
@@ -247,7 +247,7 @@ impl Workspace {
                 "badge-color-auto".into(),
                 auto,
                 badge.color.is_none(),
-                "From the name".into(),
+                crate::shared::i18n::t("From the name").into(),
             )
             .on_click(cx.listener(move |this, _, _, cx| {
                 this.set_space_badge(
@@ -266,7 +266,7 @@ impl Workspace {
                     ("badge-color", i).into(),
                     badge_hue(color),
                     badge.color == Some(color),
-                    color.label().into(),
+                    crate::shared::i18n::t(color.label()).into(),
                 )
                 .on_click(cx.listener(move |this, _, _, cx| {
                     let badge = Badge {
@@ -316,7 +316,7 @@ impl Workspace {
                                 div()
                                     .text_xs()
                                     .text_color(ui::faint())
-                                    .child("Colors follow the theme"),
+                                    .child(crate::shared::i18n::t("Colors follow the theme")),
                             ),
                     )
                     .when(!badge.is_default(), |d| {
@@ -324,16 +324,20 @@ impl Workspace {
                             Button::new("badge-reset")
                                 .ghost()
                                 .xsmall()
-                                .label("Reset")
+                                .label(crate::shared::i18n::t("Reset"))
                                 .on_click(cx.listener(move |this, _, _, cx| {
                                     this.set_space_badge(index, Badge::default(), cx)
                                 })),
                         )
                     }),
             )
-            .child(ui::section_label("Icon"))
+            .child(ui::section_label(crate::shared::i18n::t("Icon")))
             .child(icons)
-            .child(div().pt_1().child(ui::section_label("Color")))
+            .child(
+                div()
+                    .pt_1()
+                    .child(ui::section_label(crate::shared::i18n::t("Color"))),
+            )
             .child(colors);
         Some(
             deferred(

@@ -111,7 +111,9 @@ impl Workspace {
                             None => ui::muted(),
                         };
                         let mut tip = format!("{} · {} · {}", space.name, number, title);
-                        if let Some(background) = background.describe() {
+                        if let Some(background) =
+                            background.describe_in(crate::shared::i18n::language())
+                        {
                             tip.push_str(&format!(" · {background}"));
                         }
                         let tip: SharedString = tip.into();
@@ -210,7 +212,7 @@ impl Workspace {
                     .hover(|d| d.bg(ui::surface_hover()))
                     .when(!self.popups_open(), |d| {
                         d.tooltip(|window, cx| {
-                            Tooltip::new("New agent or terminal").build(window, cx)
+                            Tooltip::new(t("New agent or terminal")).build(window, cx)
                         })
                     })
                     .on_mouse_down(
@@ -241,7 +243,7 @@ impl Workspace {
                     .ghost()
                     .xsmall()
                     .icon(Icon::new(IconName::PanelLeftOpen))
-                    .tooltip("Expand workspace sidebar")
+                    .tooltip(t("Expand workspace sidebar"))
                     .on_click(cx.listener(|this, _, _, cx| this.toggle_sidebar_compact(cx))),
             )
             .child(list)
@@ -250,7 +252,7 @@ impl Workspace {
                     .ghost()
                     .xsmall()
                     .icon(Icon::new(IconName::FolderPlus))
-                    .tooltip("New workspace")
+                    .tooltip(t("New workspace"))
                     .on_click(cx.listener(|this, _, window, cx| {
                         this.pick_workspace_folder(None, window, cx);
                     })),

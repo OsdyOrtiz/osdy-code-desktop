@@ -7,6 +7,7 @@ use std::path::PathBuf;
 use gpui_kit::component::input::{InputEvent, InputState};
 use gpui_kit::*;
 
+use crate::shared::i18n::t;
 use crate::{features::app_update, features::workspaces::TabLayout};
 
 mod agent_ui;
@@ -21,6 +22,7 @@ mod fonts;
 mod hydration;
 mod input_style;
 mod interface;
+mod language;
 mod layout;
 mod maestro;
 mod models;
@@ -66,6 +68,8 @@ pub struct SettingsView {
     page: SettingsPage,
     body_scroll: ScrollHandle,
     settings_search: Entity<InputState>,
+    /// The language the search placeholder was last written in.
+    search_language: gentle_core::i18n::Language,
     _settings_search: Subscription,
     compact_categories_open: bool,
     snapshot: Option<Snapshot>,
@@ -140,7 +144,7 @@ impl SettingsView {
         );
         let package = packages::PackageUiState::new(window, cx);
         let settings_search =
-            cx.new(|cx| InputState::new(window, cx).placeholder("Find a setting…"));
+            cx.new(|cx| InputState::new(window, cx).placeholder(t("Find a setting…")));
         let settings_search_subscription = cx.subscribe(
             &settings_search,
             |this, input, event: &InputEvent, cx| match event {
@@ -171,6 +175,7 @@ impl SettingsView {
             page: SettingsPage::default(),
             body_scroll: ScrollHandle::new(),
             settings_search,
+            search_language: crate::shared::i18n::language(),
             _settings_search: settings_search_subscription,
             _workspace_sub: cx.observe(&workspace, |this, workspace, cx| {
                 this.sync_workspace(workspace, cx);

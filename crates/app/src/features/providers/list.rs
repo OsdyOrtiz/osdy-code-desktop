@@ -9,7 +9,7 @@ use pi_rpc::ProviderInfo;
 
 use super::ProvidersView;
 use super::render::badge;
-use crate::shared::ui;
+use crate::shared::{i18n::t, ui};
 
 impl ProvidersView {
     pub(super) fn render_list(&self, cx: &mut Context<Self>) -> impl IntoElement {
@@ -20,9 +20,9 @@ impl ProvidersView {
         // Signed in first, then subscriptions (what most people sign in
         // with), then everything that only takes an API key.
         let mut groups: [(&str, Vec<&ProviderInfo>); 3] = [
-            ("Signed in", Vec::new()),
-            ("Subscriptions", Vec::new()),
-            ("API keys", Vec::new()),
+            (t("Signed in"), Vec::new()),
+            (t("Subscriptions"), Vec::new()),
+            (t("API keys"), Vec::new()),
         ];
         for provider in matching {
             let group = if provider.configured {
@@ -46,13 +46,13 @@ impl ProvidersView {
                     div()
                         .text_sm()
                         .text_color(ui::muted())
-                        .child("No providers match"),
+                        .child(t("No providers match")),
                 )
                 .child(
                     div()
                         .text_xs()
                         .text_color(ui::faint())
-                        .child("Try another name or id."),
+                        .child(t("Try another name or id.")),
                 );
         }
         let mut column = v_flex().gap_4();
@@ -101,8 +101,8 @@ impl ProvidersView {
         let status = provider
             .configured
             .then(|| match provider.source.as_deref() {
-                Some("environment") => ("env", ui::info()),
-                _ => ("signed in", ui::success()),
+                Some("environment") => (t("env"), ui::info()),
+                _ => (t("signed in"), ui::success()),
             });
         let detail = provider
             .oauth
@@ -113,7 +113,7 @@ impl ProvidersView {
                     .source
                     .as_deref()
                     .filter(|s| provider.configured && *s != "stored" && *s != "environment")
-                    .map(|s| format!("via {s}"))
+                    .map(|s| t("via {source}").replace("{source}", s))
             });
         let row = h_flex()
             .px_2()
@@ -164,7 +164,7 @@ impl ProvidersView {
                                 .when(recommended, |b| b.primary())
                                 .when(!recommended, |b| b.ghost())
                                 .icon(Icon::new(IconName::LogIn))
-                                .label("Sign in")
+                                .label(t("Sign in"))
                                 .on_click(cx.listener(move |this, _, window, cx| {
                                     this.begin(&p, true, window, cx)
                                 })),
@@ -178,7 +178,7 @@ impl ProvidersView {
                                     .small()
                                     .ghost()
                                     .icon(Icon::new(IconName::KeyRound))
-                                    .label("API key")
+                                    .label(t("API key"))
                                     .on_click(cx.listener(move |this, _, window, cx| {
                                         this.begin(&p2, false, window, cx)
                                     })),
@@ -193,7 +193,7 @@ impl ProvidersView {
                                     .small()
                                     .ghost()
                                     .icon(Icon::new(IconName::LogOut))
-                                    .tooltip("Sign out")
+                                    .tooltip(t("Sign out"))
                                     .on_click(
                                         cx.listener(move |this, _, _, cx| this.logout(&p3, cx)),
                                     ),

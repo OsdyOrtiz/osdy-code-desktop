@@ -9,6 +9,7 @@ use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
 
 use super::layout::{row, section};
+use crate::shared::i18n::t;
 use crate::{features::app_update, shared::ui};
 
 fn mb(bytes: u64) -> String {
@@ -18,7 +19,7 @@ fn mb(bytes: u64) -> String {
 /// This app's version, flagged when it is a development build.
 pub(super) fn version() -> String {
     if app_update::is_dev(app_update::CURRENT) {
-        format!("{} (development build)", app_update::CURRENT)
+        t("{version} (development build)").replace("{version}", app_update::CURRENT)
     } else {
         app_update::CURRENT.to_string()
     }
@@ -41,14 +42,14 @@ pub(super) fn app_section(cx: &App) -> Div {
             .ghost()
             .small()
             .icon(Icon::new(IconName::ExternalLink))
-            .label("GitHub releases")
+            .label(t("GitHub releases"))
             .on_click(move |_, _, cx| cx.open_url(&url))
     };
     let state: AnyElement = match &status {
         app_update::Status::Idle if app_update::is_dev(app_update::CURRENT) => line(
             None,
             ui::faint(),
-            "Development build: automatic update checks are off.".into(),
+            t("Development build: automatic update checks are off.").into(),
         )
         .into_any_element(),
         app_update::Status::Idle => div().into_any_element(),
@@ -58,18 +59,19 @@ pub(super) fn app_section(cx: &App) -> Div {
             .text_xs()
             .text_color(ui::muted())
             .child(Spinner::new().xsmall().color(ui::accent()))
-            .child("Checking GitHub for a newer release…")
+            .child(t("Checking GitHub for a newer release…"))
             .into_any_element(),
         app_update::Status::UpToDate => line(
             Some(IconName::CircleCheck),
             ui::success(),
-            "You're on the latest release.".into(),
+            t("You're on the latest release.").into(),
         )
         .into_any_element(),
         app_update::Status::Skipped(version) => line(
             None,
             ui::muted(),
-            format!("Skipping {version}. Check for updates to see it again."),
+            t("Skipping {version}. Check for updates to see it again.")
+                .replace("{version}", version),
         )
         .into_any_element(),
         app_update::Status::Available(release)
@@ -97,20 +99,17 @@ pub(super) fn app_section(cx: &App) -> Div {
                                 .text_sm()
                                 .font_weight(FontWeight::MEDIUM)
                                 .text_color(ui::fg())
-                                .child(format!(
-                                    "Osdy Code Desktop {} is available",
-                                    release.version
-                                )),
+                                .child(t("Osdy Code Desktop {version} is available").replace("{version}", &release.version)),
                         )
                         .child(
                             div()
                                 .text_xs()
                                 .text_color(ui::muted())
-                                .child(format!("you have {}", app_update::CURRENT)),
+                                .child(t("you have {version}").replace("{version}", app_update::CURRENT)),
                         ),
                 )
                 .child(div().text_xs().text_color(ui::muted()).child(
-                    "Downloads the release for this computer, checks it against the published SHA-256 and replaces the app. The running app keeps working until you restart.",
+                    t("Downloads the release for this computer, checks it against the published SHA-256 and replaces the app. The running app keeps working until you restart."),
                 ))
                 .when_some(problem.clone(), |d, problem| {
                     d.child(
@@ -130,9 +129,9 @@ pub(super) fn app_section(cx: &App) -> Div {
                                 .small()
                                 .icon(Icon::new(IconName::ArrowDown))
                                 .label(if problem.is_some() {
-                                    "Try again"
+                                    t("Try again")
                                 } else {
-                                    "Download & install"
+                                    t("Download & install")
                                 })
                                 .on_click(|_, _, cx| app_update::install(cx)),
                         )
@@ -141,7 +140,7 @@ pub(super) fn app_section(cx: &App) -> Div {
                                 .ghost()
                                 .small()
                                 .icon(Icon::new(IconName::ExternalLink))
-                                .label("Release notes")
+                                .label(t("Release notes"))
                                 .on_click(move |_, _, cx| cx.open_url(&notes)),
                         )
                         .when_some(problem.and_then(|p| p.link), |d, url| {
@@ -151,7 +150,7 @@ pub(super) fn app_section(cx: &App) -> Div {
                             Button::new("app-update-skip")
                                 .ghost()
                                 .small()
-                                .label("Skip this version")
+                                .label(t("Skip this version"))
                                 .on_click(|_, _, cx| app_update::skip(cx)),
                         ),
                 )
@@ -176,17 +175,21 @@ pub(super) fn app_section(cx: &App) -> Div {
                         .gap_2()
                         .text_xs()
                         .child(Spinner::new().xsmall().color(ui::accent()))
-                        .child(div().flex_1().text_color(ui::fg()).child(format!(
-                            "Downloading Osdy Code Desktop {}…",
-                            release.version
-                        )))
+                        .child(
+                            div().flex_1().text_color(ui::fg()).child(
+                                t("Downloading Osdy Code Desktop {version}…")
+                                    .replace("{version}", &release.version),
+                            ),
+                        )
                         .child(
                             div()
                                 .text_size(ui::code_rems(12.))
                                 .font_family(ui::mono())
                                 .text_color(ui::muted())
                                 .child(match total {
-                                    Some(total) => format!("{} of {}", mb(*done), mb(*total)),
+                                    Some(total) => t("{done} of {total}")
+                                        .replace("{done}", &mb(*done))
+                                        .replace("{total}", &mb(*total)),
                                     None => mb(*done),
                                 }),
                         ),
@@ -215,10 +218,10 @@ pub(super) fn app_section(cx: &App) -> Div {
             .text_xs()
             .text_color(ui::muted())
             .child(Spinner::new().xsmall().color(ui::accent()))
-            .child(format!(
-                "Verified. Installing Osdy Code Desktop {}…",
-                release.version
-            ))
+            .child(
+                t("Verified. Installing Osdy Code Desktop {version}…")
+                    .replace("{version}", &release.version),
+            )
             .into_any_element(),
         app_update::Status::Ready { release, .. } => v_flex()
             .mt_2()
@@ -239,22 +242,22 @@ pub(super) fn app_section(cx: &App) -> Div {
                             .text_sm()
                             .font_weight(FontWeight::MEDIUM)
                             .text_color(ui::fg())
-                            .child(format!(
-                                "Osdy Code Desktop {} is installed",
-                                release.version
-                            )),
+                            .child(
+                                t("Osdy Code Desktop {version} is installed")
+                                    .replace("{version}", &release.version),
+                            ),
                     ),
             )
-            .child(div().text_xs().text_color(ui::muted()).child(
+            .child(div().text_xs().text_color(ui::muted()).child(t(
                 "Restart to use it. Workspaces are saved first and reopen as you left them.",
-            ))
+            )))
             .child(
                 h_flex().child(
                     Button::new("app-update-restart")
                         .primary()
                         .small()
                         .icon(Icon::new(IconName::RotateCw))
-                        .label("Restart now")
+                        .label(t("Restart now"))
                         .on_click(|_, _, cx| app_update::restart(cx)),
                 ),
             )
@@ -277,8 +280,8 @@ pub(super) fn app_section(cx: &App) -> Div {
             })
             .into_any_element(),
     };
-    section(IconName::Info, "App")
-        .child(row("Version", version()))
+    section(IconName::Info, t("App"))
+        .child(row(t("Version"), version()))
         .child(state)
         .child(
             h_flex().pt_2().child(
@@ -286,7 +289,7 @@ pub(super) fn app_section(cx: &App) -> Div {
                     .ghost()
                     .small()
                     .icon(Icon::new(IconName::RefreshCw))
-                    .label("Check for updates")
+                    .label(t("Check for updates"))
                     .loading(matches!(status, app_update::Status::Checking))
                     .disabled(status.busy())
                     .on_click(|_, _, cx| app_update::check(true, cx)),

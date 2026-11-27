@@ -10,6 +10,7 @@ use gpui_kit::*;
 
 use super::SettingsView;
 use super::layout::section;
+use crate::shared::i18n::t;
 use crate::{features::diagnostics, shared::ui};
 
 fn file_name(path: &std::path::Path) -> String {
@@ -27,18 +28,20 @@ impl SettingsView {
                 .gap_2()
                 .text_color(ui::warning())
                 .child(ui::pulse(div().size_2().rounded_full().bg(ui::warning())))
-                .child(format!("Recording to {name}")),
+                .child(t("Recording to {name}").replace("{name}", name)),
             (None, Some(path)) => h_flex()
                 .text_color(ui::muted())
-                .child(format!("Last recording: {}", file_name(path))),
-            (None, None) => h_flex().text_color(ui::faint()).child("No recordings yet."),
+                .child(t("Last recording: {file}").replace("{file}", &file_name(path))),
+            (None, None) => h_flex()
+                .text_color(ui::faint())
+                .child(t("No recordings yet.")),
         };
         let primary = if running.is_some() {
             Button::new("diagnostics-stop")
                 .primary()
                 .small()
                 .icon(Icon::new(IconName::Square))
-                .label("Stop and show file")
+                .label(t("Stop and show file"))
                 .on_click(cx.listener(|_, _, _, cx| {
                     diagnostics::stop_recording(cx);
                     if let Some(path) = diagnostics::latest() {
@@ -51,7 +54,7 @@ impl SettingsView {
                 .ghost()
                 .small()
                 .icon(Icon::new(IconName::Play))
-                .label("Start recording")
+                .label(t("Start recording"))
                 .on_click(cx.listener(|_, _, window, cx| {
                     if let Err(error) = diagnostics::start_recording(cx) {
                         window.push_notification(Notification::warning(error), cx);
@@ -59,15 +62,12 @@ impl SettingsView {
                     cx.notify();
                 }))
         };
-        section(IconName::Activity, "Diagnostics").child(
+        section(IconName::Activity, t("Diagnostics")).child(
             v_flex()
                 .gap_2()
                 .text_xs()
                 .child(div().text_color(ui::faint()).child(
-                    "If the app uses too much CPU or memory, start a recording, do what makes \
-                     it happen for a few minutes, then stop. It saves only numbers and program \
-                     names (never prompts, conversations or paths) and nothing leaves this \
-                     computer: attach the file to your issue on GitHub.",
+                    t("If the app uses too much CPU or memory, start a recording, do what makes it happen for a few minutes, then stop. It saves only numbers and program names (never prompts, conversations or paths) and nothing leaves this computer: attach the file to your issue on GitHub."),
                 ))
                 .child(status)
                 .child(h_flex().gap_2().flex_wrap().child(primary).when_some(
@@ -78,7 +78,7 @@ impl SettingsView {
                                 .ghost()
                                 .small()
                                 .icon(Icon::new(IconName::FolderOpen))
-                                .label("Show last recording")
+                                .label(t("Show last recording"))
                                 .on_click(move |_, _, cx| cx.reveal_path(&path)),
                         )
                     },

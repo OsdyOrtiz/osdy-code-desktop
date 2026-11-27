@@ -12,6 +12,7 @@ use gpui_kit::*;
 use super::layout::{row, section};
 use super::{SettingsEvent, SettingsView};
 use crate::features::setup::music::{self, MusicStatus};
+use crate::shared::i18n::t;
 use crate::shared::ui;
 
 /// Install output lines kept on screen.
@@ -83,7 +84,7 @@ impl SettingsView {
                 this.music.job = None;
                 this.music.status = Some(status);
                 this.music.note = Some(match result {
-                    Ok(()) => (format!("{label} done."), true),
+                    Ok(()) => (t("{action} done.").replace("{action}", t(label)), true),
                     Err(error) => (error, false),
                 });
                 // The title bar's ♪ appears or goes.
@@ -95,19 +96,19 @@ impl SettingsView {
     }
 
     pub(super) fn music_section(&self, cx: &mut Context<Self>) -> Div {
-        let section = section(IconName::Music, "Music · gentle-stream").child(
-            div().pb_2().text_xs().text_color(ui::muted()).child(
+        let section = section(IconName::Music, t("Music · gentle-stream")).child(
+            div().pb_2().text_xs().text_color(ui::muted()).child(t(
                 "Endless music composed live while you work, steered by a mood you describe \
                  (\"rainy night in a small café\"). The same player as /gentle:music, from the \
                  ♪ button in the title bar. It installs into this app's own folder.",
-            ),
+            )),
         );
         if !music::supported() {
             return section.child(
                 div()
                     .text_xs()
                     .text_color(ui::faint())
-                    .child("gentle-stream runs on macOS and Linux (and WSL)."),
+                    .child(t("gentle-stream runs on macOS and Linux (and WSL).")),
             );
         }
         let Some(status) = &self.music.status else {
@@ -117,46 +118,46 @@ impl SettingsView {
                     .text_xs()
                     .text_color(ui::muted())
                     .child(Spinner::new().xsmall().color(ui::accent()))
-                    .child("Looking for gentle-stream…"),
+                    .child(t("Looking for gentle-stream…")),
             );
         };
         let busy = self.music.job.is_some();
         let (state, color) = if status.usable() {
-            ("Ready: ♪ is in the title bar", ui::success())
+            (t("Ready: ♪ is in the title bar"), ui::success())
         } else if status.player.is_some() {
             (
-                "Found, but too old for the app (no ctl --json): install the current one",
+                t("Found, but too old for the app (no ctl --json): install the current one"),
                 ui::warning(),
             )
         } else {
-            ("Not installed", ui::faint())
+            (t("Not installed"), ui::faint())
         };
         let action = |id: &'static str, icon: IconName, label: &'static str| {
             Button::new(id)
                 .small()
                 .ghost()
                 .icon(Icon::new(icon))
-                .label(label)
+                .label(t(label))
                 .disabled(busy)
         };
         section
             .child(h_flex().pb_2().child(ui::chip(state, color)))
             .child(row(
-                "Player",
+                t("Player"),
                 status
                     .player
                     .as_ref()
                     .map(|path| path.display().to_string())
                     .unwrap_or_else(|| {
-                        "Not installed (Python 3.13 and the player, about 150 MB)".into()
+                        t("Not installed (Python 3.13 and the player, about 150 MB)").into()
                     }),
             ))
             .child(row(
-                "Instruments",
+                t("Instruments"),
                 if status.samples {
-                    "Sampled (FluidR3_GM soundfont)"
+                    t("Sampled (FluidR3_GM soundfont)")
                 } else {
-                    "Synthesized; sampled ones are an optional 120 MB download"
+                    t("Synthesized; sampled ones are an optional 120 MB download")
                 },
             ))
             .child(
@@ -170,7 +171,7 @@ impl SettingsView {
                                 .small()
                                 .primary()
                                 .icon(Icon::new(IconName::ArrowDown))
-                                .label("Install gentle-stream")
+                                .label(t("Install gentle-stream"))
                                 .disabled(busy)
                                 .on_click(cx.listener(|this, _, _, cx| {
                                     this.run_music("Install", music::install, cx)
@@ -180,7 +181,9 @@ impl SettingsView {
                     .when(status.usable() && !status.samples, |d| {
                         d.child(
                             action("music-samples", IconName::ArrowDown, "Sampled instruments")
-                                .tooltip("Download the FluidR3_GM soundfont (about 120 MB, once)")
+                                .tooltip(t(
+                                    "Download the FluidR3_GM soundfont (about 120 MB, once)",
+                                ))
                                 .on_click(cx.listener(|this, _, _, cx| {
                                     this.run_music(
                                         "Sampled instruments",
@@ -193,7 +196,7 @@ impl SettingsView {
                     .when(status.app_owned, |d| {
                         d.child(
                             action("music-remove", IconName::Trash, "Remove")
-                                .tooltip("Stop the music and delete what this app installed")
+                                .tooltip(t("Stop the music and delete what this app installed"))
                                 .on_click(cx.listener(|this, _, _, cx| {
                                     this.run_music("Remove", music::remove, cx)
                                 })),
@@ -221,7 +224,7 @@ impl SettingsView {
                         .text_xs()
                         .text_color(ui::muted())
                         .child(Spinner::new().xsmall().color(ui::accent()))
-                        .child(format!("{job}…")),
+                        .child(format!("{}…", t(job))),
                 )
             })
             .when(!self.music.log.is_empty(), |d| {

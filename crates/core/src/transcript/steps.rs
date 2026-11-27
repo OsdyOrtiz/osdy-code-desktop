@@ -35,16 +35,27 @@ impl StepKind {
 
     /// `count` steps of this kind, in words: "Read 2 files", "Ran 1 command".
     pub fn label(self, count: usize) -> String {
-        let (verb, one, many) = match self {
-            Self::Read => ("Read", "file", "files"),
-            Self::Search => ("Searched", "time", "times"),
-            Self::Edit => ("Edited", "file", "files"),
-            Self::Command => ("Ran", "command", "commands"),
-            Self::Delegate => ("Delegated", "task", "tasks"),
-            Self::Web => ("Fetched", "page", "pages"),
-            Self::Other => ("Used", "tool", "tools"),
+        self.label_in(crate::i18n::Language::English, count)
+    }
+
+    pub fn label_in(self, language: crate::i18n::Language, count: usize) -> String {
+        let template = match (self, count) {
+            (Self::Read, 1) => "Read {count} file",
+            (Self::Read, _) => "Read {count} files",
+            (Self::Search, 1) => "Searched {count} time",
+            (Self::Search, _) => "Searched {count} times",
+            (Self::Edit, 1) => "Edited {count} file",
+            (Self::Edit, _) => "Edited {count} files",
+            (Self::Command, 1) => "Ran {count} command",
+            (Self::Command, _) => "Ran {count} commands",
+            (Self::Delegate, 1) => "Delegated {count} task",
+            (Self::Delegate, _) => "Delegated {count} tasks",
+            (Self::Web, 1) => "Fetched {count} page",
+            (Self::Web, _) => "Fetched {count} pages",
+            (Self::Other, 1) => "Used {count} tool",
+            (Self::Other, _) => "Used {count} tools",
         };
-        format!("{verb} {count} {}", if count == 1 { one } else { many })
+        crate::i18n::tr(language, template).replace("{count}", &count.to_string())
     }
 }
 

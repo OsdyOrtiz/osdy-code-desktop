@@ -11,6 +11,7 @@ use pi_rpc::desktop_rpc::{
 
 use super::SettingsView;
 use crate::features::session::{ReadFailure, ReadOutcome, ReadRequest, ReadSupport, ReadTicket};
+use crate::shared::i18n::t;
 use gpui_kit::Context;
 
 /// The status last answered, and the read in flight.
@@ -85,32 +86,38 @@ pub(super) fn warns(status: &ShellStatus) -> bool {
 /// The status rows, in `/gentle:status`'s order.
 pub(super) fn status_rows(status: &ShellStatus) -> Vec<(&'static str, String)> {
     let dev_binary = match (status.dev_binary.state, &status.dev_binary.sha256_prefix) {
-        (DevBinaryState::Inactive, _) => "not overridden".to_string(),
-        (DevBinaryState::Active, Some(prefix)) => format!("override in use (sha256 {prefix}…)"),
-        (DevBinaryState::Active, None) => "override in use".to_string(),
-        (DevBinaryState::Invalid, _) => "override declared but unusable".to_string(),
-    };
-    let models = format!(
-        "models.json {} · routing {}",
-        match status.model_config.global {
-            ModelConfigPresence::Present => "present",
-            ModelConfigPresence::Missing => "missing",
-        },
-        match status.model_config.routing {
-            RoutingState::Valid => "valid",
-            RoutingState::Invalid => "invalid",
-            RoutingState::Missing => "not saved",
+        (DevBinaryState::Inactive, _) => t("not overridden").to_string(),
+        (DevBinaryState::Active, Some(prefix)) => {
+            t("override in use (sha256 {prefix}…)").replace("{prefix}", prefix)
         }
-    );
+        (DevBinaryState::Active, None) => t("override in use").to_string(),
+        (DevBinaryState::Invalid, _) => t("override declared but unusable").to_string(),
+    };
+    let models = t("models.json {config} · routing {routing}")
+        .replace(
+            "{config}",
+            match status.model_config.global {
+                ModelConfigPresence::Present => t("present"),
+                ModelConfigPresence::Missing => t("missing"),
+            },
+        )
+        .replace(
+            "{routing}",
+            match status.model_config.routing {
+                RoutingState::Valid => t("valid"),
+                RoutingState::Invalid => t("invalid"),
+                RoutingState::Missing => t("not saved"),
+            },
+        );
     vec![
-        ("Persona", status.persona.clone()),
-        ("Dev binary", dev_binary),
+        (t("Persona"), status.persona.clone()),
+        (t("Dev binary"), dev_binary),
         (
-            "Delegation assets",
+            t("Delegation assets"),
             assets("delegation", &status.assets.delegation),
         ),
-        ("Review assets", assets("review", &status.assets.review)),
-        ("Models", models),
+        (t("Review assets"), assets("review", &status.assets.review)),
+        (t("Models"), models),
     ]
 }
 
@@ -119,22 +126,25 @@ pub(super) fn status_rows(status: &ShellStatus) -> Vec<(&'static str, String)> {
 fn assets(owner: &str, asset: &AssetStatus) -> String {
     let mut parts = Vec::new();
     if asset.stale > 0 {
-        parts.push(format!(
-            "{} stale (/gentle:install-{owner} --force)",
-            asset.stale
-        ));
+        parts.push(
+            t("{count} stale (/gentle:install-{owner} --force)")
+                .replace("{count}", &asset.stale.to_string())
+                .replace("{owner}", owner),
+        );
     }
     if asset.user_overrides > 0 {
-        parts.push(format!("{} replaced by you", asset.user_overrides));
+        parts.push(
+            t("{count} replaced by you").replace("{count}", &asset.user_overrides.to_string()),
+        );
     }
     if asset.active_agent_overrides > 0 {
-        parts.push(format!(
-            "{} shadowed by your agents",
-            asset.active_agent_overrides
-        ));
+        parts.push(
+            t("{count} shadowed by your agents")
+                .replace("{count}", &asset.active_agent_overrides.to_string()),
+        );
     }
     if parts.is_empty() {
-        "up to date".to_string()
+        t("up to date").to_string()
     } else {
         parts.join(" · ")
     }

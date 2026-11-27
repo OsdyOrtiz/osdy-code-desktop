@@ -54,16 +54,24 @@ impl Report {
     pub(in crate::features::session) fn message(&self) -> String {
         match self {
             Self::Unavailable(message) => {
-                format!("Review mode could not be changed: {message}")
+                crate::shared::i18n::t("Review mode could not be changed: {message}")
+                    .replace("{message}", &message.to_string())
             }
-            Self::Busy => {
-                "Review mode is already being changed; try again in a moment.".to_string()
+            Self::Busy => crate::shared::i18n::t(
+                "Review mode is already being changed; try again in a moment.",
+            )
+            .to_string(),
+            Self::Timeout => {
+                crate::shared::i18n::t("The review mode request timed out.").to_string()
             }
-            Self::Timeout => "The review mode request timed out.".to_string(),
-            Self::Failure(error) => format!("The review mode request failed ({error})."),
-            Self::OutOfOrderSequence => {
-                "Gentle Desktop events were lost; re-reading the review mode.".to_string()
+            Self::Failure(error) => {
+                crate::shared::i18n::t("The review mode request failed ({error}).")
+                    .replace("{error}", &error.to_string())
             }
+            Self::OutOfOrderSequence => crate::shared::i18n::t(
+                "Gentle Desktop events were lost; re-reading the review mode.",
+            )
+            .to_string(),
         }
     }
 }

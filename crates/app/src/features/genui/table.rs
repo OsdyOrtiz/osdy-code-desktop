@@ -40,6 +40,7 @@ pub(super) struct TableState {
     /// The view's sort (starts as the agent's).
     pub sort: Option<Sort>,
     pub filter: Option<Entity<InputState>>,
+    filter_language: gentle_core::i18n::Language,
     pub filter_text: String,
     pub editing: Option<CellEdit>,
     _filter_subscription: Option<Subscription>,
@@ -51,6 +52,7 @@ impl TableState {
             sort: table.sort.clone(),
             edits: Edits::new(table),
             filter: None,
+            filter_language: crate::shared::i18n::language(),
             filter_text: String::new(),
             editing: None,
             _filter_subscription: None,
@@ -257,7 +259,7 @@ impl PanelView {
         let value = match table.value_from_text(&edit.column, &text) {
             Ok(value) => value,
             Err(error) => {
-                self.refused = Some(error);
+                self.refused = Some(crate::shared::i18n::Message::raw(error));
                 return;
             }
         };
@@ -289,10 +291,21 @@ impl PanelView {
     }
 
     fn ensure_filter(&mut self, window: &mut Window, cx: &mut Context<Self>) {
-        if self.table().is_none_or(|s| s.filter.is_some()) {
+        let Some(s) = state(self) else { return };
+        if let Some(filter) = &s.filter {
+            crate::shared::i18n::sync_placeholder(
+                filter,
+                "Filter rows…",
+                &mut s.filter_language,
+                window,
+                cx,
+            );
             return;
         }
-        let input = cx.new(|cx| InputState::new(window, cx).placeholder("Filter rows…"));
+        s.filter_language = crate::shared::i18n::language();
+        let input = cx.new(|cx| {
+            InputState::new(window, cx).placeholder(crate::shared::i18n::t("Filter rows…"))
+        });
         let subscription = cx.subscribe(&input, |this, input, event: &InputEvent, cx| {
             if matches!(event, InputEvent::Change) {
                 let text = input.read(cx).value().to_string();
@@ -347,9 +360,12 @@ impl PanelView {
                     .text_size(ui::code_rems(11.))
                     .text_color(ui::faint())
                     .child(if visible.len() == table.rows.len() {
-                        format!("{} rows", table.rows.len())
+                        crate::shared::i18n::t("{count} rows")
+                            .replace("{count}", &table.rows.len().to_string())
                     } else {
-                        format!("{} of {} rows", visible.len(), table.rows.len())
+                        crate::shared::i18n::t("{visible} of {total} rows")
+                            .replace("{visible}", &visible.len().to_string())
+                            .replace("{total}", &table.rows.len().to_string())
                     }),
             );
 
@@ -398,7 +414,12 @@ impl PanelView {
                     .on_click(cx.listener(move |this, _, _, cx| this.cycle_sort(&key, cx)))
             }))
             .when(table.rows.iter().any(|r| r.code_ref.is_some()), |d| {
-                d.child(div().w(rems(REF_W / 16.)).flex_shrink_0().child("Code"))
+                d.child(
+                    div()
+                        .w(rems(REF_W / 16.))
+                        .flex_shrink_0()
+                        .child(crate::shared::i18n::t("Code")),
+                )
             })
             .child(div().w(rems(22. / 16.)).flex_shrink_0());
 
@@ -414,7 +435,7 @@ impl PanelView {
                         .p_4()
                         .text_sm()
                         .text_color(ui::muted())
-                        .child("No rows match the filter."),
+                        .child(crate::shared::i18n::t("No rows match the filter.")),
                 )
                 .into_any_element()
         } else {
@@ -550,8 +571,10 @@ impl PanelView {
                 .hover(|d| d.text_color(ui::fg()))
                 .child(Icon::new(IconName::MessageSquare).xsmall())
                 .tooltip(|window, cx| {
-                    gpui_kit::component::tooltip::Tooltip::new("Ask about this row")
-                        .build(window, cx)
+                    gpui_kit::component::tooltip::Tooltip::new(crate::shared::i18n::t(
+                        "Ask about this row",
+                    ))
+                    .build(window, cx)
                 })
                 .on_click(cx.listener(move |this, _, _, cx| {
                     cx.stop_propagation();

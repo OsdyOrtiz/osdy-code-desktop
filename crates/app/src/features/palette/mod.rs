@@ -12,6 +12,9 @@ use gpui_kit::*;
 use gentle_core::background::{Background, Light};
 use gentle_core::commands::Screen;
 use gentle_core::fuzzy::{FileEntry, Needle};
+use gentle_core::i18n::Language;
+
+use crate::shared::i18n::{language, t};
 
 use crate::features::workspaces::TabLayout;
 
@@ -122,6 +125,9 @@ pub enum Category {
     Branches,
 }
 
+#[cfg(test)]
+mod tests;
+
 const CATEGORIES: [(Category, &str); 5] = [
     (Category::All, "All"),
     (Category::Commands, "Commands"),
@@ -219,11 +225,24 @@ enum Line {
 
 pub(crate) const MAX_FILES: usize = 20_000;
 
+pub(super) fn tab_count(count: usize) -> String {
+    if count == 1 {
+        t("1 tab").to_string()
+    } else {
+        t("{count} tabs").replace("{count}", &count.to_string())
+    }
+}
+
 pub struct PaletteView {
     query: Entity<InputState>,
     category: Category,
     selected: usize,
+    /// English command titles/details stay searchable in every language.
     commands: Vec<Row>,
+    localized_commands: Vec<Row>,
+    browser_card: Option<BrowserCard>,
+    tab_layout: TabLayout,
+    language: Language,
     workspaces: Vec<WorkspaceRow>,
     root: PathBuf,
     files: Option<Vec<FileEntry>>,
@@ -245,7 +264,7 @@ impl EventEmitter<PaletteEvent> for PaletteView {}
 impl PaletteView {
     pub fn new(input: PaletteInput, window: &mut Window, cx: &mut Context<Self>) -> Self {
         let query =
-            cx.new(|cx| InputState::new(window, cx).placeholder(input.category.placeholder()));
+            cx.new(|cx| InputState::new(window, cx).placeholder(t(input.category.placeholder())));
         query.update(cx, |state, cx| state.focus(window, cx));
         let subscription = cx.subscribe(&query, |this, _, event: &InputEvent, cx| {
             if let InputEvent::Change = event {
@@ -255,8 +274,14 @@ impl PaletteView {
                 cx.notify();
             }
         });
-        let mut commands = input.browser_card.map(card_rows).unwrap_or_default();
-        commands.extend(screen_rows(input.tab_layout));
+        let language = language();
+        let mut commands = Self::app_commands(
+            input.browser_card.as_ref(),
+            input.tab_layout,
+            Language::English,
+        );
+        let localized_commands =
+            Self::app_commands(input.browser_card.as_ref(), input.tab_layout, language);
         commands.extend(input.commands.into_iter().filter_map(command_row));
 
         let root = input.root.clone();
@@ -294,6 +319,10 @@ impl PaletteView {
             category: input.category,
             selected: 0,
             commands,
+            localized_commands,
+            browser_card: input.browser_card,
+            tab_layout: input.tab_layout,
+            language,
             workspaces: input.workspaces,
             root: input.root,
             files: None,
@@ -308,6 +337,32 @@ impl PaletteView {
         };
         this.refresh_rows(cx);
         this
+    }
+
+    fn app_commands(card: Option<&BrowserCard>, layout: TabLayout, language: Language) -> Vec<Row> {
+        let mut rows = card
+            .map(|card| card_rows(card, language))
+            .unwrap_or_default();
+        rows.extend(screen_rows(layout, language));
+        rows
+    }
+
+    /// Refresh the card's generated title with the rest of the window chrome.
+    pub(super) fn refresh_card_title(
+        &mut self,
+        title: impl FnOnce(u64) -> Option<String>,
+        cx: &mut Context<Self>,
+    ) {
+        if let Some(card) = &mut self.browser_card
+            && let Some(title) = title(card.stage)
+            && title != card.title
+        {
+            card.title = title;
+            self.localized_commands =
+                Self::app_commands(self.browser_card.as_ref(), self.tab_layout, language());
+            self.refresh_rows(cx);
+            cx.notify();
+        }
     }
 
     pub fn category(&self) -> Category {
@@ -325,7 +380,7 @@ impl PaletteView {
         self.renaming = None;
         self.scroll.scroll_to_item(0);
         self.query.update(cx, |state, cx| {
-            state.set_placeholder(category.placeholder(), window, cx);
+            state.set_placeholder(t(category.placeholder()), window, cx);
             state.focus(window, cx);
         });
         self.refresh_rows(cx);

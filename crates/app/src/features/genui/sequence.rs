@@ -563,7 +563,7 @@ impl PanelView {
                                         .font_family(ui::mono())
                                         .text_size(px(10.5 * scale * ui::code_scale()))
                                         .text_color(ui::faint())
-                                        .child(p.kind.name()),
+                                        .child(crate::shared::i18n::t(p.kind.name())),
                                 )
                             }),
                     )
@@ -593,7 +593,9 @@ impl PanelView {
             empty: shown
                 .participants
                 .is_empty()
-                .then_some("Nothing drawn yet. Add a participant with +."),
+                .then_some(crate::shared::i18n::t(
+                    "Nothing drawn yet. Add a participant with +.",
+                )),
         }
     }
 
@@ -662,10 +664,13 @@ impl PanelView {
             div()
                 .text_color(ui::muted())
                 .child(format!(
-                    "{} → {} · step {}",
+                    "{} → {} · {}",
                     who(&m.from),
                     who(&m.to),
-                    shown.index(&id).map_or(0, |i| i + 1)
+                    crate::shared::i18n::t("step {number}").replace(
+                        "{number}",
+                        &shown.index(&id).map_or(0, |i| i + 1).to_string()
+                    )
                 ))
                 .into_any_element(),
         ];

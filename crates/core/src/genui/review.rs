@@ -7,7 +7,7 @@
 use serde_json::{Map, Value, json};
 
 use super::diagram::{Errors, MAX_TEXT, array, id_of, text, truncate};
-use super::edits::{Editable, list_names, plural};
+use super::edits::{Editable, list_names};
 
 pub const MAX_FILES: usize = 50;
 pub const MAX_HUNKS: usize = 300;
@@ -620,15 +620,29 @@ impl Review {
 
     /// "5 of 9 hunks decided".
     pub fn progress(&self) -> String {
-        format!(
-            "{} of {} decided",
-            self.decided(),
-            plural(self.hunk_count(), "hunk")
-        )
+        self.progress_in(crate::i18n::Language::English)
+    }
+
+    pub fn progress_in(&self, language: crate::i18n::Language) -> String {
+        crate::i18n::tr(language, "{decided} of {hunks} decided")
+            .replace("{decided}", &self.decided().to_string())
+            .replace(
+                "{hunks}",
+                &super::edits::count_in(
+                    language,
+                    self.hunk_count(),
+                    "{count} hunk",
+                    "{count} hunks",
+                ),
+            )
     }
 
     /// The header's counts: files, lines added and removed, progress.
     pub fn stats(&self) -> String {
+        self.stats_in(crate::i18n::Language::English)
+    }
+
+    pub fn stats_in(&self, language: crate::i18n::Language) -> String {
         let (add, del): (usize, usize) = self
             .files
             .iter()
@@ -636,8 +650,8 @@ impl Review {
             .fold((0, 0), |(a, d), (fa, fd)| (a + fa, d + fd));
         format!(
             "{} · +{add} −{del} · {}",
-            plural(self.files.len(), "file"),
-            self.progress()
+            super::edits::count_in(language, self.files.len(), "{count} file", "{count} files"),
+            self.progress_in(language)
         )
     }
 

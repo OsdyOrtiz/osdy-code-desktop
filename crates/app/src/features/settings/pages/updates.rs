@@ -7,6 +7,7 @@ use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
 
 use crate::features::updates::status::{main_update_target, pi_update_available, status_rows};
+use crate::shared::i18n::t;
 
 use super::super::{
     SettingsView, app,
@@ -36,8 +37,8 @@ fn backend_updates_section(
         status.and_then(|status| main_update_target(&status.gentle_shell, snapshot.managed)),
     );
     let pi = status.is_some_and(|status| pi_update_available(status, snapshot.managed));
-    section(IconName::RefreshCw, "Gentle Shell and Engram")
-        .child(row("Versions", snapshot.versions.join(" · ")))
+    section(IconName::RefreshCw, t("Gentle Shell and Engram"))
+        .child(row(t("Versions"), snapshot.versions.join(" · ")))
         .children(
             status
                 .into_iter()
@@ -52,11 +53,11 @@ fn backend_updates_section(
                         .ghost()
                         .icon(Icon::new(IconName::RefreshCw))
                         .label(if view.waiting_for_tab() {
-                            "Waiting for the agent tab to start…"
+                            t("Waiting for the agent tab to start…")
                         } else if checking {
-                            "Checking Gentle Shell for updates…"
+                            t("Checking Gentle Shell for updates…")
                         } else {
-                            "Check for updates"
+                            t("Check for updates")
                         })
                         .loading(checking)
                         .disabled(checking)

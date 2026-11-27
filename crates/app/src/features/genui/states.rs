@@ -428,7 +428,7 @@ impl PanelView {
             empty: shown
                 .states
                 .is_empty()
-                .then_some("No states yet. Add one with +."),
+                .then_some(crate::shared::i18n::t("No states yet. Add one with +.")),
         }
     }
 
@@ -581,7 +581,7 @@ impl PanelView {
                             div()
                                 .text_size(px(10.5 * scale))
                                 .text_color(ui::accent())
-                                .child("current"),
+                                .child(crate::shared::i18n::t("current")),
                         )
                     }),
             )
@@ -632,7 +632,7 @@ impl PanelView {
                 rows.push(
                     div()
                         .text_color(ui::accent())
-                        .child("The machine is in this state now")
+                        .child(crate::shared::i18n::t("The machine is in this state now"))
                         .into_any_element(),
                 );
             }
@@ -684,7 +684,7 @@ impl PanelView {
                 div()
                     .text_color(ui::muted())
                     .child(if label.is_empty() {
-                        "no event".to_string()
+                        crate::shared::i18n::t("no event").to_string()
                     } else {
                         label
                     })

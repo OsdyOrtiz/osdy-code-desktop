@@ -104,23 +104,19 @@ pub(super) fn has_day_cost(stats: &UsageStats) -> bool {
 
 /// What the tab says about rows Gentle Shell left out (totals still count
 /// them).
-pub(super) fn shell_notes(stats: &UsageStats) -> Vec<String> {
+pub(super) fn shell_notes(stats: &UsageStats) -> Vec<&'static str> {
     let mut notes = Vec::new();
     if stats.truncated.by_model {
-        notes.push("Only the 50 largest models are listed; the totals count every model.".into());
+        notes.push("Only the 50 largest models are listed; the totals count every model.");
     }
     if stats.truncated.by_project == Some(true) {
-        notes.push(
-            "Only the 50 largest projects are listed; the totals count every project.".into(),
-        );
+        notes.push("Only the 50 largest projects are listed; the totals count every project.");
     }
     if stats.truncated.by_provider == Some(true) {
-        notes.push(
-            "Only the 50 largest providers are listed; the totals count every provider.".into(),
-        );
+        notes.push("Only the 50 largest providers are listed; the totals count every provider.");
     }
     if stats.truncated.by_day {
-        notes.push("Active days count only the 400 most recent days with usage.".into());
+        notes.push("Active days count only the 400 most recent days with usage.");
     }
     notes
 }

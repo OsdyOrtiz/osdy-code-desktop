@@ -10,7 +10,7 @@ use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
 
 use crate::features::profiles::{Leave, NameMode, ProfilesView};
-use crate::shared::ui;
+use crate::shared::{i18n::t, ui};
 
 impl ProfilesView {
     pub(super) fn render_profile_list(&self, cx: &mut Context<Self>) -> impl IntoElement {
@@ -34,7 +34,7 @@ impl ProfilesView {
                     .pt_3()
                     .pb_1()
                     .gap_2()
-                    .child(ui::section_label("Profiles"))
+                    .child(ui::section_label(t("Profiles")))
                     .child(
                         div()
                             .flex_1()
@@ -47,7 +47,7 @@ impl ProfilesView {
                             .xsmall()
                             .ghost()
                             .icon(Icon::new(IconName::Download))
-                            .tooltip("Import a profile…")
+                            .tooltip(t("Import a profile…"))
                             .disabled(self.busy)
                             .on_click(cx.listener(|this, _, _, cx| this.import_profile(cx))),
                     )
@@ -56,7 +56,7 @@ impl ProfilesView {
                             .xsmall()
                             .ghost()
                             .icon(Icon::new(IconName::Upload))
-                            .tooltip("Export this profile…")
+                            .tooltip(t("Export this profile…"))
                             .disabled(self.busy || !has_selection)
                             .on_click(cx.listener(|this, _, _, cx| this.export_profile(cx))),
                     ),
@@ -137,27 +137,28 @@ impl ProfilesView {
                                                 .gap_1()
                                                 .child(
                                                     div().text_xs().text_color(ui::faint()).child(
-                                                        format!(
-                                                            "{roles} {}",
-                                                            if roles == 1 {
-                                                                "role"
-                                                            } else {
-                                                                "roles"
-                                                            }
-                                                        ),
+                                                        t(if roles == 1 {
+                                                            "{count} role"
+                                                        } else {
+                                                            "{count} roles"
+                                                        })
+                                                        .replace("{count}", &roles.to_string()),
                                                     ),
                                                 )
                                                 .when(in_session, |d| {
-                                                    d.child(ui::chip("this session", ui::success()))
+                                                    d.child(ui::chip(
+                                                        t("this session"),
+                                                        ui::success(),
+                                                    ))
                                                 })
                                                 .when(active, |d| {
-                                                    d.child(ui::chip("default", ui::accent()))
+                                                    d.child(ui::chip(t("default"), ui::accent()))
                                                 })
                                                 .when(pinned, |d| {
-                                                    d.child(ui::chip("this repo", ui::warning()))
+                                                    d.child(ui::chip(t("this repo"), ui::warning()))
                                                 })
                                                 .when(is_declared && !pinned, |d| {
-                                                    d.child(ui::chip("declared", ui::info()))
+                                                    d.child(ui::chip(t("declared"), ui::info()))
                                                 }),
                                         );
                                     ui::appear(("profile-in", ix), div().child(row))
@@ -172,17 +173,12 @@ impl ProfilesView {
                     .border_t_1()
                     .border_color(ui::border())
                     .when_some(self.name_mode, |d, mode| {
-                        let title = match mode {
-                            NameMode::New => "New empty profile".to_string(),
-                            NameMode::Duplicate => format!(
-                                "Duplicate as (empty = {}-copy)",
-                                self.selected.as_deref().unwrap_or_default()
-                            ),
-                            NameMode::Rename => format!(
-                                "Rename \"{}\" to",
-                                self.selected.as_deref().unwrap_or_default()
-                            ),
-                        };
+                        let title = t(match mode {
+                            NameMode::New => "New empty profile",
+                            NameMode::Duplicate => "Duplicate as (empty = {name}-copy)",
+                            NameMode::Rename => "Rename \"{name}\" to",
+                        })
+                        .replace("{name}", self.selected.as_deref().unwrap_or_default());
                         d.child(
                             v_flex()
                                 .gap_1p5()
@@ -210,7 +206,7 @@ impl ProfilesView {
                                             Button::new("name-cancel")
                                                 .small()
                                                 .ghost()
-                                                .label("Cancel")
+                                                .label(t("Cancel"))
                                                 .on_click(cx.listener(|this, _, _, cx| {
                                                     this.name_mode = None;
                                                     cx.notify();
@@ -228,7 +224,7 @@ impl ProfilesView {
                                     .small()
                                     .ghost()
                                     .icon(Icon::new(IconName::Plus))
-                                    .label("New")
+                                    .label(t("New"))
                                     .disabled(self.busy)
                                     .on_click(cx.listener(|this, _, window, cx| {
                                         this.leave(Leave::New, window, cx)
@@ -240,7 +236,7 @@ impl ProfilesView {
                                     .small()
                                     .ghost()
                                     .icon(Icon::new(IconName::Copy))
-                                    .tooltip("Duplicate")
+                                    .tooltip(t("Duplicate"))
                                     .disabled(self.busy || !has_selection)
                                     .on_click(cx.listener(|this, _, window, cx| {
                                         this.leave(Leave::Duplicate, window, cx)
@@ -251,7 +247,7 @@ impl ProfilesView {
                                     .small()
                                     .ghost()
                                     .icon(Icon::new(IconName::Replace))
-                                    .tooltip("Rename")
+                                    .tooltip(t("Rename"))
                                     .disabled(self.busy || !has_selection)
                                     .on_click(cx.listener(|this, _, window, cx| {
                                         this.open_name(NameMode::Rename, window, cx)
@@ -262,7 +258,7 @@ impl ProfilesView {
                                     .small()
                                     .ghost()
                                     .icon(Icon::new(IconName::Trash))
-                                    .tooltip("Delete")
+                                    .tooltip(t("Delete"))
                                     .disabled(self.busy || !has_selection)
                                     .on_click(
                                         cx.listener(|this, _, _, cx| this.request_delete(cx)),

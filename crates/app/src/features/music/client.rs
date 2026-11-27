@@ -9,6 +9,7 @@ use std::path::Path;
 use std::process::Stdio;
 use std::time::{Duration, Instant};
 
+use crate::shared::i18n::Message;
 use gentle_core::music::{self, MusicState};
 
 /// Why a request didn't get an answer.
@@ -16,7 +17,7 @@ use gentle_core::music::{self, MusicState};
 pub enum Error {
     /// The player answered `nothing_playing`: this action needs one.
     NoPlayer,
-    Failed(String),
+    Failed(Message),
 }
 
 /// The ctl arguments for one action: `--gentle-shell <shell> ctl <action>
@@ -59,14 +60,19 @@ struct Output {
 
 /// Run `program args…` with the app's combined PATH, reading both pipes to
 /// the end and killing the child past `timeout`.
-fn spawn(program: &Path, args: &[OsString], timeout: Duration) -> Result<Output, String> {
+fn spawn(program: &Path, args: &[OsString], timeout: Duration) -> Result<Output, Message> {
     let mut child = crate::features::setup::music::player_command(program)
         .args(args)
         .stdin(Stdio::null())
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
-        .map_err(|e| format!("gentle-stream didn't start: {e}"))?;
+        .map_err(|e| {
+            Message::with(
+                "gentle-stream didn't start: {error}",
+                [("{error}", e.to_string())],
+            )
+        })?;
     let stdout = drain(child.stdout.take());
     let stderr = drain(child.stderr.take());
     let deadline = Instant::now() + timeout;
@@ -79,7 +85,7 @@ fn spawn(program: &Path, args: &[OsString], timeout: Duration) -> Result<Output,
             _ => {
                 let _ = child.kill();
                 let _ = child.wait();
-                return Err("gentle-stream didn't answer in time.".into());
+                return Err(Message::new("gentle-stream didn't answer in time."));
             }
         }
     };
@@ -94,7 +100,7 @@ fn spawn(program: &Path, args: &[OsString], timeout: Duration) -> Result<Output,
 
 /// The process runner, injectable so tests can drive [`run_with`] without a
 /// real player, socket or network.
-type Runner = fn(&Path, &[OsString], Duration) -> Result<Output, String>;
+type Runner = fn(&Path, &[OsString], Duration) -> Result<Output, Message>;
 
 fn run_with(
     program: &Path,
@@ -113,23 +119,24 @@ fn interpret(output: &Output) -> Result<Option<MusicState>, Error> {
     match music::parse_ctl(&String::from_utf8_lossy(&output.stdout)) {
         Ok(state) => Ok(state),
         Err(music::CtlError::NothingPlaying) => Err(Error::NoPlayer),
-        Err(music::CtlError::InvalidRequest(message)) => Err(Error::Failed(message)),
-        Err(music::CtlError::Unavailable(message)) => Err(Error::Failed(message)),
+        Err(music::CtlError::InvalidRequest(message) | music::CtlError::Unavailable(message)) => {
+            Err(Error::Failed(Message::raw(message)))
+        }
         Err(music::CtlError::Malformed) => Err(Error::Failed(last_stderr(output))),
     }
 }
 
-fn last_stderr(output: &Output) -> String {
+fn last_stderr(output: &Output) -> Message {
     String::from_utf8_lossy(&output.stderr)
         .lines()
         .rfind(|line| !line.trim().is_empty())
-        .map(str::to_string)
+        .map(Message::raw)
         .unwrap_or_else(|| {
-            if output.success {
-                "gentle-stream didn't answer".into()
+            Message::new(if output.success {
+                "gentle-stream didn't answer"
             } else {
-                "gentle-stream failed".into()
-            }
+                "gentle-stream failed"
+            })
         })
 }
 
@@ -153,7 +160,7 @@ mod tests {
 
     thread_local! {
         static RUNS: RefCell<Vec<RunCall>> = const { RefCell::new(Vec::new()) };
-        static REPLY: RefCell<Result<Output, String>> = const { RefCell::new(Ok(Output {
+        static REPLY: RefCell<Result<Output, Message>> = const { RefCell::new(Ok(Output {
             success: true,
             stdout: Vec::new(),
             stderr: Vec::new(),
@@ -167,7 +174,7 @@ mod tests {
         timeout: Duration,
     }
 
-    fn fake(program: &Path, args: &[OsString], timeout: Duration) -> Result<Output, String> {
+    fn fake(program: &Path, args: &[OsString], timeout: Duration) -> Result<Output, Message> {
         RUNS.with(|runs| {
             runs.borrow_mut().push(RunCall {
                 program: program.to_path_buf(),
@@ -190,7 +197,7 @@ mod tests {
 
     fn reply_err(stderr: &str) {
         REPLY.with(|reply| {
-            *reply.borrow_mut() = Err(stderr.to_string());
+            *reply.borrow_mut() = Err(Message::raw(stderr));
         })
     }
 
@@ -287,7 +294,7 @@ mod tests {
                 Duration::from_secs(1),
                 fake
             ),
-            Err(Error::Failed("the player is unavailable".into()))
+            Err(Error::Failed(Message::raw("the player is unavailable")))
         );
 
         reply_err("gentle-stream didn't start: no such file");
@@ -300,9 +307,9 @@ mod tests {
                 Duration::from_secs(1),
                 fake
             ),
-            Err(Error::Failed(
-                "gentle-stream didn't start: no such file".into()
-            ))
+            Err(Error::Failed(Message::raw(
+                "gentle-stream didn't start: no such file"
+            )))
         );
     }
 
@@ -324,7 +331,7 @@ mod tests {
                 Duration::from_secs(1),
                 fake
             ),
-            Err(Error::Failed("boom".into()))
+            Err(Error::Failed(Message::raw("boom")))
         );
     }
 }

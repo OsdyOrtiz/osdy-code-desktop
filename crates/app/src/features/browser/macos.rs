@@ -27,11 +27,13 @@ impl HasWindowHandle for Host {
     }
 }
 
-pub(super) fn host(window: &Window) -> Result<Host, String> {
+pub(super) fn host(window: &Window) -> Result<Host, super::NativeFailure> {
     // GPUI's own `Window::window_handle` shadows the trait's.
     match HasWindowHandle::window_handle(window).map(|handle| handle.as_raw()) {
         Ok(RawWindowHandle::AppKit(handle)) => Ok(Host(handle.ns_view)),
-        _ => Err("The browser could not find the app's window.".into()),
+        _ => Err(super::NativeFailure::new(
+            "The browser could not find the app's window.",
+        )),
     }
 }
 
@@ -52,7 +54,7 @@ impl NativeView {
         sandbox: Option<&super::Sandbox>,
         profile: &Profile,
         relays: super::Relays,
-    ) -> Result<Self, String> {
+    ) -> Result<Self, super::NativeFailure> {
         use wry::WebViewBuilderExtDarwin as _;
         let builder = wry::WebViewBuilder::new()
             .with_url(url)
@@ -73,7 +75,9 @@ impl NativeView {
             None => builder,
         }
         .build_as_child(&host)
-        .map_err(|error| format!("The browser could not start: {error}"))?;
+        .map_err(|error| {
+            super::NativeFailure::with_error("The browser could not start: {error}", error)
+        })?;
         round_corners(&webview);
         Ok(Self {
             webview,

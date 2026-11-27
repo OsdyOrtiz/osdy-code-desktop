@@ -1525,10 +1525,25 @@ pub fn layout(seq: &Sequence) -> SequenceLayout {
 
 /// The header's counts.
 pub fn counts(seq: &Sequence) -> String {
+    counts_in(seq, crate::i18n::Language::English)
+}
+
+pub fn counts_in(seq: &Sequence, language: crate::i18n::Language) -> String {
+    use super::edits::count_in;
     format!(
         "{} · {}",
-        plural(seq.participants.len(), "participant"),
-        plural(seq.messages.len(), "message")
+        count_in(
+            language,
+            seq.participants.len(),
+            "{count} participant",
+            "{count} participants"
+        ),
+        count_in(
+            language,
+            seq.messages.len(),
+            "{count} message",
+            "{count} messages"
+        ),
     )
 }
 

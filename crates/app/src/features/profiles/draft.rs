@@ -4,7 +4,7 @@
 use gentle_core::profiles::{ORCHESTRATOR, RouteEntry, normalize_model_id};
 use gpui_kit::*;
 
-use super::{ProfilesView, Tone};
+use super::{ProfileText, ProfilesView, Tone, profile_msg};
 
 impl ProfilesView {
     pub(super) fn set_model(&mut self, key: &str, model: Option<String>, cx: &mut Context<Self>) {
@@ -27,12 +27,17 @@ impl ProfilesView {
                 },
             );
         }
-        let label = model.unwrap_or_else(|| self.inherit_label(key).to_string());
+        let label = model.map_or_else(
+            || ProfileText::from(self.inherit_label(key)),
+            ProfileText::from,
+        );
         let selected = self.selected.clone().unwrap_or_default();
         self.say(
-            format!(
-                "{}: model {label}. Save keeps it in {selected}.",
-                Self::row_label(key)
+            profile_msg!(
+                "{row}: model {label}. Save keeps it in {selected}.",
+                row = Self::row_label(key),
+                label = label,
+                selected = selected
             ),
             Tone::Info,
         );
@@ -67,11 +72,13 @@ impl ProfilesView {
             );
         }
         let selected = self.selected.clone().unwrap_or_default();
-        let level = thinking.unwrap_or_else(|| "inherit".into());
+        let level = thinking.map_or_else(|| ProfileText::from("inherit"), ProfileText::from);
         self.say(
-            format!(
-                "{}: effort {level}. Save keeps it in {selected}.",
-                Self::row_label(key)
+            profile_msg!(
+                "{row}: effort {level}. Save keeps it in {selected}.",
+                row = Self::row_label(key),
+                level = level,
+                selected = selected
             ),
             Tone::Info,
         );
@@ -95,12 +102,9 @@ impl ProfilesView {
         self.draft.set(key, entry);
         let selected = self.selected.clone().unwrap_or_default();
         self.say(
-            format!(
-                "{}: {}. Save keeps it in {selected}.{}",
-                Self::row_label(key),
-                if fast { "Fast" } else { "Standard" },
-                if fast { " Fast depends on plan/model; subscription usage 2.5x or purchased credits 2x. API pricing differs." } else { "" }
-            ),
+            profile_msg!("{row}: {tier}. Save keeps it in {selected}.{note}",
+                row = Self::row_label(key), tier = if fast { "Fast" } else { "Standard" }, selected = selected,
+                note = if fast { " Fast depends on plan/model; subscription usage 2.5x or purchased credits 2x. API pricing differs." } else { "" }),
             Tone::Info,
         );
         cx.notify();
@@ -123,10 +127,11 @@ impl ProfilesView {
             self.say("No compatible OpenAI routes in this profile.", Tone::Info);
         } else {
             self.say(
-                format!(
-                    "All Fast: {count} compatible route{}. Save to keep. Subscription 2.5x; purchased credits 2x. API pricing differs.",
-                    if count == 1 { "" } else { "s" }
-                ),
+                profile_msg!(if count == 1 {
+                    "All Fast: {count} compatible route. Save to keep. Subscription 2.5x; purchased credits 2x. API pricing differs."
+                } else {
+                    "All Fast: {count} compatible routes. Save to keep. Subscription 2.5x; purchased credits 2x. API pricing differs."
+                }, count = count.to_string()),
                 Tone::Info,
             );
         }

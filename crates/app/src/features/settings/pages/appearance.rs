@@ -9,6 +9,7 @@ use super::super::{
     layout::{or_dash, row, section},
     snapshot::Snapshot,
 };
+use crate::shared::i18n::t;
 use crate::shared::ui;
 
 pub(super) fn render(
@@ -18,6 +19,7 @@ pub(super) fn render(
 ) -> Div {
     v_flex()
         .gap_3()
+        .child(view.language_section(cx))
         .child(view.interface_section(cx))
         .child(view.input_style_section(cx))
         .child(
@@ -33,15 +35,15 @@ pub(super) fn render(
                 .child(view.theme_section(cx)),
         )
         .child(
-            section(IconName::SquareTerminal, "Terminal appearance")
-                .child(row("Theme (terminal)", or_dash(&snapshot.theme, "default")))
+            section(IconName::SquareTerminal, t("Terminal appearance"))
+                .child(row(t("Theme (terminal)"), or_dash(&snapshot.theme, t("default"))))
                 .child(row(
-                    "Banner",
-                    or_dash(&snapshot.banner, "pink · rose on · text on"),
+                    t("Banner"),
+                    or_dash(&snapshot.banner, t("pink · rose on · text on")),
                 ))
                 .child(
                     div().pt_2().text_xs().text_color(ui::faint()).child(
-                        "These values reflect Gentle Shell's terminal configuration. Desktop themes and terminal themes are stored separately.",
+                        t("These values reflect Gentle Shell's terminal configuration. Desktop themes and terminal themes are stored separately."),
                     ),
                 ),
         )

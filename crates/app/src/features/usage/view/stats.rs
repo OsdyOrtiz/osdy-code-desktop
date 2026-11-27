@@ -4,8 +4,10 @@
 use std::path::Path;
 
 use gentle_core::transcript::format_tokens;
-use gentle_core::usage::stats::{DayStats, ProviderStats, StatsRange, StatsSummary, format_cost};
-use gentle_core::usage::time::day_label;
+use gentle_core::usage::stats::{
+    DayStats, ProviderStats, StatsRange, StatsSummary, UNKNOWN, format_cost,
+};
+use gentle_core::usage::time::day_label_in;
 use gpui_kit::assets::IconName;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::spinner::Spinner;
@@ -16,7 +18,14 @@ use gpui_kit::*;
 
 use super::{segmented, status_line};
 use crate::features::usage::{Metric, StatsSource, StatsState, UsageView};
-use crate::shared::ui;
+use crate::shared::{
+    i18n::{language, t},
+    ui,
+};
+
+fn stats_name(name: &str) -> &str {
+    if name == UNKNOWN { t("unknown") } else { name }
+}
 
 impl UsageView {
     pub(super) fn render_stats(&self, cx: &mut Context<Self>) -> AnyElement {
@@ -27,7 +36,7 @@ impl UsageView {
                     .text_sm()
                     .text_color(ui::muted())
                     .child(Spinner::new().small().color(ui::muted()))
-                    .child("Reading session history…")
+                    .child(t("Reading session history…"))
                     .into_any_element();
             }
             StatsState::Loaded { source, summary } => (source, summary),
@@ -44,24 +53,26 @@ impl UsageView {
         match source {
             StatsSource::Files { data, .. } => {
                 if !data.skipped_large.is_empty() {
-                    notes.push(format!(
-                        "Skipped {} session file{} larger than 64 MiB.",
-                        data.skipped_large.len(),
-                        if data.skipped_large.len() == 1 {
-                            ""
+                    let count = data.skipped_large.len();
+                    notes.push(
+                        t(if count == 1 {
+                            "Skipped {count} session file larger than 64 MiB."
                         } else {
-                            "s"
-                        }
-                    ));
+                            "Skipped {count} session files larger than 64 MiB."
+                        })
+                        .replace("{count}", &count.to_string()),
+                    );
                 }
                 if data.unreadable > 0 {
-                    notes.push(format!(
-                        "{} session file(s) could not be read.",
-                        data.unreadable
-                    ));
+                    notes.push(
+                        t("{count} session file(s) could not be read.")
+                            .replace("{count}", &data.unreadable.to_string()),
+                    );
                 }
             }
-            StatsSource::Shell { notes: shell, .. } => notes.extend(shell.iter().cloned()),
+            StatsSource::Shell { notes: shell, .. } => {
+                notes.extend(shell.iter().map(|note| t(note).to_string()))
+            }
         }
         let day_cost = match source {
             StatsSource::Files { .. } => true,
@@ -72,17 +83,25 @@ impl UsageView {
             .child(
                 h_flex()
                     .gap_2()
-                    .child(ui::section_label("Range"))
+                    .child(ui::section_label(t("Range")))
                     .child(div().flex_1())
                     .child(
                         segmented()
-                            .child(range_button("usage-range-all", "All time", StatsRange::All))
+                            .child(range_button(
+                                "usage-range-all",
+                                t("All time"),
+                                StatsRange::All,
+                            ))
                             .child(range_button(
                                 "usage-range-30d",
-                                "30 days",
+                                t("30 days"),
                                 StatsRange::Month,
                             ))
-                            .child(range_button("usage-range-7d", "7 days", StatsRange::Week)),
+                            .child(range_button(
+                                "usage-range-7d",
+                                t("7 days"),
+                                StatsRange::Week,
+                            )),
                     ),
             )
             .child(Self::render_totals(summary))
@@ -108,7 +127,7 @@ impl UsageView {
                     .gap_1()
                     .px_3()
                     .py_2p5()
-                    .child(ui::section_label(label))
+                    .child(ui::section_label(t(label)))
                     .child(
                         div()
                             .truncate()
@@ -125,7 +144,7 @@ impl UsageView {
             h_flex()
                 .gap_1p5()
                 .text_xs()
-                .child(div().text_color(ui::faint()).child(label))
+                .child(div().text_color(ui::faint()).child(t(label)))
                 .child(
                     div()
                         .text_color(ui::muted())
@@ -189,15 +208,16 @@ impl UsageView {
                     cx.notify();
                 }))
         };
+        let language = language();
         let first = summary
             .daily
             .first()
-            .map(|d| day_label(d.day))
+            .map(|d| day_label_in(language, d.day))
             .unwrap_or_default();
         let last = summary
             .daily
             .last()
-            .map(|d| day_label(d.day))
+            .map(|d| day_label_in(language, d.day))
             .unwrap_or_default();
         let bar_color = match metric {
             Metric::Tokens => ui::accent(),
@@ -209,20 +229,19 @@ impl UsageView {
             .child(
                 h_flex()
                     .gap_2()
-                    .child(ui::section_label(format!(
-                        "Last {} days",
-                        summary.daily.len()
-                    )))
+                    .child(ui::section_label(
+                        t("Last {count} days").replace("{count}", &summary.daily.len().to_string()),
+                    ))
                     .child(div().flex_1())
                     .when(day_cost, |d| {
                         d.child(
                             segmented()
                                 .child(metric_button(
                                     "usage-metric-tokens",
-                                    "Tokens",
+                                    t("Tokens"),
                                     Metric::Tokens,
                                 ))
-                                .child(metric_button("usage-metric-cost", "Cost", Metric::Cost)),
+                                .child(metric_button("usage-metric-cost", t("Cost"), Metric::Cost)),
                         )
                     }),
             )
@@ -239,11 +258,9 @@ impl UsageView {
                     .children(summary.daily.iter().map(|day| {
                         let v = value(day);
                         let fraction = if max > 0.0 { (v / max) as f32 } else { 0.0 };
-                        let mut tip = format!(
-                            "{} · {} tokens",
-                            day_label(day.day),
-                            format_tokens(day.tokens)
-                        );
+                        let mut tip = t("{day} · {count} tokens")
+                            .replace("{day}", &day_label_in(language, day.day))
+                            .replace("{count}", &format_tokens(day.tokens));
                         if day_cost {
                             tip.push_str(&format!(" · {}", format_cost(day.cost)));
                         }
@@ -278,12 +295,12 @@ impl UsageView {
                         div()
                             .font_family(ui::mono())
                             .text_size(ui::code_rems(12.))
-                            .child(format!(
-                                "peak {}",
-                                match metric {
+                            .child(t("peak {value}").replace(
+                                "{value}",
+                                &match metric {
                                     Metric::Tokens => format_tokens(max as u64),
                                     Metric::Cost => format_cost(max),
-                                }
+                                },
                             )),
                     )
                     .child(div().flex_1())
@@ -301,13 +318,13 @@ impl UsageView {
             .border_color(ui::border())
             .text_xs()
             .text_color(ui::faint())
-            .child(div().flex_1().min_w_0().truncate().child(columns[0].0))
+            .child(div().flex_1().min_w_0().truncate().child(t(columns[0].0)))
             .children(columns[1..].iter().map(|(label, width)| {
                 div()
                     .w(rems(*width / 16.))
                     .flex_shrink_0()
                     .text_right()
-                    .child(*label)
+                    .child(t(label))
             }))
     }
 
@@ -327,7 +344,7 @@ impl UsageView {
         ui::card()
             .gap_2()
             .p_3()
-            .child(div().px_2().pt_1().child(ui::section_label(title)))
+            .child(div().px_2().pt_1().child(ui::section_label(t(title))))
             .child(Self::table_header(columns))
             .when(empty, |d| {
                 d.child(
@@ -336,7 +353,7 @@ impl UsageView {
                         .py_1()
                         .text_xs()
                         .text_color(ui::muted())
-                        .child("No usage in this range."),
+                        .child(t("No usage in this range.")),
                 )
             })
     }
@@ -381,13 +398,16 @@ impl UsageView {
                                             .min_w_0()
                                             .text_color(ui::fg())
                                             .truncate()
-                                            .child(model.model.clone()),
+                                            .child(stats_name(&model.model).to_string()),
                                     )
                                     // Gentle Shell's answer names no provider.
                                     .when(!model.provider.is_empty(), |d| {
                                         d.child(
-                                            ui::chip(model.provider.clone(), ui::info())
-                                                .flex_shrink_0(),
+                                            ui::chip(
+                                                stats_name(&model.provider).to_string(),
+                                                ui::info(),
+                                            )
+                                            .flex_shrink_0(),
                                         )
                                     }),
                             )
@@ -431,7 +451,7 @@ impl UsageView {
                                     .min_w_0()
                                     .text_color(ui::fg())
                                     .truncate()
-                                    .child(provider.provider.clone()),
+                                    .child(stats_name(&provider.provider).to_string()),
                             )
                             .child(Self::numeric(64., provider.messages.to_string()))
                             .child(Self::numeric(64., format_tokens(provider.tokens)))

@@ -295,16 +295,19 @@ impl Workspace {
         };
         let Some(factory) = factory else {
             window.push_notification(
-                Notification::info(format!(
-                    "{} panes are not available in this build.",
-                    match kind {
-                        PaneKind::File => "File",
-                        PaneKind::History => "Git",
-                        PaneKind::Canvas => "Canvas",
-                        PaneKind::Tower => "Tower",
-                        _ => "Terminal",
-                    }
-                )),
+                Notification::info(
+                    crate::shared::i18n::t("{kind} panes are not available in this build.")
+                        .replace(
+                            "{kind}",
+                            crate::shared::i18n::t(match kind {
+                                PaneKind::File => "File",
+                                PaneKind::History => "Git",
+                                PaneKind::Canvas => "Canvas",
+                                PaneKind::Tower => "Tower",
+                                _ => "Terminal",
+                            }),
+                        ),
+                ),
                 cx,
             );
             return None;
@@ -825,36 +828,39 @@ impl Workspace {
                 .join(", ")
         };
         let title = match (unsaved.len(), busy.len()) {
-            (0, 1) => format!("Stop {} and close it?", names(&busy)),
-            (0, n) => format!("Stop {n} agents and close them?"),
-            (1, 0) => format!("Close {} without saving?", names(&unsaved)),
-            (n, 0) => format!("Close {n} files without saving?"),
-            _ => "Close unsaved files and working agents?".to_string(),
+            (0, 1) => crate::shared::i18n::t("Stop {names} and close it?")
+                .replace("{names}", &names(&busy)),
+            (0, n) => crate::shared::i18n::t("Stop {count} agents and close them?")
+                .replace("{count}", &n.to_string()),
+            (1, 0) => crate::shared::i18n::t("Close {names} without saving?")
+                .replace("{names}", &names(&unsaved)),
+            (n, 0) => crate::shared::i18n::t("Close {count} files without saving?")
+                .replace("{count}", &n.to_string()),
+            _ => crate::shared::i18n::t("Close unsaved files and working agents?").to_string(),
         };
         let mut lines = Vec::new();
         if !unsaved.is_empty() {
-            lines.push(format!(
-                "Unsaved edits in {} are lost. {} saves first.",
-                names(&unsaved),
-                ui::shortcut("S")
-            ));
+            lines.push(
+                crate::shared::i18n::t(
+                    "Unsaved edits in {names} are lost. {shortcut} saves first.",
+                )
+                .replace("{shortcut}", &ui::shortcut("S"))
+                .replace("{names}", &names(&unsaved)),
+            );
         }
         if !busy.is_empty() {
-            lines.push(format!(
-                "{} {} working or waiting for your answer; closing stops {}. The \
-                 conversation is kept: {} reopens it.",
-                names(&busy),
-                if busy.len() == 1 { "is" } else { "are" },
-                if busy.len() == 1 { "it" } else { "them" },
-                closed::REOPEN_KEY,
-            ));
+            lines.push(crate::shared::i18n::t(if busy.len() == 1 {
+                "{names} is working or waiting for your answer; closing stops it. The conversation is kept: {shortcut} reopens it."
+            } else {
+                "{names} are working or waiting for your answer; closing stops them. The conversation is kept: {shortcut} reopens it."
+            }).replace("{shortcut}", closed::REOPEN_KEY).replace("{names}", &names(&busy)));
         }
         let description = lines.join(" ");
-        let ok = if busy.is_empty() {
+        let ok = crate::shared::i18n::t(if busy.is_empty() {
             "Close without saving"
         } else {
             "Stop and close"
-        };
+        });
         let this = cx.entity().downgrade();
         let then = Rc::new(then);
         window.open_alert_dialog(cx, move |alert, _, _| {
@@ -863,6 +869,7 @@ impl Workspace {
                 .title(title.clone())
                 .description(description.clone())
                 .ok_text(ok)
+                .cancel_text(crate::shared::i18n::t("Cancel"))
                 .ok_variant(ButtonVariant::Danger)
                 .show_cancel(true)
                 .on_ok(move |_, window, cx| {

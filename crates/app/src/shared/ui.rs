@@ -636,7 +636,10 @@ pub fn close_hint(id: u64, font: SharedString) -> impl IntoElement {
         .rounded_md()
         .bg(panel())
         .font_family(font)
-        .child(chip(format!("Press {chord} again to close"), muted()))
+        .child(chip(
+            crate::shared::i18n::t("Press {chord} again to close").replace("{chord}", chord),
+            muted(),
+        ))
         .with_animation(
             ElementId::NamedInteger("close-hint".into(), id),
             Animation::new(gentle_core::double_interrupt::WINDOW),

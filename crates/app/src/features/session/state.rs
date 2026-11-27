@@ -327,17 +327,13 @@ pub(in crate::features::session) mod desktop {
         pub(in crate::features::session) fn message(&self) -> String {
             match self {
                 Self::MissingExtension => {
-                    "This Gentle Shell does not provide Gentle Desktop. Update gentle-pi, then reload the tab.".to_string()
+                    crate::shared::i18n::t("This Gentle Shell does not provide Gentle Desktop. Update gentle-pi, then reload the tab.").to_string()
                 }
                 Self::NotHandled => {
-                    format!("Gentle Shell did not run {PROMPT_COMMAND}. Is gentle-pi up to date?")
+                    crate::shared::i18n::t("Gentle Shell did not run {PROMPT_COMMAND}. Is gentle-pi up to date?").replace("{PROMPT_COMMAND}", PROMPT_COMMAND)
                 }
-                Self::Capabilities(error) => format!(
-                    "Gentle Desktop's capabilities could not be read ({error}); its channel stays off in this tab."
-                ),
-                Self::Snapshot(error) => format!(
-                    "Gentle Desktop's snapshot could not be read ({error}); its channel stays off in this tab."
-                ),
+                Self::Capabilities(error) => crate::shared::i18n::t("Gentle Desktop's capabilities could not be read ({error}); its channel stays off in this tab.").replace("{error}", &error.to_string()),
+                Self::Snapshot(error) => crate::shared::i18n::t("Gentle Desktop's snapshot could not be read ({error}); its channel stays off in this tab.").replace("{error}", &error.to_string()),
             }
         }
     }
@@ -1488,25 +1484,25 @@ pub(in crate::features::session) mod desktop {
             pub(in crate::features::session) fn message(&self) -> String {
                 match self {
                     Self::Unsupported | Self::UnsupportedMethod => {
-                        "This Gentle Shell does not support changing the permission mode from Desktop."
+                        crate::shared::i18n::t("This Gentle Shell does not support changing the permission mode from Desktop.")
                             .to_string()
                     }
                     Self::NotReady => {
-                        "Gentle Desktop is still loading; try the permission change again in a moment."
+                        crate::shared::i18n::t("Gentle Desktop is still loading; try the permission change again in a moment.")
                             .to_string()
                     }
                     Self::Timeout => {
-                        "The permission request timed out; it was not applied.".to_string()
+                        crate::shared::i18n::t("The permission request timed out; it was not applied.").to_string()
                     }
-                    Self::PersistError(error) => format!(
-                        "The permission mode changed, but the new default was not saved ({}: {}).",
-                        error.code, error.message
+                    Self::PersistError(error) => gentle_core::i18n::fill(
+                        crate::shared::i18n::t("The permission mode changed, but the new default was not saved ({code}: {message})."),
+                        &[("code", &error.code), ("message", &error.message)],
                     ),
                     Self::Failure(error) => {
-                        format!("The permission mode change failed ({error}).")
+                        crate::shared::i18n::t("The permission mode change failed ({error}).").replace("{error}", &error.to_string())
                     }
                     Self::OutOfOrderSequence => {
-                        "Gentle Desktop events were lost; resyncing the channel.".to_string()
+                        crate::shared::i18n::t("Gentle Desktop events were lost; resyncing the channel.").to_string()
                     }
                 }
             }
@@ -1968,19 +1964,19 @@ pub(in crate::features::session) mod desktop {
             pub(in crate::features::session) fn message(&self) -> String {
                 match self {
                     Self::Unsupported | Self::UnsupportedMethod => {
-                        "This Gentle Shell does not support stopping helpers and jobs from Desktop."
+                        crate::shared::i18n::t("This Gentle Shell does not support stopping helpers and jobs from Desktop.")
                             .to_string()
                     }
                     Self::NotReady => {
-                        "Gentle Desktop is still loading; try again in a moment.".to_string()
+                        crate::shared::i18n::t("Gentle Desktop is still loading; try again in a moment.").to_string()
                     }
-                    Self::NotFound => "That helper or job is no longer running.".to_string(),
+                    Self::NotFound => crate::shared::i18n::t("That helper or job is no longer running.").to_string(),
                     Self::Timeout => {
-                        "The cancel request timed out; it was not applied.".to_string()
+                        crate::shared::i18n::t("The cancel request timed out; it was not applied.").to_string()
                     }
-                    Self::Failure(error) => format!("The cancel request failed ({error})."),
+                    Self::Failure(error) => crate::shared::i18n::t("The cancel request failed ({error}).").replace("{error}", &error.to_string()),
                     Self::OutOfOrderSequence => {
-                        "Gentle Desktop events were lost; resyncing helpers and jobs.".to_string()
+                        crate::shared::i18n::t("Gentle Desktop events were lost; resyncing helpers and jobs.").to_string()
                     }
                 }
             }
@@ -2606,18 +2602,18 @@ pub(in crate::features::session) mod desktop {
             pub(in crate::features::session) fn message(&self) -> String {
                 match self {
                     Self::Unsupported | Self::UnsupportedMethod => {
-                        "This Gentle Shell does not support reading subscription usage from Desktop."
+                        crate::shared::i18n::t("This Gentle Shell does not support reading subscription usage from Desktop.")
                             .to_string()
                     }
                     Self::NotReady => {
-                        "Gentle Desktop is still loading; try again in a moment.".to_string()
+                        crate::shared::i18n::t("Gentle Desktop is still loading; try again in a moment.").to_string()
                     }
-                    Self::Timeout => "The subscription usage request timed out.".to_string(),
+                    Self::Timeout => crate::shared::i18n::t("The subscription usage request timed out.").to_string(),
                     Self::Failure(error) => {
-                        format!("The subscription usage request failed ({error}).")
+                        crate::shared::i18n::t("The subscription usage request failed ({error}).").replace("{error}", &error.to_string())
                     }
                     Self::OutOfOrderSequence => {
-                        "Gentle Desktop events were lost; resyncing subscription usage.".to_string()
+                        crate::shared::i18n::t("Gentle Desktop events were lost; resyncing subscription usage.").to_string()
                     }
                 }
             }
@@ -3087,24 +3083,29 @@ pub(in crate::features::session) mod desktop {
             /// What the conversation says about it. Never the canvas URL.
             pub(in crate::features::session) fn message(&self) -> String {
                 match self {
-                    Self::Unsupported | Self::UnsupportedMethod => {
-                        "This Gentle Shell does not report its design canvas to Desktop."
-                            .to_string()
+                    Self::Unsupported | Self::UnsupportedMethod => crate::shared::i18n::t(
+                        "This Gentle Shell does not report its design canvas to Desktop.",
+                    )
+                    .to_string(),
+                    Self::NotReady => crate::shared::i18n::t(
+                        "Gentle Desktop is still loading; try again in a moment.",
+                    )
+                    .to_string(),
+                    Self::Timeout => {
+                        crate::shared::i18n::t("The design canvas request timed out.").to_string()
                     }
-                    Self::NotReady => {
-                        "Gentle Desktop is still loading; try again in a moment.".to_string()
-                    }
-                    Self::Timeout => "The design canvas request timed out.".to_string(),
                     Self::Failure(error) => {
-                        format!("The design canvas could not be read ({error}).")
+                        crate::shared::i18n::t("The design canvas could not be read ({error}).")
+                            .replace("{error}", &error.to_string())
                     }
-                    Self::OutOfOrderSequence => {
-                        "Gentle Desktop events were lost; resyncing the design canvas.".to_string()
-                    }
-                    Self::NotLoopback => {
-                        "Gentle Desktop did not open a design canvas outside this machine."
-                            .to_string()
-                    }
+                    Self::OutOfOrderSequence => crate::shared::i18n::t(
+                        "Gentle Desktop events were lost; resyncing the design canvas.",
+                    )
+                    .to_string(),
+                    Self::NotLoopback => crate::shared::i18n::t(
+                        "Gentle Desktop did not open a design canvas outside this machine.",
+                    )
+                    .to_string(),
                 }
             }
 
@@ -3484,16 +3485,21 @@ pub(in crate::features::session) mod desktop {
             /// What the conversation says about it.
             pub(in crate::features::session) fn message(&self) -> String {
                 match self {
-                    Self::UnsupportedMethod => {
-                        "This Gentle Shell does not serve its configuration to Desktop.".to_string()
+                    Self::UnsupportedMethod => crate::shared::i18n::t(
+                        "This Gentle Shell does not serve its configuration to Desktop.",
+                    )
+                    .to_string(),
+                    Self::Timeout => {
+                        crate::shared::i18n::t("The configuration request timed out.").to_string()
                     }
-                    Self::Timeout => "The configuration request timed out.".to_string(),
                     Self::Failure(error) => {
-                        format!("The configuration request failed ({error}).")
+                        crate::shared::i18n::t("The configuration request failed ({error}).")
+                            .replace("{error}", &error.to_string())
                     }
-                    Self::OutOfOrderSequence => {
-                        "Gentle Desktop events were lost; re-reading the configuration.".to_string()
-                    }
+                    Self::OutOfOrderSequence => crate::shared::i18n::t(
+                        "Gentle Desktop events were lost; re-reading the configuration.",
+                    )
+                    .to_string(),
                 }
             }
 

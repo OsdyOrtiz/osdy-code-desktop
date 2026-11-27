@@ -16,6 +16,11 @@ use gentle_core::devices::{Device, Platform};
 use serde_json::json;
 
 use crate::features::setup::devices as setup;
+use crate::shared::i18n::Message;
+
+fn with_error(template: &'static str, error: impl std::fmt::Display) -> Message {
+    Message::with(template, [("{error}", error.to_string())])
+}
 
 /// The hub answers `/readyz` within a few seconds; Node's first run can take
 /// longer on a cold disk.
@@ -113,19 +118,26 @@ pub struct HubProcess {
 
 impl HubProcess {
     /// Start the hub on a free loopback port and wait until it answers.
-    pub fn start() -> Result<Self, String> {
-        let (node, entry) =
-            setup::hub_command().ok_or("Turn on Use devices in Configuration → Devices first.")?;
+    pub fn start() -> Result<Self, Message> {
+        let (node, entry) = setup::hub_command()
+            .ok_or_else(|| Message::new("Turn on Use devices in Configuration → Devices first."))?;
         stop_orphan();
         let port = std::net::TcpListener::bind(("127.0.0.1", 0))
             .and_then(|listener| listener.local_addr())
             .map(|addr| addr.port())
-            .map_err(|e| format!("No free port for the device hub: {e}"))?;
-        let dir = state_dir().ok_or("This system has no app data folder.")?;
-        std::fs::create_dir_all(&dir)
-            .map_err(|e| format!("Couldn't create {}: {e}", dir.display()))?;
+            .map_err(|e| with_error("No free port for the device hub: {error}", e))?;
+        let dir = state_dir().ok_or_else(|| Message::new("This system has no app data folder."))?;
+        std::fs::create_dir_all(&dir).map_err(|e| {
+            Message::with(
+                "Couldn't create {path}: {error}",
+                [
+                    ("{path}", dir.display().to_string()),
+                    ("{error}", e.to_string()),
+                ],
+            )
+        })?;
         let log = std::fs::File::create(dir.join("hub.log"))
-            .map_err(|e| format!("Couldn't open the hub's log: {e}"))?;
+            .map_err(|e| with_error("Couldn't open the hub's log: {error}", e))?;
         let mut command = pi_rpc::command(&node);
         command
             .arg(&entry)
@@ -135,7 +147,9 @@ impl HubProcess {
             .env("FORCE_COLOR", "0")
             .env("NO_COLOR", "1")
             .stdin(Stdio::null())
-            .stdout(Stdio::from(log.try_clone().map_err(|e| e.to_string())?))
+            .stdout(Stdio::from(
+                log.try_clone().map_err(|e| Message::raw(e.to_string()))?,
+            ))
             .stderr(Stdio::from(log));
         // serve-sim (iOS) is Apple-silicon macOS only; elsewhere the hub
         // shows Android emulators alone.
@@ -152,7 +166,7 @@ impl HubProcess {
         }
         let child = command
             .spawn()
-            .map_err(|e| format!("The device hub didn't start: {e}"))?;
+            .map_err(|e| with_error("The device hub didn't start: {error}", e))?;
         // Recorded before it answers, so a crash while it starts still
         // leaves the next run something to stop.
         let record = json!({"port": port, "pid": child.id()}).to_string();
@@ -170,10 +184,15 @@ impl HubProcess {
                     .rev()
                     .find(|l| !l.trim().is_empty())
                     .unwrap_or("");
-                return Err(format!("The device hub stopped ({status}). {last}"));
+                return Err(Message::with(
+                    "The device hub stopped ({status}). {last}",
+                    [("{status}", status.to_string()), ("{last}", last.into())],
+                ));
             }
             if Instant::now() > deadline {
-                return Err("The device hub didn't answer in time; see devices/hub.log.".into());
+                return Err(Message::new(
+                    "The device hub didn't answer in time; see devices/hub.log.",
+                ));
             }
             std::thread::sleep(Duration::from_millis(150));
         }
@@ -232,15 +251,20 @@ impl Drop for HubProcess {
 
 /// Every simulator and emulator, and what the hub couldn't list.
 pub fn list(port: u16) -> Result<(Vec<Device>, Vec<String>), String> {
+    list_for_panel(port).map_err(|error| error.render_in(gentle_core::i18n::Language::English))
+}
+
+pub(super) fn list_for_panel(port: u16) -> Result<(Vec<Device>, Vec<String>), Message> {
     let mut response = agent(Duration::from_secs(20))
         .get(format!("{}/api/devices", base(port)))
         .call()
-        .map_err(|e| format!("The device hub didn't answer: {e}"))?;
+        .map_err(|e| with_error("The device hub didn't answer: {error}", e))?;
     let text = response
         .body_mut()
         .read_to_string()
-        .map_err(|e| format!("The device hub's answer is unreadable: {e}"))?;
-    let (devices, mut errors) = gentle_core::devices::hub_devices(&text, &super::sdk::avds())?;
+        .map_err(|e| with_error("The device hub's answer is unreadable: {error}", e))?;
+    let (devices, mut errors) = gentle_core::devices::parse_hub_devices(&text, &super::sdk::avds())
+        .map_err(|e| with_error("The device hub's list is unreadable: {error}", e))?;
     // Without an Android SDK the hub's Android errors only say so; the
     // panel and Configuration already do.
     if super::sdk::android_sdk().is_none() {
@@ -254,7 +278,7 @@ pub fn list(port: u16) -> Result<(Vec<Device>, Vec<String>), String> {
     Ok((devices, errors))
 }
 
-fn action(port: u16, route: &str, device: &Device) -> Result<(), String> {
+fn action(port: u16, route: &str, device: &Device) -> Result<(), Message> {
     let body = json!({
         "platform": match device.platform {
             Platform::Ios => "ios",
@@ -267,7 +291,7 @@ fn action(port: u16, route: &str, device: &Device) -> Result<(), String> {
         .post(format!("{}/api/devices/{route}", base(port)))
         .header("Content-Type", "application/json")
         .send(body.to_string())
-        .map_err(|e| format!("The device hub didn't answer: {e}"))?;
+        .map_err(|e| with_error("The device hub didn't answer: {error}", e))?;
     let text = response.body_mut().read_to_string().unwrap_or_default();
     let value: serde_json::Value = serde_json::from_str(&text).unwrap_or_default();
     if value["ok"] == true {
@@ -276,17 +300,17 @@ fn action(port: u16, route: &str, device: &Device) -> Result<(), String> {
         Err(value["error"]
             .as_str()
             .or_else(|| value["errors"][0].as_str())
-            .unwrap_or("The device hub refused.")
-            .to_string())
+            .map(Message::raw)
+            .unwrap_or_else(|| Message::new("The device hub refused.")))
     }
 }
 
 /// Start a device headless (no Simulator.app, no emulator window).
-pub fn boot(port: u16, device: &Device) -> Result<(), String> {
+pub fn boot(port: u16, device: &Device) -> Result<(), Message> {
     action(port, "boot", device)
 }
 
-pub fn shutdown(port: u16, device: &Device) -> Result<(), String> {
+pub fn shutdown(port: u16, device: &Device) -> Result<(), Message> {
     action(port, "shutdown", device)
 }
 

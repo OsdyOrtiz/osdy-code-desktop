@@ -14,6 +14,7 @@ use super::super::{
     shell_status::{status_rows, warns},
     snapshot::Snapshot,
 };
+use crate::shared::i18n::t;
 use crate::shared::ui;
 
 pub(super) fn render(
@@ -29,7 +30,7 @@ pub(super) fn render(
         ))
         .child(view.runs_on_section(cx))
         .child(view.diagnostics_section(cx))
-        .child(section(IconName::CircleCheck, "Setup & requirements").child(view.setup.clone()))
+        .child(section(IconName::CircleCheck, t("Setup & requirements")).child(view.setup.clone()))
 }
 
 /// The homes and launcher, then, when the active agent tab's Shell offers
@@ -37,22 +38,22 @@ pub(super) fn render(
 fn gentle_shell_section(snapshot: &Snapshot, status: Option<&ShellStatus>) -> Div {
     section(IconName::SquareTerminal, "Gentle Shell")
         .child(row(
-            "Home",
+            t("Home"),
             if snapshot.home_mode.is_empty() {
                 snapshot.agent.display().to_string()
             } else {
                 snapshot.home_mode.clone()
             },
         ))
-        .child(row("Agent dir", snapshot.agent.display().to_string()))
-        .child(row("Config dir", snapshot.config.display().to_string()))
+        .child(row(t("Agent dir"), snapshot.agent.display().to_string()))
+        .child(row(t("Config dir"), snapshot.config.display().to_string()))
         .child(row(
-            "Launcher",
+            t("Launcher"),
             snapshot
                 .launcher
                 .as_ref()
                 .map(|path| path.display().to_string())
-                .unwrap_or_else(|| "not found".into()),
+                .unwrap_or_else(|| t("not found").into()),
         ))
         .children(status.map(status_block))
         .child(
@@ -66,7 +67,7 @@ fn gentle_shell_section(snapshot: &Snapshot, status: Option<&ShellStatus>) -> Di
                         .ghost()
                         .small()
                         .icon(Icon::new(IconName::FolderOpen))
-                        .label("Open agent dir")
+                        .label(t("Open agent dir"))
                         .on_click(move |_, _, cx| cx.open_url(&format!("file://{}", dir.display())))
                 })
                 .child({
@@ -75,7 +76,7 @@ fn gentle_shell_section(snapshot: &Snapshot, status: Option<&ShellStatus>) -> Di
                         .ghost()
                         .small()
                         .icon(Icon::new(IconName::FolderOpen))
-                        .label("Open config dir")
+                        .label(t("Open config dir"))
                         .on_click(move |_, _, cx| cx.open_url(&format!("file://{}", dir.display())))
                 }),
         )
@@ -91,9 +92,9 @@ fn status_block(status: &ShellStatus) -> Div {
                 .pt_3()
                 .pb_1()
                 .gap_2()
-                .child(ui::section_label("Status"))
+                .child(ui::section_label(t("Status")))
                 .child(if warning {
-                    ui::chip("Needs attention", ui::warning())
+                    ui::chip(t("Needs attention"), ui::warning())
                 } else {
                     ui::chip("OK", ui::success())
                 })
@@ -101,7 +102,7 @@ fn status_block(status: &ShellStatus) -> Div {
                     div()
                         .text_xs()
                         .text_color(ui::muted())
-                        .child("Run /gentle:doctor in a session to repair it.")
+                        .child(t("Run /gentle:doctor in a session to repair it."))
                 })),
         )
         .children(

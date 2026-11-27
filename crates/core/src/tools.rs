@@ -2,6 +2,8 @@
 
 use serde_json::Value;
 
+use crate::i18n::{Language, tr};
+
 #[derive(Debug, PartialEq, Eq)]
 pub struct ToolSummary {
     pub title: String,
@@ -11,6 +13,10 @@ pub struct ToolSummary {
 }
 
 pub fn summarize(name: &str, args: &Value, details: &Value) -> ToolSummary {
+    summarize_in(Language::English, name, args, details)
+}
+
+pub fn summarize_in(language: Language, name: &str, args: &Value, details: &Value) -> ToolSummary {
     let arg = |key: &str| args[key].as_str().unwrap_or_default().to_string();
     let (title, subject) = match name {
         "bash" => ("Bash", crate::text::first_line(&arg("command"), 120)),
@@ -104,7 +110,7 @@ pub fn summarize(name: &str, args: &Value, details: &Value) -> ToolSummary {
         _ => (None, None),
     };
     ToolSummary {
-        title: title.into(),
+        title: tr(language, title).into(),
         subject,
         added,
         removed,

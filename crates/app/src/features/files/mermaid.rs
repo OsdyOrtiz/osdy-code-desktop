@@ -22,7 +22,10 @@ use gpui_kit::{
     IntoElement as _, ParentElement as _, SharedUri, Styled as _, Task, div,
 };
 
-use crate::shared::ui;
+use super::Text;
+use crate::shared::{i18n::t, ui};
+
+const START_DOWNLOAD: &str = "Starting the download…";
 
 /// How a document's images name a drawn diagram: `mermaid:<key>`.
 const SCHEME: &str = "mermaid:";
@@ -84,17 +87,17 @@ pub fn banner(blocks: usize, id: impl Into<ElementId>, cx: &App) -> Option<Div> 
         _ if blocks == 0 => return None,
         Renderer::Ready(_) => return None,
         Renderer::Missing => (
-            format!(
-                "{blocks} Mermaid {} here. Draw {} with the diagram renderer, a one-time download of about 20 MB.",
-                if blocks == 1 { "diagram" } else { "diagrams" },
-                if blocks == 1 { "it" } else { "them" },
-            ),
-            Some("Install"),
+            t(if blocks == 1 {
+                "{blocks} Mermaid diagram here. Draw it with the diagram renderer, a one-time download of about 20 MB."
+            } else {
+                "{blocks} Mermaid diagrams here. Draw them with the diagram renderer, a one-time download of about 20 MB."
+            }).replace("{blocks}", &blocks.to_string()),
+            Some(t("Install")),
         ),
-        Renderer::Installing(progress) => (progress.clone(), None),
+        Renderer::Installing(progress) => ((if progress == START_DOWNLOAD { t(START_DOWNLOAD) } else { progress }).to_string(), None),
         Renderer::Failed(error) => (
-            format!("The diagram renderer couldn't be installed: {error}"),
-            Some("Try again"),
+            t("The diagram renderer couldn't be installed: {error}").replace("{error}", error),
+            Some(t("Try again")),
         ),
     };
     let installing = matches!(renderer(cx), Renderer::Installing(_));
@@ -138,7 +141,7 @@ pub fn install(cx: &mut App) {
     let set = |renderer: Renderer, cx: &mut App| {
         cx.update_global::<RendererState, _>(|state, _| state.renderer = renderer);
     };
-    set(Renderer::Installing("Starting the download…".into()), cx);
+    set(Renderer::Installing(START_DOWNLOAD.into()), cx);
     let (tx, rx) = async_channel::unbounded::<String>();
     let task = cx.spawn(async move |cx| {
         let work = cx.background_executor().spawn(async move {
@@ -168,7 +171,7 @@ pub fn install(cx: &mut App) {
 enum Drawing {
     Pending,
     Ready(Arc<Image>),
-    Failed(String),
+    Failed(Text),
 }
 
 /// The diagrams of one preview, by source and theme.
@@ -221,13 +224,16 @@ impl Diagrams {
             out.push_str(&text[at..block.range.start]);
             match cache.get(&key) {
                 Some(Drawing::Ready(_)) => {
-                    out.push_str(&format!("![Mermaid diagram]({SCHEME}{key})\n"));
+                    out.push_str(&format!("![{}]({SCHEME}{key})\n", t("Mermaid diagram")));
                 }
                 Some(Drawing::Failed(error)) => {
                     out.push_str(&text[block.range.clone()]);
-                    out.push_str(&format!(
-                        "\n> Mermaid couldn't draw this diagram: {error}\n"
-                    ));
+                    out.push_str("\n> ");
+                    out.push_str(
+                        &t("Mermaid couldn't draw this diagram: {error}")
+                            .replace("{error}", &error.render()),
+                    );
+                    out.push('\n');
                 }
                 Some(Drawing::Pending) => out.push_str(&text[block.range.clone()]),
                 None => {
@@ -252,7 +258,7 @@ impl Diagrams {
     }
 
     /// Store what drawing `job` gave.
-    pub fn finish(&self, job: &Job, drawn: Result<Vec<u8>, String>) {
+    pub fn finish(&self, job: &Job, drawn: Result<Vec<u8>, Text>) {
         let drawing = match drawn {
             Ok(svg) => Drawing::Ready(Arc::new(Image::from_bytes(ImageFormat::Svg, svg))),
             Err(error) => Drawing::Failed(error),
@@ -312,7 +318,7 @@ static FONT: LazyLock<Option<(String, PathBuf)>> = LazyLock::new(|| {
 
 /// Draw `job` as SVG with the renderer. Tens of milliseconds: call it off
 /// the UI thread.
-pub fn draw(job: &Job) -> Result<Vec<u8>, String> {
+pub fn draw(job: &Job) -> Result<Vec<u8>, Text> {
     let mut init = vec![format!(
         "\"theme\": \"{}\"",
         if job.dark { "dark" } else { "default" }
@@ -338,7 +344,10 @@ pub fn draw(job: &Job) -> Result<Vec<u8>, String> {
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
-        .map_err(|e| format!("couldn't start the diagram renderer: {e}"))?;
+        .map_err(|e| {
+            Text::from("couldn't start the diagram renderer: {error}")
+                .with("{error}", e.to_string())
+        })?;
     let source = format!("%%{{init: {{{}}}}}%%\n{}", init.join(", "), job.source);
     child
         .stdin
@@ -352,9 +361,9 @@ pub fn draw(job: &Job) -> Result<Vec<u8>, String> {
     } else {
         let error = String::from_utf8_lossy(&output.stderr).trim().to_string();
         Err(if error.is_empty() {
-            "the diagram renderer gave no drawing".to_string()
+            "the diagram renderer gave no drawing".into()
         } else {
-            error
+            error.into()
         })
     }
 }

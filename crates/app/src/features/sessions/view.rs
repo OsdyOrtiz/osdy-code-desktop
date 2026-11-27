@@ -12,7 +12,9 @@ use pi_rpc::desktop_rpc::{
 };
 
 use super::discovery::{find_session, list_sessions};
-use super::{Pending, Scope, SessionsEvent, SessionsView, Source};
+use super::{
+    FILTER_PLACEHOLDER, OpenError, Pending, Scope, SessionsEvent, SessionsView, Source, t,
+};
 use crate::features::session::{
     READ_DECIDE_WAIT, ReadFailure, ReadOutcome, ReadRequest, ReadSupport, SessionView,
 };
@@ -127,9 +129,7 @@ impl SessionsView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> Self {
-        let filter = cx.new(|cx| {
-            InputState::new(window, cx).placeholder("Search by name, first message or path")
-        });
+        let filter = cx.new(|cx| InputState::new(window, cx).placeholder(t(FILTER_PLACEHOLDER)));
         let mut subscriptions = vec![cx.subscribe_in(
             &filter,
             window,
@@ -157,6 +157,7 @@ impl SessionsView {
             error: None,
             loading: false,
             filter,
+            filter_language: crate::shared::i18n::language(),
             _load: Task::ready(()),
             _subscriptions: subscriptions,
         }
@@ -309,9 +310,7 @@ impl SessionsView {
             (Some(Pending::List { .. }), _) => self.use_files(cx),
             (Some(Pending::Switch { .. }), ReadOutcome::Switched(result)) => {
                 if result.cancelled {
-                    self.error = Some(
-                        "An extension cancelled the switch; this tab keeps its session.".into(),
-                    );
+                    self.error = Some(OpenError::Cancelled);
                 } else {
                     // The tab replaced its session (or already ran it).
                     cx.emit(SessionsEvent::Close);
@@ -321,7 +320,7 @@ impl SessionsView {
                 if opens_elsewhere(&failure, scope) {
                     self.open_from_file(entry, cx);
                 } else {
-                    self.error = Some(failure.message());
+                    self.error = Some(OpenError::Request(failure));
                 }
             }
             _ => {}
@@ -470,10 +469,7 @@ impl SessionsView {
             let _ = this.update(cx, |this, cx| match found {
                 Some(session) => this.open(&session, cx),
                 None => {
-                    this.error = Some(
-                        "That session belongs to another project, and its file was not found to open it in a new tab."
-                            .into(),
-                    );
+                    this.error = Some(OpenError::MissingFile);
                     cx.notify();
                 }
             });

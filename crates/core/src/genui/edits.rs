@@ -207,6 +207,16 @@ pub fn format_number(n: f64) -> String {
     }
 }
 
+pub fn count_in(
+    language: crate::i18n::Language,
+    count: usize,
+    one: &'static str,
+    many: &'static str,
+) -> String {
+    crate::i18n::tr(language, if count == 1 { one } else { many })
+        .replace("{count}", &count.to_string())
+}
+
 pub fn plural(count: usize, word: &str) -> String {
     format!("{count} {word}{}", if count == 1 { "" } else { "s" })
 }

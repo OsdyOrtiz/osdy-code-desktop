@@ -282,53 +282,31 @@ impl ConfigFailure {
     }
 
     pub(crate) fn message(&self) -> String {
+        self.text().render_in(gentle_core::i18n::Language::English)
+    }
+
+    pub(super) fn text(&self) -> super::ProfileText {
+        use super::profile_msg;
         match self {
-            Self::Unsupported | Self::UnsupportedMethod => {
-                "This Gentle Shell does not serve its configuration to Desktop.".to_string()
-            }
-            Self::NotReady => {
-                "Gentle Shell is still starting in this tab; try again in a moment.".to_string()
-            }
-            Self::Timeout => {
-                "Gentle Shell did not answer in time; nothing is confirmed.".to_string()
-            }
-            Self::Dropped => {
-                "Gentle Shell restarted before it answered; nothing is confirmed.".to_string()
-            }
+            Self::Unsupported | Self::UnsupportedMethod => "This Gentle Shell does not serve its configuration to Desktop.".into(),
+            Self::NotReady => "Gentle Shell is still starting in this tab; try again in a moment.".into(),
+            Self::Timeout => "Gentle Shell did not answer in time; nothing is confirmed.".into(),
+            Self::Dropped => "Gentle Shell restarted before it answered; nothing is confirmed.".into(),
             Self::Rejected { code, message } => match code {
-                ConfigErrorCode::RevisionConflict => {
-                    "The configuration changed in Gentle Shell since it was read.".to_string()
-                }
-                ConfigErrorCode::InvalidData => {
-                    format!("Gentle Shell refused the data ({message}).")
-                }
-                ConfigErrorCode::WriteFailed => {
-                    format!("Gentle Shell could not write it ({message}).")
-                }
-                ConfigErrorCode::ConfigUnavailable => {
-                    format!("Gentle Shell's configuration is unavailable ({message}).")
-                }
-                ConfigErrorCode::ProfileApplyBusy => {
-                    "Gentle Shell is applying a profile right now, so nothing was written."
-                        .to_string()
-                }
-                ConfigErrorCode::UnknownStore | ConfigErrorCode::ReadOnly => {
-                    format!("Gentle Shell refused the request ({code}: {message}).")
-                }
+                ConfigErrorCode::RevisionConflict => "The configuration changed in Gentle Shell since it was read.".into(),
+                ConfigErrorCode::InvalidData => profile_msg!("Gentle Shell refused the data ({message}).", message = message.clone()),
+                ConfigErrorCode::WriteFailed => profile_msg!("Gentle Shell could not write it ({message}).", message = message.clone()),
+                ConfigErrorCode::ConfigUnavailable => profile_msg!("Gentle Shell's configuration is unavailable ({message}).", message = message.clone()),
+                ConfigErrorCode::ProfileApplyBusy => "Gentle Shell is applying a profile right now, so nothing was written.".into(),
+                ConfigErrorCode::UnknownStore | ConfigErrorCode::ReadOnly => profile_msg!("Gentle Shell refused the request ({code}: {message}).", code = code.to_string(), message = message.clone()),
             },
-            Self::Failure(reason) => format!("The configuration request failed ({reason})."),
-            Self::Held => "Make default is still writing the files; wait for Make default to finish, then save again.".to_string(),
-            Self::Applying => "Gentle Shell is still applying a profile; wait for it to finish, then try again.".to_string(),
+            Self::Failure(reason) => profile_msg!("The configuration request failed ({reason}).", reason = reason.clone()),
+            Self::Held => "Make default is still writing the files; wait for Make default to finish, then save again.".into(),
+            Self::Applying => "Gentle Shell is still applying a profile; wait for it to finish, then try again.".into(),
             Self::ApplyRefused { code, message } => match code {
-                ProfileApplyErrorCode::UnknownProfile => {
-                    format!("Gentle Shell has no saved profile by that name ({message}).")
-                }
-                ProfileApplyErrorCode::ProfileApplyBusy => {
-                    "Gentle Shell is already applying a profile; nothing was written. Try again once it finishes.".to_string()
-                }
-                ProfileApplyErrorCode::ProfilesUnavailable => {
-                    format!("Gentle Shell's profiles are unavailable in this tab ({message}).")
-                }
+                ProfileApplyErrorCode::UnknownProfile => profile_msg!("Gentle Shell has no saved profile by that name ({message}).", message = message.clone()),
+                ProfileApplyErrorCode::ProfileApplyBusy => "Gentle Shell is already applying a profile; nothing was written. Try again once it finishes.".into(),
+                ProfileApplyErrorCode::ProfilesUnavailable => profile_msg!("Gentle Shell's profiles are unavailable in this tab ({message}).", message = message.clone()),
             },
         }
     }

@@ -26,7 +26,7 @@ pub struct TemplatesView {
     list: Vec<(PathBuf, Template)>,
     /// The template being renamed and its field.
     renaming: Option<(PathBuf, Entity<InputState>, Subscription)>,
-    error: Option<String>,
+    error: Option<crate::shared::i18n::Message>,
     focus: FocusHandle,
 }
 
@@ -102,10 +102,13 @@ impl TemplatesView {
     }
 
     pub(super) fn rename(&mut self, path: &std::path::Path, name: &str, cx: &mut Context<Self>) {
-        let result = store::dir(cx)
-            .ok_or_else(|| "no data folder".to_string())
-            .and_then(|dir| store::rename_template(&dir, path, name).map_err(|e| e.to_string()));
-        self.error = result.err().map(|e| format!("Couldn't rename it: {e}"));
+        use crate::shared::i18n::Message;
+        self.error = match store::dir(cx) {
+            Some(dir) => store::rename_template(&dir, path, name)
+                .err()
+                .map(|e| Message::with_error("Couldn't rename it: {error}", e)),
+            None => Some(Message::new("Couldn't rename it: no data folder")),
+        };
         self.reload(cx);
         cx.notify();
     }
@@ -116,7 +119,7 @@ impl TemplatesView {
         };
         self.error = store::delete_template(path)
             .err()
-            .map(|e| format!("Couldn't delete it: {e}"));
+            .map(|e| crate::shared::i18n::Message::with_error("Couldn't delete it: {error}", e));
         self.reload(cx);
         cx.notify();
     }
@@ -148,7 +151,7 @@ impl Render for TemplatesView {
                     .text_size(rems(14. / 16.))
                     .font_weight(FontWeight::SEMIBOLD)
                     .text_color(ui::fg())
-                    .child("UI templates"),
+                    .child(crate::shared::i18n::t("UI templates")),
             )
             .child(
                 Button::new("genui-templates-close")
@@ -156,7 +159,7 @@ impl Render for TemplatesView {
                     .xsmall()
                     .text_color(ui::muted())
                     .icon(Icon::new(IconName::X))
-                    .tooltip("Close")
+                    .tooltip(crate::shared::i18n::t("Close"))
                     .on_click(cx.listener(|_, _, _, cx| cx.emit(TemplatesEvent::Close))),
             );
         let rows = self.list.iter().enumerate().map(|(ix, (path, template))| {
@@ -213,7 +216,7 @@ impl Render for TemplatesView {
                         .xsmall()
                         .text_color(ui::muted())
                         .icon(Icon::new(IconName::Pencil))
-                        .tooltip("Rename")
+                        .tooltip(crate::shared::i18n::t("Rename"))
                         .on_click(cx.listener(move |this, _, window, cx| {
                             this.start_rename(ix, window, cx)
                         })),
@@ -224,14 +227,14 @@ impl Render for TemplatesView {
                         .xsmall()
                         .text_color(ui::muted())
                         .icon(Icon::new(IconName::Trash))
-                        .tooltip("Delete")
+                        .tooltip(crate::shared::i18n::t("Delete"))
                         .on_click(cx.listener(move |this, _, _, cx| this.delete(ix, cx))),
                 )
                 .child(
                     Button::new(("genui-template-insert", ix))
                         .primary()
                         .xsmall()
-                        .label("Insert")
+                        .label(crate::shared::i18n::t("Insert"))
                         .on_click(cx.listener(move |this, _, _, cx| this.insert(ix, cx))),
                 )
         });
@@ -257,8 +260,7 @@ impl Render for TemplatesView {
                                 .text_color(ui::muted())
                                 .whitespace_normal()
                                 .child(
-                                    "No templates yet. Save one from a surface's Export menu \
-                                     (Save as template).",
+                                    crate::shared::i18n::t("No templates yet. Save one from a surface's Export menu (Save as template)."),
                                 ),
                         )
                     }),
@@ -267,7 +269,7 @@ impl Render for TemplatesView {
                 div()
                     .text_size(rems(12. / 16.))
                     .text_color(ui::danger())
-                    .child(error)
+                    .child(error.render())
             }))
     }
 }

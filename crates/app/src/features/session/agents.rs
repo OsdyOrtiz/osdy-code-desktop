@@ -1,5 +1,6 @@
 //! The Agents panel: Gentle Agents subagents for this session, Tern-style.
 
+use crate::shared::i18n::t;
 use std::cell::Cell;
 use std::collections::HashSet;
 use std::rc::Rc;
@@ -53,9 +54,9 @@ impl AgentsFilter {
     }
     fn label(self) -> &'static str {
         match self {
-            Self::All => "Filter: all",
-            Self::Active => "Filter: active",
-            Self::Finished => "Filter: finished",
+            Self::All => t("Filter: all"),
+            Self::Active => t("Filter: active"),
+            Self::Finished => t("Filter: finished"),
         }
     }
     fn keeps(self, helper: &Helper) -> bool {
@@ -179,11 +180,11 @@ pub fn agent_usage_lines(agent: &DesktopAgent) -> Vec<(&'static str, String)> {
     let usage = &agent.usage;
     let token = |value: Option<u64>| value.map_or_else(|| "unavailable".to_string(), format_tokens);
     vec![
-        ("Tokens", format_tokens(usage.total)),
-        ("Input", token(usage.input)),
-        ("Output", token(usage.output)),
-        ("Cache read", token(usage.cache)),
-        ("Reasoning", token(usage.reasoning)),
+        (t("Tokens"), format_tokens(usage.total)),
+        (t("Input"), token(usage.input)),
+        (t("Output"), token(usage.output)),
+        (t("Cache read"), token(usage.cache)),
+        (t("Reasoning"), token(usage.reasoning)),
     ]
 }
 
@@ -274,16 +275,16 @@ impl JobRow {
         &self.id
     }
 
-    fn from_legacy(job: &Job) -> Self {
+    fn from_legacy(job: &Job, language: gentle_core::i18n::Language) -> Self {
         Self {
             id: job.id.clone(),
-            label: job.display_label(),
-            state: job.state_text(),
+            label: job.localized_label(language),
+            state: job.localized_state(language),
             outcome: job.outcome(),
         }
     }
 
-    fn from_desktop(job: &DesktopJob) -> Self {
+    fn from_desktop(job: &DesktopJob, language: gentle_core::i18n::Language) -> Self {
         let outcome = if desktop::output::is_running(job) {
             JobOutcome::Running
         } else if matches!(job.exit_code, Some(JobExitCode::Code(0))) && job.status != "failed" {
@@ -294,13 +295,16 @@ impl JobRow {
         Self {
             id: job.id.clone(),
             label: if job.label.is_empty() {
-                format!("job {}", job.id)
+                gentle_core::i18n::tr(language, "job {id}").replace("{id}", &job.id)
             } else {
                 job.label.clone()
             },
             state: match &job.exit_code {
-                Some(JobExitCode::Code(code)) => format!("exit {code}"),
-                Some(JobExitCode::Null) => "no exit code".to_string(),
+                Some(JobExitCode::Code(code)) => gentle_core::i18n::tr(language, "exit {code}")
+                    .replace("{code}", &code.to_string()),
+                Some(JobExitCode::Null) => {
+                    gentle_core::i18n::tr(language, "no exit code").to_string()
+                }
                 None => job.status.clone(),
             },
             outcome,
@@ -342,13 +346,17 @@ impl SessionView {
     /// Prefer the seeded structured list and append only tool- or notice-
     /// reported jobs the channel has never reported in this session.
     pub(super) fn job_rows(&self) -> Vec<JobRow> {
+        self.job_rows_in(crate::shared::i18n::language())
+    }
+
+    fn job_rows_in(&self, language: gentle_core::i18n::Language) -> Vec<JobRow> {
         let mut rows: Vec<_> = if self.desktop.jobs_ready() {
             let mut seen = HashSet::new();
             self.desktop
                 .jobs()
                 .iter()
                 .filter(|job| seen.insert(job.id.as_str()))
-                .map(JobRow::from_desktop)
+                .map(|job| JobRow::from_desktop(job, language))
                 .collect()
         } else {
             Vec::new()
@@ -358,7 +366,7 @@ impl SessionView {
                 .jobs
                 .iter()
                 .filter(|job| !self.desktop.job_was_reported(&job.id))
-                .map(JobRow::from_legacy),
+                .map(|job| JobRow::from_legacy(job, language)),
         );
         rows
     }
@@ -470,7 +478,7 @@ impl SessionView {
                     .map(|read| (job.id.clone(), read.output.clone()))
             });
             let jobs = self
-                .job_rows()
+                .job_rows_in(gentle_core::i18n::Language::English)
                 .iter()
                 .map(|row| {
                     let status = match row.outcome {
@@ -599,7 +607,7 @@ pub(super) fn job_row(
                     .ghost()
                     .xsmall()
                     .icon(Icon::new(IconName::OctagonX))
-                    .tooltip("Cancel this job")
+                    .tooltip(t("Cancel this job"))
                     .on_click(move |_, _, cx| {
                         let _ = view.update(cx, |this, cx| this.cancel_running_job(id.clone(), cx));
                     }),
@@ -641,14 +649,16 @@ fn job_output_well(output: Option<(String, bool)>, failure: Option<Failure>) -> 
     let note = |text: &'static str| div().text_color(ui::faint()).child(text);
     match (output, failure) {
         (_, Some(failure)) => well.child(note(match failure {
-            Failure::Gone => "This job's output is no longer available.",
-            Failure::Unavailable => "Gentle Shell can't read job output right now.",
-            Failure::Failed => "The output could not be read.",
+            Failure::Gone => t("This job's output is no longer available."),
+            Failure::Unavailable => t("Gentle Shell can't read job output right now."),
+            Failure::Failed => t("The output could not be read."),
         })),
-        (None, None) => well.child(note("Reading the output…")),
-        (Some((text, _)), None) if text.trim().is_empty() => well.child(note("No output yet.")),
+        (None, None) => well.child(note(t("Reading the output…"))),
+        (Some((text, _)), None) if text.trim().is_empty() => well.child(note(t("No output yet."))),
         (Some((text, truncated)), None) => well
-            .when(truncated, |d| d.child(note("… earlier output not shown")))
+            .when(truncated, |d| {
+                d.child(note(t("… earlier output not shown")))
+            })
             .children(
                 text.lines()
                     .map(|line| div().whitespace_nowrap().child(line.to_string())),
@@ -841,7 +851,9 @@ impl SessionView {
         let (summary_line, running_now, count) = if on_jobs {
             let running = jobs.iter().filter(|j| j.is_running()).count();
             (
-                format!("{running} running · {} finished", jobs.len() - running),
+                t("{running} running · {finished} finished")
+                    .replace("{running}", &running.to_string())
+                    .replace("{finished}", &(jobs.len() - running).to_string()),
                 running > 0,
                 jobs.len(),
             )
@@ -851,10 +863,10 @@ impl SessionView {
             let queued = helpers.iter().filter(|h| h.status() == "queued").count();
             let finished = helpers.iter().filter(|h| !h.is_active()).count();
             let mut bits = vec![
-                format!("{running} running"),
-                format!("{waiting} waiting"),
-                format!("{queued} queued"),
-                format!("{finished} finished"),
+                t("{count} running").replace("{count}", &running.to_string()),
+                t("{count} waiting").replace("{count}", &waiting.to_string()),
+                t("{count} queued").replace("{count}", &queued.to_string()),
+                t("{count} finished").replace("{count}", &finished.to_string()),
             ];
             // Counts from the widget, or from a projection that carries them
             // (Gentle Shell 5.0.0); an older projection alone has none.
@@ -865,8 +877,8 @@ impl SessionView {
             if counted {
                 let turns: u64 = helpers.iter().filter_map(|h| h.turns()).sum();
                 let tools: u64 = helpers.iter().filter_map(|h| h.tool_calls()).sum();
-                bits.push(format!("{turns} turns"));
-                bits.push(format!("{tools} tools"));
+                bits.push(t("{count} turns").replace("{count}", &turns.to_string()));
+                bits.push(t("{count} tools").replace("{count}", &tools.to_string()));
             }
             (bits.join(" · "), running > 0, helpers.len())
         };
@@ -879,7 +891,7 @@ impl SessionView {
                     .text_base()
                     .font_weight(FontWeight::SEMIBOLD)
                     .text_color(ui::fg())
-                    .child("Agents"),
+                    .child(t("Agents")),
             )
             .child(
                 div()
@@ -943,14 +955,18 @@ impl SessionView {
             .bg(ui::well())
             .border_1()
             .border_color(ui::border())
-            .child(tab_button("agents-tab", "Agents", AgentsTab::Agents))
-            .child(tab_button("activity-tab", "Activity", AgentsTab::Activity))
-            .child(tab_button("jobs-tab", "Jobs", AgentsTab::Jobs));
+            .child(tab_button("agents-tab", t("Agents"), AgentsTab::Agents))
+            .child(tab_button(
+                "activity-tab",
+                t("Activity"),
+                AgentsTab::Activity,
+            ))
+            .child(tab_button("jobs-tab", t("Jobs"), AgentsTab::Jobs));
 
         let no_subagents = || {
             empty_state(
                 IconName::Bot,
-                "No subagents yet. When el Gentleman delegates work, helpers appear here live.",
+                t("No subagents yet. When el Gentleman delegates work, helpers appear here live."),
             )
         };
         let left_body = match tab {
@@ -970,9 +986,10 @@ impl SessionView {
                         Some(ThreadWatch {
                             thread: Some(thread),
                             ..
-                        }) if thread.items.is_empty() => {
-                            empty_state(IconName::MessageSquare, "This helper has no activity yet.")
-                        }
+                        }) if thread.items.is_empty() => empty_state(
+                            IconName::MessageSquare,
+                            t("This helper has no activity yet."),
+                        ),
                         Some(ThreadWatch {
                             thread: Some(thread),
                             truncated,
@@ -985,20 +1002,21 @@ impl SessionView {
                             IconName::MessageSquare,
                             match failure {
                                 Failure::Gone => {
-                                    "Gentle Shell no longer keeps this helper's activity."
+                                    t("Gentle Shell no longer keeps this helper's activity.")
                                 }
                                 Failure::Unavailable => {
-                                    "Gentle Shell can't read helper activity right now."
+                                    t("Gentle Shell can't read helper activity right now.")
                                 }
-                                Failure::Failed => "This helper's activity could not be read.",
+                                Failure::Failed => t("This helper's activity could not be read."),
                             },
                         ),
-                        Some(_) => {
-                            empty_state(IconName::MessageSquare, "Reading this helper's activity…")
-                        }
+                        Some(_) => empty_state(
+                            IconName::MessageSquare,
+                            t("Reading this helper's activity…"),
+                        ),
                         None => empty_state(
                             IconName::MessageSquare,
-                            "Gentle Shell has not published an activity thread for this helper.",
+                            t("Gentle Shell has not published an activity thread for this helper."),
                         ),
                     }
                 }
@@ -1006,7 +1024,9 @@ impl SessionView {
             },
             AgentsTab::Jobs if jobs.is_empty() => empty_state(
                 IconName::Activity,
-                "No background jobs yet. Commands the agent runs in the background show up here.",
+                t(
+                    "No background jobs yet. Commands the agent runs in the background show up here.",
+                ),
             ),
             AgentsTab::Jobs => {
                 let (cancel, view) = (self.desktop.cancel_job_supported(), cx.entity().downgrade());
@@ -1075,8 +1095,8 @@ impl SessionView {
                                 .outline()
                                 .small()
                                 .icon(Icon::new(IconName::OctagonX))
-                                .label("Stop")
-                                .tooltip("Ask Gentle Shell to cancel this helper over the Desktop channel")
+                                .label(t("Stop"))
+                                .tooltip(t("Ask Gentle Shell to cancel this helper over the Desktop channel"))
                                 .on_click(cx.listener(move |this, _, _, cx| this.stop_agent(&id, cx))),
                         )
                     } else {
@@ -1086,8 +1106,8 @@ impl SessionView {
                                 .outline()
                                 .small()
                                 .icon(Icon::new(IconName::OctagonX))
-                                .label("Ask to stop")
-                                .tooltip("Gentle Shell stops helpers from its agent: this asks it to run subagent_cancel")
+                                .label(t("Ask to stop"))
+                                .tooltip(t("Gentle Shell stops helpers from its agent: this asks it to run subagent_cancel"))
                                 .on_click(cx.listener(move |this, _, _, cx| this.ask_to_stop_agent(&id, cx))),
                         )
                     }
@@ -1112,7 +1132,7 @@ impl SessionView {
                 Button::new("agents-footer-close")
                     .ghost()
                     .small()
-                    .label("Close")
+                    .label(t("Close"))
                     .on_click(cx.listener(|this, _, _, cx| this.close_agents(cx))),
             )
             .when(!on_jobs, |d| {
@@ -1125,7 +1145,7 @@ impl SessionView {
                         } else {
                             IconName::MessageSquare
                         }))
-                        .label(if tab == AgentsTab::Activity { "Back to agents" } else { "Open transcript" })
+                        .label(if tab == AgentsTab::Activity { t("Back to agents") } else { t("Open transcript") })
                         .on_click(cx.listener(|this, _, _, cx| {
                             this.agents_panel.tab = match this.agents_panel.tab {
                                 AgentsTab::Agents => AgentsTab::Activity,
@@ -1181,11 +1201,11 @@ impl SessionView {
             .text_xs()
             .text_color(ui::faint())
             .child(div().w(rems(10. / 16.)).flex_shrink_0())
-            .child(div().flex_1().min_w_0().truncate().child("Agent"))
-            .child(column(72., "Status".into()))
-            .child(column(56., "Time".into()))
-            .child(column(40., "Turns".into()))
-            .child(column(40., "Tools".into()));
+            .child(div().flex_1().min_w_0().truncate().child(t("Agent")))
+            .child(column(72., t("Status").into()))
+            .child(column(56., t("Time").into()))
+            .child(column(40., t("Turns").into()))
+            .child(column(40., t("Tools").into()));
         let rows = helpers.iter().enumerate().map(|(ix, helper)| {
             let id = helper.id().to_string();
             let is_selected = selected == Some(helper.id());
@@ -1357,36 +1377,39 @@ impl SessionView {
                         h_flex()
                             .gap_2()
                             .child(stat(
-                                "Model",
+                                t("Model"),
                                 agent.model.clone().unwrap_or_else(|| "unavailable".into()),
                             ))
-                            .child(stat("Cost", format_cost(agent.usage.cost))),
+                            .child(stat(t("Cost"), format_cost(agent.usage.cost))),
                     )
                     .when(helper.live().is_some() || agent.turns.is_some(), |d| {
                         d.child(
                             h_flex()
                                 .gap_2()
-                                .child(stat("Time", duration(helper.elapsed_ms(now))))
-                                .child(stat("Turns", count(helper.turns())))
-                                .child(stat("Tools", count(helper.tool_calls()))),
+                                .child(stat(t("Time"), duration(helper.elapsed_ms(now))))
+                                .child(stat(t("Turns"), count(helper.turns())))
+                                .child(stat(t("Tools"), count(helper.tool_calls()))),
                         )
                     })
                     .child(
-                        v_flex().gap_1().child(ui::section_label("Usage")).children(
-                            agent_usage_lines(agent)
-                                .into_iter()
-                                .map(|(label, value)| field(label, value, true)),
-                        ),
+                        v_flex()
+                            .gap_1()
+                            .child(ui::section_label(t("Usage")))
+                            .children(
+                                agent_usage_lines(agent)
+                                    .into_iter()
+                                    .map(|(label, value)| field(label, value, true)),
+                            ),
                     )
                     .when_some(agent.thinking.clone(), |d, thinking| {
-                        d.child(field("Thinking", thinking, false))
+                        d.child(field(t("Thinking"), thinking, false))
                     })
                     .child(field(
-                        "Last step",
+                        t("Last step"),
                         helper.last_step().unwrap_or_default(),
                         true,
                     ))
-                    .child(field("Id", agent.id.clone(), true))
+                    .child(field(t("Id"), agent.id.clone(), true))
             }
             Helper::Legacy(task) => {
                 let s = &task.summary;
@@ -1418,9 +1441,9 @@ impl SessionView {
                     .child(
                         h_flex()
                             .gap_2()
-                            .child(stat("Time", duration(s.elapsed_ms(now))))
-                            .child(stat("Turns", s.turns.to_string()))
-                            .child(stat("Tools", s.tool_calls.to_string())),
+                            .child(stat(t("Time"), duration(s.elapsed_ms(now))))
+                            .child(stat(t("Turns"), s.turns.to_string()))
+                            .child(stat(t("Tools"), s.tool_calls.to_string())),
                     )
                     .when_some(s.error.clone(), |d, error| {
                         d.child(
@@ -1437,7 +1460,7 @@ impl SessionView {
                                         .text_size(rems(10. / 16.))
                                         .font_weight(FontWeight::SEMIBOLD)
                                         .text_color(ui::danger())
-                                        .child("ERROR"),
+                                        .child(t("ERROR")),
                                 )
                                 .child(
                                     div()
@@ -1449,11 +1472,11 @@ impl SessionView {
                         )
                     })
                     .when_some(s.last_step.clone(), |d, step| {
-                        d.child(field("Last step", step, true))
+                        d.child(field(t("Last step"), step, true))
                     })
                     .when_some(s.prompt.clone(), |d, prompt| {
                         d.child(
-                            v_flex().gap_1().child(ui::section_label("Task")).child(
+                            v_flex().gap_1().child(ui::section_label(t("Task"))).child(
                                 ui::well_box()
                                     .px_3()
                                     .py_2()
@@ -1463,7 +1486,7 @@ impl SessionView {
                             ),
                         )
                     })
-                    .child(field("Id", s.id.clone(), true))
+                    .child(field(t("Id"), s.id.clone(), true))
             }
         }
         .into_any_element()
@@ -1485,9 +1508,9 @@ impl SessionView {
             .px_1();
         if thread.dropped > 0 || truncated {
             let text = if thread.dropped > 0 {
-                format!("… {} earlier items dropped", thread.dropped)
+                t("… {count} earlier items dropped").replace("{count}", &thread.dropped.to_string())
             } else {
-                "… earlier items not shown".to_string()
+                t("… earlier items not shown").to_string()
             };
             column = column.child(div().text_xs().text_color(ui::faint()).child(text));
         }
@@ -1595,9 +1618,10 @@ impl SessionView {
                                         .text_color(ui::muted())
                                         .when(hidden > 0, |d| {
                                             d.child(
-                                                div()
-                                                    .text_color(ui::faint())
-                                                    .child(format!("… {hidden} more lines")),
+                                                div().text_color(ui::faint()).child(
+                                                    t("… {count} more lines")
+                                                        .replace("{count}", &hidden.to_string()),
+                                                ),
                                             )
                                         })
                                         .children(shown.lines().map(|l| {

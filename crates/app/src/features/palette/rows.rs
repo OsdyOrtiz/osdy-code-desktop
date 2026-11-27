@@ -4,10 +4,11 @@
 use gpui_kit::App;
 use gpui_kit::assets::IconName;
 
+use crate::features::session::SessionView;
 use crate::shared::ui;
 use gentle_core::fuzzy::{Needle, fuzzy_score, rank_files};
 
-use super::{Category, Line, PaletteAction, PaletteView, Row, WorkspaceRow};
+use super::{Category, Line, PaletteAction, PaletteView, Row, WorkspaceRow, t, tab_count};
 
 impl PaletteView {
     /// Re-match the rows against the current query and category.
@@ -57,10 +58,9 @@ impl PaletteView {
                 },
                 title: w.name.clone(),
                 meta: format!(
-                    "{} {}{}",
-                    w.tabs,
-                    if w.tabs == 1 { "tab" } else { "tabs" },
-                    if w.current { " · current" } else { "" }
+                    "{}{}",
+                    tab_count(w.tabs),
+                    if w.current { t(" · current") } else { "" }
                 ),
                 detail: String::new(),
                 group: "Workspaces",
@@ -81,9 +81,9 @@ impl PaletteView {
                 0,
                 Row {
                     icon: IconName::Plus,
-                    title: format!("Create workspace \u{201c}{query}\u{201d}"),
+                    title: t("Create workspace “{name}”").replace("{name}", query),
                     meta: String::new(),
-                    detail: format!("in {}", ui::split_path(&self.root).1),
+                    detail: t("in {folder}").replace("{folder}", &ui::split_path(&self.root).1),
                     group: "Workspaces",
                     action: PaletteAction::CreateWorkspace {
                         name: query.to_string(),
@@ -96,12 +96,10 @@ impl PaletteView {
         }
         rows.push(Row {
             icon: IconName::Folder,
-            title: "Browse folders…".into(),
+            title: t("Browse folders…").into(),
             meta: String::new(),
-            detail: format!(
-                "Open Osdy Code Desktop in any folder ({})",
-                ui::shortcut("O")
-            ),
+            detail: t("Open Osdy Code Desktop in any folder ({shortcut})")
+                .replace("{shortcut}", &ui::shortcut("O")),
             group: "Workspaces",
             action: PaletteAction::OpenExplorer,
             workspace: None,
@@ -109,12 +107,12 @@ impl PaletteView {
         });
         rows.push(Row {
             icon: IconName::FolderOpen,
-            title: "Create workspace from folder…".into(),
+            title: t("Create workspace from folder…").into(),
             meta: String::new(),
             detail: if query.is_empty() {
-                "Named after the folder".into()
+                t("Named after the folder").into()
             } else {
-                format!("Named \u{201c}{query}\u{201d}")
+                t("Named “{name}”").replace("{name}", query)
             },
             group: "Workspaces",
             action: PaletteAction::CreateWorkspace {
@@ -138,9 +136,17 @@ impl PaletteView {
             .iter()
             .enumerate()
             .filter_map(|(i, row)| {
-                let score = fuzzy_score(query, &row.title)
-                    .or_else(|| fuzzy_score(query, &row.detail).map(|s| s + 500))?;
-                Some((score, i, row))
+                let localized = self.localized_commands.get(i).unwrap_or(row);
+                let score = |row: &Row| {
+                    fuzzy_score(query, &row.title)
+                        .or_else(|| fuzzy_score(query, &row.detail).map(|s| s + 500))
+                };
+                let score = score(row).or_else(|| score(localized)).or_else(|| {
+                    let name = row.title.strip_prefix('/')?;
+                    let english = SessionView::builtin_english_description(name, &row.detail)?;
+                    fuzzy_score(query, english).map(|s| s + 500)
+                })?;
+                Some((score, i, localized))
             })
             .collect();
         // Keep groups together when nothing is typed.
@@ -201,7 +207,7 @@ impl PaletteView {
                 },
                 title: name.clone(),
                 meta: if *current {
-                    "current".into()
+                    t("current").into()
                 } else {
                     String::new()
                 },

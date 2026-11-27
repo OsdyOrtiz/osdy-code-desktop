@@ -137,7 +137,10 @@ pub(super) struct Rename {
 }
 
 /// The details panel's text fields for the selected node or group.
+pub(super) const TECH_PLACEHOLDER: &str = "Tech (e.g. Postgres)";
+
 pub(super) struct Fields {
+    pub language: gentle_core::i18n::Language,
     pub target: Selection,
     /// Nodes only.
     pub tech: Option<Entity<InputState>>,
@@ -185,6 +188,7 @@ pub struct DiagramView {
     pub(super) rename: Option<Rename>,
     pub(super) fields: Option<Fields>,
     pub(super) note: Option<Entity<InputState>>,
+    pub(super) note_language: gentle_core::i18n::Language,
     pub(super) send: SendState<Diagram>,
     /// The canvas' and the minimap's bounds last frame, written while painting.
     pub(super) bounds: Rc<Cell<Bounds<Pixels>>>,
@@ -231,6 +235,7 @@ impl DiagramView {
             rename: None,
             fields: None,
             note: None,
+            note_language: crate::shared::i18n::language(),
             send: SendState::Idle,
             bounds: Rc::new(Cell::new(Bounds::default())),
             minimap: Rc::new(Cell::new(Bounds::default())),
@@ -777,11 +782,11 @@ impl DiagramView {
                      cx: &mut Context<Self>| {
             cx.new(|cx| {
                 InputState::new(window, cx)
-                    .placeholder(placeholder)
+                    .placeholder(crate::shared::i18n::t(placeholder))
                     .default_value(value)
             })
         };
-        let tech = tech.map(|t| field(t, "Tech (e.g. Postgres)", window, cx));
+        let tech = tech.map(|t| field(t, TECH_PLACEHOLDER, window, cx));
         let description = field(description.unwrap_or_default(), "Description", window, cx);
         let mut subscriptions = Vec::new();
         for input in tech.iter().chain([&description]) {
@@ -799,6 +804,7 @@ impl DiagramView {
             ));
         }
         self.fields = Some(Fields {
+            language: crate::shared::i18n::language(),
             target,
             tech,
             description,
@@ -907,8 +913,10 @@ impl DiagramView {
 
     pub(super) fn note_input(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         if self.note.is_none() {
+            self.note_language = crate::shared::i18n::language();
             self.note = Some(cx.new(|cx| {
-                InputState::new(window, cx).placeholder("Add a note for the agent (optional)")
+                InputState::new(window, cx)
+                    .placeholder(crate::shared::i18n::t(super::NOTE_PLACEHOLDER))
             }));
         }
     }

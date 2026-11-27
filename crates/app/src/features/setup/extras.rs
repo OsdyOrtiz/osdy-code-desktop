@@ -8,7 +8,8 @@ use super::gentle::bridge_version;
 use super::probe::{
     go_version, os_release_value, output_of, parse_version, run_logged, show_version,
 };
-use super::{Fix, Log, MIN_ENGRAM, MIN_GO, MIN_NODE, Status, fetch, refresh_paths};
+use super::{Detail, Fix, Log, MIN_ENGRAM, MIN_GO, MIN_NODE, Status, fetch, refresh_paths};
+use crate::shared::i18n::t;
 
 // ── Node.js ────────────────────────────────────────────────────────────────
 
@@ -24,33 +25,44 @@ pub fn check_node() -> (Status, Fix) {
     };
     let Some(text) = output_of(&node, &["--version"]) else {
         return (
-            Status::Failed(format!("{} doesn't run", node.display())),
+            Status::Failed(Detail::template(
+                "{path} doesn't run",
+                [("{path}", node.to_string_lossy().into_owned())],
+            )),
             fix,
         );
     };
     let Some(version) = parse_version(&text) else {
         return (
-            Status::Failed(format!("Unexpected `node --version`: {text}")),
+            Status::Failed(Detail::template(
+                "Unexpected `node --version`: {output}",
+                [("{output}", text)],
+            )),
             fix,
         );
     };
     if version < MIN_NODE {
         return (
-            Status::Outdated(format!(
-                "Node {} — needs {} or newer",
-                show_version(version),
-                show_version(MIN_NODE)
+            Status::Outdated(Detail::template(
+                "Node {version} — needs {minimum} or newer",
+                [
+                    ("{version}", show_version(version)),
+                    ("{minimum}", show_version(MIN_NODE)),
+                ],
             )),
             fix,
         );
     }
     match pi_rpc::find_program("npm").and_then(|npm| output_of(&npm, &["--version"])) {
         Some(npm) => (
-            Status::Ok(format!("Node {} · npm {npm}", show_version(version))),
+            Status::Ok(format!("Node {} · npm {npm}", show_version(version)).into()),
             Fix::None,
         ),
         None => (
-            Status::Missing(format!("Node {} found, but not npm", show_version(version))),
+            Status::Missing(Detail::template(
+                "Node {version} found, but not npm",
+                [("{version}", show_version(version))],
+            )),
             fix,
         ),
     }
@@ -64,7 +76,7 @@ fn winget() -> Option<PathBuf> {
 
 /// A per-machine package via winget; Windows may show its own UAC prompt.
 fn winget_install(id: &str, what: &str, log: &Log) -> Result<(), String> {
-    let winget = winget().ok_or("winget isn't available on this system.")?;
+    let winget = winget().ok_or_else(|| t("winget isn't available on this system."))?;
     let mut command = pi_rpc::command(winget);
     command.args([
         "install",
@@ -116,17 +128,25 @@ pub fn check_go() -> (Status, Fix) {
         return (Status::Missing("Go isn't installed".into()), go_fix());
     };
     match output_of(&go, &["version"]).as_deref().and_then(go_version) {
-        Some(v) if v >= MIN_GO => (Status::Ok(format!("Go {}", show_version(v))), Fix::None),
+        Some(v) if v >= MIN_GO => (
+            Status::Ok(format!("Go {}", show_version(v)).into()),
+            Fix::None,
+        ),
         Some(v) => (
-            Status::Outdated(format!(
-                "Go {} — needs {} or newer",
-                show_version(v),
-                show_version(MIN_GO)
+            Status::Outdated(Detail::template(
+                "Go {version} — needs {minimum} or newer",
+                [
+                    ("{version}", show_version(v)),
+                    ("{minimum}", show_version(MIN_GO)),
+                ],
             )),
             go_fix(),
         ),
         None => (
-            Status::Failed(format!("{} doesn't run", go.display())),
+            Status::Failed(Detail::template(
+                "{path} doesn't run",
+                [("{path}", go.to_string_lossy().into_owned())],
+            )),
             go_fix(),
         ),
     }
@@ -139,7 +159,7 @@ pub fn install_go(log: &Log) -> Result<(), String> {
     match check_go() {
         (Status::Ok(_), _) => Ok(()),
         _ => result.and(Err(
-            "Go was installed, but this app can't find it yet.".into()
+            t("Go was installed, but this app can't find it yet.").into()
         )),
     }
 }
@@ -207,10 +227,7 @@ pub fn check_git() -> (Status, Fix) {
     }
     match git.and_then(|git| output_of(&git, &["--version"])) {
         Some(text) => (
-            Status::Ok(format!(
-                "Git {}",
-                text.trim_start_matches("git version ").trim()
-            )),
+            Status::Ok(format!("Git {}", text.trim_start_matches("git version ").trim()).into()),
             Fix::None,
         ),
         None => (Status::Missing("Git isn't installed".into()), git_fix()),
@@ -220,10 +237,11 @@ pub fn check_git() -> (Status, Fix) {
 pub fn install_git(log: &Log) -> Result<(), String> {
     if !cfg!(windows) {
         return match git_fix() {
-            Fix::Terminal(command) => Err(format!(
-                "Git needs your password to install: run `{command}`."
-            )),
-            _ => Err("Install Git from your system's package manager.".into()),
+            Fix::Terminal(command) => {
+                Err(t("Git needs your password to install: run `{command}`.")
+                    .replace("{command}", &command))
+            }
+            _ => Err(t("Install Git from your system's package manager.").into()),
         };
     }
     let result = winget_install("Git.Git", "Git", log);
@@ -231,7 +249,7 @@ pub fn install_git(log: &Log) -> Result<(), String> {
     match check_git() {
         (Status::Ok(_), _) => Ok(()),
         _ => result.and(Err(
-            "Git was installed, but this app can't find it yet.".into()
+            t("Git was installed, but this app can't find it yet.").into()
         )),
     }
 }
@@ -253,13 +271,13 @@ fn engram() -> Option<PathBuf> {
 /// on the PATH and a Windows path without `.exe` still pass. Installing doesn't
 /// help (the override still wins), and Gentle Shell reads it too, so it's
 /// reported rather than skipped.
-fn stale_engram_bin(bin: &Path) -> Option<String> {
+fn stale_engram_bin(bin: &Path) -> Option<Detail> {
     pi_rpc::find_program(&bin.to_string_lossy())
         .is_none()
         .then(|| {
-            format!(
-                "ENGRAM_BIN points to {}, which can't be run. Fix or remove it.",
-                bin.display()
+            Detail::template(
+                "ENGRAM_BIN points to {path}, which can't be run. Fix or remove it.",
+                [("{path}", bin.to_string_lossy().into_owned())],
             )
         })
 }
@@ -267,7 +285,7 @@ fn stale_engram_bin(bin: &Path) -> Option<String> {
 /// `stale_engram_bin` for the current environment. Only for Engram on this
 /// computer: the path is read here, so it is checked here. When agents run
 /// in a backend, `remote` looks for Engram there and never gets this far.
-fn engram_bin_problem() -> Option<String> {
+fn engram_bin_problem() -> Option<Detail> {
     engram_bin().and_then(|bin| stale_engram_bin(&bin))
 }
 
@@ -287,14 +305,16 @@ pub(super) fn engram_status(text: &str) -> (Status, Fix) {
     let line = text.lines().next().unwrap_or("installed").trim();
     match line.split_whitespace().last().and_then(parse_version) {
         Some(version) if version < MIN_ENGRAM => (
-            Status::Outdated(format!(
-                "Engram {} — needs {} or newer",
-                show_version(version),
-                show_version(MIN_ENGRAM)
+            Status::Outdated(Detail::template(
+                "Engram {version} — needs {minimum} or newer",
+                [
+                    ("{version}", show_version(version)),
+                    ("{minimum}", show_version(MIN_ENGRAM)),
+                ],
             )),
             Fix::Auto,
         ),
-        _ => (Status::Ok(line.to_string()), Fix::None),
+        _ => (Status::Ok(line.to_string().into()), Fix::None),
     }
 }
 
@@ -318,7 +338,7 @@ pub fn install_engram(log: &Log) -> Result<(), String> {
         return super::remote::install_engram(&choice, log).map(drop);
     }
     if let Some(why) = engram_bin_problem() {
-        return Err(why);
+        return Err(why.to_string());
     }
     if !cfg!(windows)
         && let Some(brew) = brew()
@@ -339,9 +359,10 @@ pub fn install_engram(log: &Log) -> Result<(), String> {
         (Status::Ok(_), _) => Ok(()),
         // An `ENGRAM_BIN` or an older install earlier on the PATH still wins.
         (Status::Outdated(why), _) => {
-            Err(format!("Engram was installed, but another one runs: {why}"))
+            Err(t("Engram was installed, but another one runs: {reason}")
+                .replace("{reason}", &why.to_string()))
         }
-        _ => Err("Engram was installed, but it doesn't run.".into()),
+        _ => Err(t("Engram was installed, but it doesn't run.").into()),
     }
 }
 
@@ -368,9 +389,9 @@ pub fn upgrade_engram(log: &Log) -> Result<String, String> {
         return super::remote::install_engram(&choice, log);
     }
     if let Some(why) = engram_bin_problem() {
-        return Err(why);
+        return Err(why.to_string());
     }
-    let installed = engram().ok_or("Engram isn't installed.")?;
+    let installed = engram().ok_or_else(|| t("Engram isn't installed."))?;
     let real = dunce::canonicalize(&installed).unwrap_or(installed);
     let from_brew = real.components().any(|c| c.as_os_str() == "Cellar");
     match brew().filter(|_| from_brew && !cfg!(windows)) {
@@ -384,7 +405,7 @@ pub fn upgrade_engram(log: &Log) -> Result<String, String> {
         None => fetch::install_engram_release(log)?,
     }
     refresh_paths();
-    engram_version().ok_or_else(|| "Engram was updated, but it doesn't run.".into())
+    engram_version().ok_or_else(|| t("Engram was updated, but it doesn't run.").into())
 }
 
 // ── Provider and Claude Code ───────────────────────────────────────────────
@@ -419,7 +440,10 @@ pub fn check_provider(agent: &Path, claude_login: Option<bool>) -> (Status, Fix)
     found.extend(json_keys(&agent.join("models.json"), Some("providers")));
     if !found.is_empty() {
         return (
-            Status::Ok(format!("Signed in: {}", found.join(", "))),
+            Status::Ok(Detail::template(
+                "Signed in: {providers}",
+                [("{providers}", found.join(", "))],
+            )),
             Fix::None,
         );
     }
@@ -427,7 +451,13 @@ pub fn check_provider(agent: &Path, claude_login: Option<bool>) -> (Status, Fix)
         .iter()
         .find(|k| std::env::var_os(k).is_some_and(|v| !v.is_empty()))
     {
-        return (Status::Ok(format!("{key} is set")), Fix::None);
+        return (
+            Status::Ok(Detail::template(
+                "{key} is set",
+                [("{key}", (*key).to_string())],
+            )),
+            Fix::None,
+        );
     }
     if bridge_version(agent).is_some_and(|v| v.is_some()) && claude_login == Some(true) {
         return (
@@ -516,7 +546,9 @@ mod tests {
 
         // A path that names nothing is reported, with the path in the message.
         let missing = std::env::temp_dir().join(format!("gs-no-engram-{}", std::process::id()));
-        let why = stale_engram_bin(&missing).expect("a missing ENGRAM_BIN is reported");
+        let why = stale_engram_bin(&missing)
+            .expect("a missing ENGRAM_BIN is reported")
+            .text(gentle_core::i18n::Language::English);
         assert!(why.contains("ENGRAM_BIN"), "{why}");
         assert!(why.contains(&missing.display().to_string()), "{why}");
 

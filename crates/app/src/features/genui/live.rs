@@ -54,7 +54,7 @@ pub(super) struct LiveState {
     pub gate: Option<Gate>,
     pub data: Option<Value>,
     pub updated: Option<Instant>,
-    pub error: Option<String>,
+    pub error: Option<crate::shared::i18n::Message>,
     pub paused: bool,
     pub reading: bool,
     /// Reads started so far (git reads and command runs).
@@ -103,18 +103,20 @@ impl LiveState {
 
     /// The header's "Live · …".
     pub fn label(&self) -> String {
+        use crate::shared::i18n::{language, t};
         let state = match self.gate.as_ref().map(Gate::consent) {
-            Some(Consent::Ask) => "waiting for your OK".to_string(),
-            Some(Consent::Denied) => "not allowed".to_string(),
-            _ if self.paused => "paused".to_string(),
-            _ if self.error.is_some() => "failed".to_string(),
+            Some(Consent::Ask) => t("waiting for your OK").to_string(),
+            Some(Consent::Denied) => t("not allowed").to_string(),
+            _ if self.paused => t("paused").to_string(),
+            _ if self.error.is_some() => t("failed").to_string(),
             _ => match self.updated {
-                Some(at) => format!("updated {}", live::ago(at.elapsed().as_secs())),
-                None if self.reading => "reading…".to_string(),
-                None => "waiting for data".to_string(),
+                Some(at) => t("updated {age}")
+                    .replace("{age}", &live::ago_in(at.elapsed().as_secs(), language())),
+                None if self.reading => t("reading…").to_string(),
+                None => t("waiting for data").to_string(),
             },
         };
-        format!("Live · {state}")
+        t("Live · {state}").replace("{state}", &state)
     }
 }
 
@@ -174,10 +176,16 @@ pub fn todo_records(tasks: &[TodoTask]) -> Value {
 }
 
 /// One read of a read source, off the UI thread.
-fn read(source: Source, live: &Live, workspace: &Path) -> Result<Value, String> {
+fn read(
+    source: Source,
+    live: &Live,
+    workspace: &Path,
+) -> Result<Value, crate::shared::i18n::Message> {
+    use crate::shared::i18n::Message;
     match source {
         Source::GitStatus => {
-            let snapshot = git::snapshot(workspace).ok_or("not a git repository")?;
+            let snapshot =
+                git::snapshot(workspace).ok_or_else(|| Message::new("not a git repository"))?;
             Ok(Value::Array(
                 snapshot
                     .files
@@ -195,8 +203,10 @@ fn read(source: Source, live: &Live, workspace: &Path) -> Result<Value, String> 
             ))
         }
         Source::GitLog => {
-            let top = git::toplevel(workspace).ok_or("not a git repository")?;
-            let history = git::history(&top, &git::Scope::Head, 50).ok_or("git log failed")?;
+            let top =
+                git::toplevel(workspace).ok_or_else(|| Message::new("not a git repository"))?;
+            let history = git::history(&top, &git::Scope::Head, 50)
+                .ok_or_else(|| Message::new("git log failed"))?;
             Ok(Value::Array(
                 history
                     .commits
@@ -218,15 +228,28 @@ fn read(source: Source, live: &Live, workspace: &Path) -> Result<Value, String> 
             ))
         }
         Source::Command => {
-            let command = live.command.as_ref().ok_or("no command")?;
+            let command = live
+                .command
+                .as_ref()
+                .ok_or_else(|| Message::new("no command"))?;
             let dir = match &command.cwd {
                 Some(cwd) => workspace.join(cwd),
                 None => workspace.to_path_buf(),
             };
             let output = run_command(&command.cmd, &dir)?;
-            live::parse_output(command.parse, &output)
+            live::parse_output_with_details(command.parse, &output).map_err(|error| {
+                Message::with(
+                    "the output isn't JSON ({error}): {output}",
+                    [
+                        ("{error}", error.error.to_string()),
+                        ("{output}", error.preview),
+                    ],
+                )
+            })
         }
-        Source::Jobs | Source::Subagents | Source::Todo => Err("handed over, not read".into()),
+        Source::Jobs | Source::Subagents | Source::Todo => {
+            Err(Message::new("handed over, not read"))
+        }
     }
 }
 
@@ -247,9 +270,19 @@ fn change_word(code: char) -> &'static str {
 /// `cmd` run by the user's shell in `dir` with the app's PATH: its stdout
 /// (any exit code: test runners exit 1 with a report), stopped after
 /// [`COMMAND_TIMEOUT`] or past [`OUTPUT_CAP`] bytes.
-fn run_command(cmd: &str, dir: &Path) -> Result<String, String> {
+fn run_command(cmd: &str, dir: &Path) -> Result<String, crate::shared::i18n::Message> {
+    use crate::shared::i18n::Message;
+    let output_limit = || {
+        Message::with(
+            "its output is over {limit} KiB",
+            [("{limit}", (OUTPUT_CAP / 1024).to_string())],
+        )
+    };
     if !dir.is_dir() {
-        return Err(format!("{} is not a folder", dir.display()));
+        return Err(Message::with(
+            "{path} is not a folder",
+            [("{path}", dir.display().to_string())],
+        ));
     }
     #[cfg(unix)]
     let mut command = {
@@ -278,7 +311,7 @@ fn run_command(cmd: &str, dir: &Path) -> Result<String, String> {
         .stderr(Stdio::piped());
     let mut child = command
         .spawn()
-        .map_err(|e| format!("couldn't start: {e}"))?;
+        .map_err(|e| Message::with_error("couldn't start: {error}", e))?;
     let stdout = child.stdout.take();
     let stderr = child.stderr.take();
     let out = std::thread::spawn(move || {
@@ -304,7 +337,7 @@ fn run_command(cmd: &str, dir: &Path) -> Result<String, String> {
             let read = out.take().and_then(|r| r.join().ok()).unwrap_or_default();
             if read.len() > OUTPUT_CAP {
                 pi_rpc::kill_tree(&mut child);
-                return Err(format!("its output is over {} KiB", OUTPUT_CAP / 1024));
+                return Err(output_limit());
             }
             bytes = Some(read);
         }
@@ -313,7 +346,10 @@ fn run_command(cmd: &str, dir: &Path) -> Result<String, String> {
             Ok(None) if Instant::now() < deadline => std::thread::sleep(Duration::from_millis(25)),
             _ => {
                 pi_rpc::kill_tree(&mut child);
-                return Err(format!("stopped after {COMMAND_TIMEOUT} s"));
+                return Err(Message::with(
+                    "stopped after {seconds} s",
+                    [("{seconds}", COMMAND_TIMEOUT.to_string())],
+                ));
             }
         }
     };
@@ -322,16 +358,16 @@ fn run_command(cmd: &str, dir: &Path) -> Result<String, String> {
         None => out.and_then(|r| r.join().ok()).unwrap_or_default(),
     };
     if bytes.len() > OUTPUT_CAP {
-        return Err(format!("its output is over {} KiB", OUTPUT_CAP / 1024));
+        return Err(output_limit());
     }
     let text = String::from_utf8_lossy(&bytes).into_owned();
     if text.trim().is_empty() && !status.success() {
         let stderr = err.join().unwrap_or_default();
         let last = stderr.lines().rev().find(|l| !l.trim().is_empty());
-        return Err(match last {
+        return Err(Message::raw(match last {
             Some(line) => format!("{status}: {}", line.trim()),
             None => status.to_string(),
-        });
+        }));
     }
     Ok(text)
 }
@@ -434,7 +470,7 @@ impl PanelView {
         if !body.holds(&filled)
             && let Err(errors) = body.rebase(&filled)
         {
-            state.error = Some(errors.join("; "));
+            state.error = Some(crate::shared::i18n::Message::raw(errors.join("; ")));
         }
         cx.notify();
     }
@@ -450,7 +486,9 @@ impl PanelView {
             return;
         }
         let Some(workspace) = workspace else {
-            state.error = Some("no workspace folder to read from".into());
+            state.error = Some(crate::shared::i18n::Message::new(
+                "no workspace folder to read from",
+            ));
             return;
         };
         let (source, spec) = (state.spec.source, state.spec.clone());
@@ -467,7 +505,11 @@ impl PanelView {
         .detach();
     }
 
-    fn finish_read(&mut self, result: Result<Value, String>, cx: &mut Context<Self>) {
+    fn finish_read(
+        &mut self,
+        result: Result<Value, crate::shared::i18n::Message>,
+        cx: &mut Context<Self>,
+    ) {
         let Some(state) = &mut self.live else { return };
         state.reading = false;
         match result {
@@ -597,8 +639,12 @@ impl PanelView {
         };
         let tip = state
             .error
-            .clone()
-            .unwrap_or_else(|| format!("From {}", source_text(&state.spec)));
+            .as_ref()
+            .map(crate::shared::i18n::Message::render)
+            .unwrap_or_else(|| {
+                crate::shared::i18n::t("From {source}")
+                    .replace("{source}", &source_text(&state.spec))
+            });
         let consented = state.gate.as_ref().is_none_or(Gate::may_run);
         Some(
             h_flex()
@@ -633,7 +679,11 @@ impl PanelView {
                                 } else {
                                     IconName::Pause
                                 }))
-                                .tooltip(if state.paused { "Resume" } else { "Pause" })
+                                .tooltip(crate::shared::i18n::t(if state.paused {
+                                    "Resume"
+                                } else {
+                                    "Pause"
+                                }))
                                 .on_click(cx.listener(|this, _, _, cx| this.toggle_pause(cx))),
                         ),
                     )
@@ -655,6 +705,16 @@ impl PanelView {
                 .text_color(ui::fg())
                 .child(text)
         };
+        let schedule =
+            crate::shared::i18n::t("every {seconds} s in {path}, while this card is on screen")
+                .replace("{seconds}", &state.spec.interval.to_string())
+                .replace(
+                    "{path}",
+                    command
+                        .cwd
+                        .as_deref()
+                        .unwrap_or_else(|| crate::shared::i18n::t("the workspace")),
+                );
         let panel = div().absolute().left_2().right_2().top_2();
         match gate.consent() {
             Consent::Ask => Some(
@@ -673,7 +733,9 @@ impl PanelView {
                                     .text_size(rems(12. / 16.))
                                     .text_color(ui::warning())
                                     .child(Icon::new(IconName::Terminal).xsmall())
-                                    .child("Allow this UI to run a command?"),
+                                    .child(crate::shared::i18n::t(
+                                        "Allow this UI to run a command?",
+                                    )),
                             )
                             .child(
                                 v_flex()
@@ -681,11 +743,7 @@ impl PanelView {
                                     .text_size(rems(12. / 16.))
                                     .text_color(ui::muted())
                                     .child(code(command.cmd.clone()).whitespace_normal())
-                                    .child(format!(
-                                        "every {} s in {}, while this card is on screen",
-                                        state.spec.interval,
-                                        command.cwd.as_deref().unwrap_or("the workspace")
-                                    )),
+                                    .child(schedule),
                             )
                             .child(
                                 h_flex()
@@ -734,11 +792,10 @@ impl PanelView {
                             .text_color(ui::muted())
                             .child(Icon::new(IconName::Ban).xsmall())
                             .child(
-                                div()
-                                    .flex_1()
-                                    .min_w_0()
-                                    .truncate()
-                                    .child(format!("Not running {}", command.cmd)),
+                                div().flex_1().min_w_0().truncate().child(
+                                    crate::shared::i18n::t("Not running {command}")
+                                        .replace("{command}", &command.cmd),
+                                ),
                             )
                             .child(consent_button(
                                 "genui-live-ask-again",
@@ -760,7 +817,10 @@ fn consent_button(
     primary: bool,
     on_click: impl Fn(&ClickEvent, &mut Window, &mut App) + 'static,
 ) -> impl IntoElement {
-    let button = Button::new(id).xsmall().label(label).on_click(on_click);
+    let button = Button::new(id)
+        .xsmall()
+        .label(crate::shared::i18n::t(label))
+        .on_click(on_click);
     div().debug_selector(move || id.into()).child(if primary {
         button.primary()
     } else {
@@ -770,13 +830,17 @@ fn consent_button(
 
 /// "the background jobs", "`npm test` every 30 s"… for the chip's tooltip.
 fn source_text(live: &Live) -> String {
-    match (live.source, &live.command) {
-        (Source::Jobs, _) => "the session's background jobs".into(),
-        (Source::Subagents, _) => "the session's subagents".into(),
-        (Source::Todo, _) => "the agent's todo list".into(),
-        (Source::GitStatus, _) => format!("git status, every {} s", live.interval),
-        (Source::GitLog, _) => format!("git log, every {} s", live.interval),
-        (Source::Command, Some(c)) => format!("{}, every {} s", c.cmd, live.interval),
-        (Source::Command, None) => "a command".into(),
-    }
+    use crate::shared::i18n::t;
+    let command = match (live.source, &live.command) {
+        (Source::Jobs, _) => return t("the session's background jobs").into(),
+        (Source::Subagents, _) => return t("the session's subagents").into(),
+        (Source::Todo, _) => return t("the agent's todo list").into(),
+        (Source::GitStatus, _) => "git status",
+        (Source::GitLog, _) => "git log",
+        (Source::Command, Some(c)) => &c.cmd,
+        (Source::Command, None) => return t("a command").into(),
+    };
+    t("{command}, every {seconds} s")
+        .replace("{seconds}", &live.interval.to_string())
+        .replace("{command}", command)
 }

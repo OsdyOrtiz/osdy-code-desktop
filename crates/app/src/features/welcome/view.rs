@@ -9,7 +9,7 @@ use gpui_kit::*;
 
 use super::{AFTER_INTRO, WelcomeView, finale};
 use crate::shared::banner::{WRITE, banner};
-use crate::shared::ui;
+use crate::shared::{i18n::t, ui};
 
 /// The client-drawn title bar (Windows, Linux) keeps its window controls
 /// visible above the screen; on macOS the screen fills the window under the
@@ -73,7 +73,7 @@ impl WelcomeView {
                     .line_height(rems(42. / 16.))
                     .font_weight(FontWeight::BOLD)
                     .text_color(ui::fg())
-                    .child(title),
+                    .child(t(title)),
             )
             .child(
                 div()
@@ -82,7 +82,7 @@ impl WelcomeView {
                     .text_center()
                     .line_height(rems(24. / 16.))
                     .text_color(ui::muted())
-                    .child(line),
+                    .child(t(line)),
             );
         let delay = if self.intro_done {
             std::time::Duration::ZERO
@@ -116,7 +116,7 @@ impl WelcomeView {
             .when(!ready && can_install, |b| {
                 b.icon(Icon::new(IconName::ArrowDown))
             })
-            .label(label)
+            .label(t(label))
             .loading(busy)
             .disabled(!enabled)
             .on_click(cx.listener(|this, _, _, cx| this.primary(cx)));
@@ -129,7 +129,7 @@ impl WelcomeView {
                 d.child(
                     Button::new("welcome-skip")
                         .ghost()
-                        .label("Skip for now")
+                        .label(t("Skip for now"))
                         .disabled(busy)
                         .on_click(cx.listener(|this, _, _, cx| this.enter(cx))),
                 )
@@ -138,7 +138,7 @@ impl WelcomeView {
                 Button::new("welcome-recheck")
                     .ghost()
                     .icon(Icon::new(IconName::RefreshCw))
-                    .label("Check again")
+                    .label(t("Check again"))
                     .loading(checking)
                     .disabled(busy || checking)
                     .on_click(cx.listener(|this, _, _, cx| this.check_again(cx))),

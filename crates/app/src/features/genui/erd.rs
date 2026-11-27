@@ -368,7 +368,7 @@ impl PanelView {
             empty: shown
                 .tables
                 .is_empty()
-                .then_some("No tables yet. Add one with +."),
+                .then_some(crate::shared::i18n::t("No tables yet. Add one with +.")),
         }
     }
 
@@ -567,7 +567,7 @@ impl PanelView {
                         .items_center()
                         .text_size(px(11. * scale))
                         .text_color(ui::faint())
-                        .child("no columns"),
+                        .child(crate::shared::i18n::t("no columns")),
                 )
             })
             .into_any_element()
@@ -645,7 +645,7 @@ impl PanelView {
                         .text_color(ui::muted())
                         .child(format!(
                             "{} · {}",
-                            gentle_core::genui::edits::plural(t.columns.len(), "column"),
+                            super::count(t.columns.len(), "{count} column", "{count} columns"),
                             t.id
                         ))
                         .into_any_element(),
@@ -720,7 +720,11 @@ impl PanelView {
                         .font_family(ui::mono())
                         .text_size(ui::code_rems(12.))
                         .text_color(ui::muted())
-                        .child(col.ty.clone().unwrap_or_else(|| "no type".into()))
+                        .child(
+                            col.ty
+                                .clone()
+                                .unwrap_or_else(|| crate::shared::i18n::t("no type").into()),
+                        )
                         .into_any_element(),
                     h_flex()
                         .gap_1()

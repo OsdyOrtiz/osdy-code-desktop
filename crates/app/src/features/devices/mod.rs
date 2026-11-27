@@ -24,6 +24,7 @@ use gentle_core::devices::{Device, State};
 use gpui_kit::*;
 
 use crate::features::setup::devices as setup;
+use crate::shared::i18n::Message;
 pub use instructions::agent_instructions;
 pub use panel::{DevicePanel, DevicePanelEvent};
 pub(crate) use sdk::{android_sdk, android_tool_dirs, simctl_path, xcode_developer_dir};
@@ -41,7 +42,7 @@ pub enum HubStatus {
     Off,
     Starting,
     Running(u16),
-    Failed(String),
+    Failed(Message),
 }
 
 pub struct Hub {
@@ -59,7 +60,7 @@ pub struct Hub {
     booting: Vec<String>,
     /// Device panels showing; the list is polled while any is.
     watchers: usize,
-    last_error: Option<String>,
+    last_error: Option<Message>,
     _start: Task<()>,
     _poll: Task<()>,
     _quit: Subscription,
@@ -91,7 +92,7 @@ impl Hub {
                 let Some(port) = port else { continue };
                 let listed = cx
                     .background_executor()
-                    .spawn(async move { hub::list(port) })
+                    .spawn(async move { hub::list_for_panel(port) })
                     .await;
                 if this
                     .update(cx, |hub, cx| hub.apply_list(listed, cx))
@@ -154,8 +155,8 @@ impl Hub {
     }
 
     /// The last boot or shutdown that failed.
-    pub fn last_error(&self) -> Option<&str> {
-        self.last_error.as_deref()
+    pub fn last_error(&self) -> Option<String> {
+        self.last_error.as_ref().map(Message::render)
     }
 
     pub fn is_booting(&self, device: &Device) -> bool {
@@ -175,7 +176,7 @@ impl Hub {
 
     fn apply_list(
         &mut self,
-        listed: Result<(Vec<Device>, Vec<String>), String>,
+        listed: Result<(Vec<Device>, Vec<String>), Message>,
         cx: &mut Context<Self>,
     ) {
         match listed {
@@ -261,7 +262,7 @@ impl Hub {
         cx.spawn(async move |this, cx| {
             let listed = cx
                 .background_executor()
-                .spawn(async move { hub::list(port) })
+                .spawn(async move { hub::list_for_panel(port) })
                 .await;
             let _ = this.update(cx, |hub, cx| hub.apply_list(listed, cx));
         })

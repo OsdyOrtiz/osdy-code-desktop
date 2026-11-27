@@ -8,8 +8,9 @@ use serde_json::Value;
 
 use super::gentle::{self, BRIDGE, Marker};
 use super::probe::{parse_version, show_version};
-use super::{Check, CheckId, Fix, Log, MIN_NODE, Status, extras, fetch, meta};
+use super::{Check, CheckId, Detail, Fix, Log, MIN_NODE, Status, extras, fetch, meta};
 use crate::features::backend;
+use crate::shared::i18n::t;
 
 /// The backend agents run in, when they don't run on this computer.
 pub(super) fn backend() -> Option<Backend> {
@@ -31,20 +32,28 @@ const ENGRAM_TARGET: &str = r#"e="$(command -v engram 2>/dev/null)"; if [ -n "$e
 /// verified here and copied there. The version it runs afterwards.
 pub(super) fn install_engram(choice: &Backend, log: &Log) -> Result<String, String> {
     let label = choice.label();
-    let arch = backend::arch(choice).ok_or_else(|| format!("Couldn't tell {label}'s machine."))?;
+    let arch = backend::arch(choice)
+        .ok_or_else(|| t("Couldn't tell {label}'s machine.").replace("{label}", &label))?;
     let (_staging, found, version) = fetch::download_engram("linux", arch, log)?;
     let there = run(choice, "sh", &["-c", ENGRAM_TARGET])
         .map(|out| out.trim().to_string())
         .filter(|path| path.starts_with('/'))
-        .ok_or_else(|| format!("Couldn't find a folder for Engram in {label}."))?;
+        .ok_or_else(|| {
+            t("Couldn't find a folder for Engram in {label}.").replace("{label}", &label)
+        })?;
     log(format!("Copying Engram {version} to {there} in {label}…"));
     backend::put_file(choice, &found, &there, true)?;
     backend::forget_paths();
     let text = engram_version_text(choice).ok_or_else(|| {
-        format!("Engram is in {there}, but it doesn't run there: is that folder on the PATH?")
+        t("Engram is in {path}, but it doesn't run there: is that folder on the PATH?")
+            .replace("{path}", &there)
     })?;
-    extras::engram_version_of(&text)
-        .ok_or_else(|| format!("Engram is in {there}, but `engram version` says: {text}"))
+    extras::engram_version_of(&text).ok_or_else(|| {
+        gentle_core::i18n::fill(
+            t("Engram is in {path}, but `engram version` says: {output}"),
+            &[("path", &there), ("output", &text)],
+        )
+    })
 }
 
 /// Node.js 22 through nvm, which needs only curl and no admin rights.
@@ -102,8 +111,9 @@ pub(super) fn run_checks(choice: &Backend) -> Vec<Check> {
                     // WSL appends Windows' PATH: a Windows install answers, but
                     // it isn't the distro's own.
                     (_, Some(path)) if gentle_core::backend::is_windows_file(path) => (
-                        Status::Missing(format!(
-                            "Only Windows' gentle-shell is visible from {label} ({path})"
+                        Status::Missing(Detail::template(
+                            "Only Windows' gentle-shell is visible from {label} ({path})",
+                            [("{label}", label.clone()), ("{path}", path.clone())],
                         )),
                         terminal(&npm_global("gentle-pi")),
                     ),
@@ -112,7 +122,10 @@ pub(super) fn run_checks(choice: &Backend) -> Vec<Check> {
                         (status, _) => (status, terminal("gentle-shell upgrade")),
                     },
                     (None, _) => (
-                        Status::Missing(format!("gentle-shell isn't installed in {label}")),
+                        Status::Missing(Detail::template(
+                            "gentle-shell isn't installed in {label}",
+                            [("{label}", label.clone())],
+                        )),
                         terminal(&npm_global("gentle-pi")),
                     ),
                 },
@@ -122,7 +135,10 @@ pub(super) fn run_checks(choice: &Backend) -> Vec<Check> {
                     found.extend(keys(agent_file("models.json"), Some("providers")));
                     if !found.is_empty() {
                         (
-                            Status::Ok(format!("Signed in: {}", found.join(", "))),
+                            Status::Ok(Detail::template(
+                                "Signed in: {providers}",
+                                [("{providers}", found.join(", "))],
+                            )),
                             Fix::None,
                         )
                     } else if bridge.as_ref().is_some_and(Option::is_some) && claude == Some(true) {
@@ -141,21 +157,27 @@ pub(super) fn run_checks(choice: &Backend) -> Vec<Check> {
                 }
                 CheckId::Git => match run(choice, "git", &["--version"]) {
                     Some(text) => (
-                        Status::Ok(format!(
-                            "Git {}",
-                            text.trim().trim_start_matches("git version ")
-                        )),
+                        Status::Ok(
+                            format!("Git {}", text.trim().trim_start_matches("git version "))
+                                .into(),
+                        ),
                         Fix::None,
                     ),
                     None => (
-                        Status::Missing(format!("Install git in {label}")),
+                        Status::Missing(Detail::template(
+                            "Install git in {label}",
+                            [("{label}", label.clone())],
+                        )),
                         Fix::None,
                     ),
                 },
                 CheckId::Engram => match engram_version_text(choice) {
                     Some(text) => extras::engram_status(&text),
                     None => (
-                        Status::Missing(format!("Not installed in {label}")),
+                        Status::Missing(Detail::template(
+                            "Not installed in {label}",
+                            [("{label}", label.clone())],
+                        )),
                         Fix::Auto,
                     ),
                 },
@@ -189,35 +211,42 @@ fn terminal(command: &str) -> Fix {
 fn node(choice: &Backend, label: &str) -> (Status, Fix) {
     let Some(text) = run(choice, "node", &["--version"]) else {
         return (
-            Status::Missing(format!("Node.js isn't installed in {label}")),
+            Status::Missing(Detail::template(
+                "Node.js isn't installed in {label}",
+                [("{label}", label.to_string())],
+            )),
             terminal(INSTALL_NODE),
         );
     };
     match parse_version(&text) {
         Some(version) if version >= MIN_NODE => match run(choice, "npm", &["--version"]) {
             Some(npm) => (
-                Status::Ok(format!(
-                    "Node {} · npm {}",
-                    show_version(version),
-                    npm.trim()
-                )),
+                Status::Ok(format!("Node {} · npm {}", show_version(version), npm.trim()).into()),
                 Fix::None,
             ),
             None => (
-                Status::Missing(format!("Node {} found, but not npm", show_version(version))),
+                Status::Missing(Detail::template(
+                    "Node {version} found, but not npm",
+                    [("{version}", show_version(version))],
+                )),
                 terminal(INSTALL_NODE),
             ),
         },
         Some(version) => (
-            Status::Outdated(format!(
-                "Node {} — needs {} or newer",
-                show_version(version),
-                show_version(MIN_NODE)
+            Status::Outdated(Detail::template(
+                "Node {version} — needs {minimum} or newer",
+                [
+                    ("{version}", show_version(version)),
+                    ("{minimum}", show_version(MIN_NODE)),
+                ],
             )),
             terminal(INSTALL_NODE),
         ),
         None => (
-            Status::Failed(format!("Unexpected `node --version`: {}", text.trim())),
+            Status::Failed(Detail::template(
+                "Unexpected `node --version`: {output}",
+                [("{output}", text.trim().to_string())],
+            )),
             terminal(INSTALL_NODE),
         ),
     }
@@ -238,10 +267,19 @@ fn setup(
     };
     if version.home_mode.as_deref() == Some("link") {
         return if gentle::settings_list(settings, "gentle-engram") {
-            (Status::Ok(format!("Linked to {home}")), Fix::None)
+            (
+                Status::Ok(Detail::template(
+                    "Linked to {home}",
+                    [("{home}", home.to_string())],
+                )),
+                Fix::None,
+            )
         } else {
             (
-                Status::Missing(format!("{home} isn't set up yet")),
+                Status::Missing(Detail::template(
+                    "{home} isn't set up yet",
+                    [("{home}", home.to_string())],
+                )),
                 terminal("gentle-shell setup"),
             )
         };
@@ -258,7 +296,10 @@ fn setup(
     .unwrap_or(Value::Null);
     match gentle::marker_state(&config, home, None, &version.gentle_shell) {
         Marker::Match { at } => (
-            Status::Ok(format!("Set up {}", at.get(..10).unwrap_or(&at))),
+            Status::Ok(Detail::template(
+                "Set up {date}",
+                [("{date}", at.get(..10).unwrap_or(&at).to_string())],
+            )),
             Fix::None,
         ),
         Marker::Missing => (
@@ -266,14 +307,16 @@ fn setup(
             terminal("gentle-shell setup"),
         ),
         Marker::StalePin { recorded } => (
-            Status::Outdated(format!("Set up with Gentle AI {recorded}")),
+            Status::Outdated(Detail::template(
+                "Set up with Gentle AI {recorded}",
+                [("{recorded}", recorded)],
+            )),
             terminal("gentle-shell setup"),
         ),
         Marker::StaleGentlePi { recorded } => (
-            Status::Outdated(format!(
-                "Set up with gentle-pi {}; {} is installed",
-                recorded.as_deref().unwrap_or("an older version"),
-                version.gentle_shell
+            Status::Outdated(gentle::stale_launcher_setup(
+                recorded.as_deref(),
+                &version.gentle_shell,
             )),
             terminal("gentle-shell setup"),
         ),

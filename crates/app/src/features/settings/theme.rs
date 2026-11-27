@@ -17,6 +17,7 @@ use gpui_kit::*;
 use super::SettingsView;
 use super::layout::section;
 use crate::shared::backdrop::{self, SHARE_EXTENSION};
+use crate::shared::i18n::t;
 use crate::{shared::themes, shared::ui};
 
 /// A shared theme bigger than this isn't downloaded.
@@ -36,7 +37,7 @@ impl ThemeShare {
     pub(super) fn new(window: &mut Window, cx: &mut Context<SettingsView>) -> Self {
         let url = cx.new(|cx| {
             InputState::new(window, cx)
-                .placeholder("Paste a theme link (https://…/name.gentletheme)")
+                .placeholder(t("Paste a theme link (https://…/name.gentletheme)"))
         });
         let subscription = cx.subscribe_in(
             &url,
@@ -72,7 +73,7 @@ impl SettingsView {
     fn install_theme(&mut self, text: Result<String, String>, cx: &mut Context<Self>) {
         let result = text.and_then(|text| themes::install_shared(&text, cx));
         self.theme_note(
-            result.map(|name| format!("Added \u{201c}{name}\u{201d} and switched to it.")),
+            result.map(|name| t("Added “{name}” and switched to it.").replace("{name}", &name)),
             cx,
         );
     }
@@ -83,7 +84,7 @@ impl SettingsView {
             files: true,
             directories: false,
             multiple: true,
-            prompt: Some("Import theme".into()),
+            prompt: Some(t("Import theme").into()),
         });
         cx.spawn(async move |this, cx| {
             let Ok(Ok(Some(paths))) = paths.await else {
@@ -97,14 +98,14 @@ impl SettingsView {
     fn import_theme_paths(&mut self, paths: Vec<PathBuf>, cx: &mut Context<Self>) {
         for path in paths {
             let text = std::fs::read_to_string(&path)
-                .map_err(|e| format!("Couldn't read {}: {e}", path.display()));
+                .map_err(|e| format!("{} {}: {e}", t("Couldn't read"), path.display()));
             self.install_theme(text, cx);
         }
     }
 
     fn import_theme_link(&mut self, link: String, cx: &mut Context<Self>) {
         if !(link.starts_with("https://") || link.starts_with("http://")) {
-            self.theme_note(Err("A theme link starts with https://".into()), cx);
+            self.theme_note(Err(t("A theme link starts with https://").into()), cx);
             return;
         }
         self.theme_share.busy = true;
@@ -115,22 +116,21 @@ impl SettingsView {
                 .timeout_global(Some(Duration::from_secs(30)))
                 .build()
                 .into();
-            let mut response = agent
-                .get(&link)
-                .call()
-                .map_err(|e| format!("Couldn't download the theme: {e}"))?;
+            let mut response = agent.get(&link).call().map_err(|e| {
+                t("Couldn't download the theme: {error}").replace("{error}", &e.to_string())
+            })?;
             if !response.status().is_success() {
-                return Err(format!(
-                    "Couldn't download the theme: HTTP {}",
-                    response.status()
-                ));
+                return Err(t("Couldn't download the theme: HTTP {status}")
+                    .replace("{status}", &response.status().to_string()));
             }
             response
                 .body_mut()
                 .with_config()
                 .limit(MAX_DOWNLOAD)
                 .read_to_string()
-                .map_err(|e| format!("Couldn't download the theme: {e}"))
+                .map_err(|e| {
+                    t("Couldn't download the theme: {error}").replace("{error}", &e.to_string())
+                })
         });
         cx.spawn(async move |this, cx| {
             let text = download.await;
@@ -149,7 +149,12 @@ impl SettingsView {
         };
         let (stem, text) = match themes::share_text(&theme) {
             Some(Ok(shared)) => shared,
-            Some(Err(err)) => return self.theme_note(Err(format!("Couldn't share it: {err}")), cx),
+            Some(Err(err)) => {
+                return self.theme_note(
+                    Err(t("Couldn't share it: {error}").replace("{error}", &err)),
+                    cx,
+                );
+            }
             None => return,
         };
         let directory = dirs::download_dir()
@@ -162,12 +167,10 @@ impl SettingsView {
             };
             let written = std::fs::write(&path, text)
                 .map(|()| {
-                    format!(
-                        "Saved {}: send it to anyone with the app, they import it here.",
-                        path.display()
-                    )
+                    t("Saved {path}: send it to anyone with the app, they import it here.")
+                        .replace("{path}", &path.display().to_string())
                 })
-                .map_err(|e| format!("Couldn't save it: {e}"));
+                .map_err(|e| t("Couldn't save it: {error}").replace("{error}", &e.to_string()));
             let _ = this.update(cx, |this, cx| {
                 if written.is_ok() {
                     cx.reveal_path(&path);
@@ -186,9 +189,9 @@ impl SettingsView {
         let state = cx.global::<themes::Themes>();
         let groups = [
             (themes::Source::Gentle, "Gentle Shell"),
-            (themes::Source::App, "Animated backgrounds"),
-            (themes::Source::Pi, "Your Pi themes"),
-            (themes::Source::Builtin, "Popular"),
+            (themes::Source::App, t("Animated backgrounds")),
+            (themes::Source::Pi, t("Your Pi themes")),
+            (themes::Source::Builtin, t("Popular")),
         ];
         let glass = state.glass;
         let size = state.interface_size;
@@ -200,51 +203,51 @@ impl SettingsView {
             .as_ref()
             .is_some_and(|b| b.image.is_some() || b.scene.is_some());
         let blur_note = match active.background.as_ref() {
-            _ if !blurrable => "This theme has no background picture to blur.",
+            _ if !blurrable => t("This theme has no background picture to blur."),
             Some(b) if b.scene.is_some() && b.image.is_none() => {
-                "Softens the theme's animated scene (scenes are faded, not blurred)."
+                t("Softens the theme's animated scene (scenes are faded, not blurred).")
             }
             Some(b) if b.scene.is_some() => {
-                "Blurs the theme's picture; its animated scene is faded, not blurred."
+                t("Blurs the theme's picture; its animated scene is faded, not blurred.")
             }
-            _ => "Blurs the theme's background picture.",
+            _ => t("Blurs the theme's background picture."),
         };
-        let mut card = section(IconName::Sparkles, "Theme")
+        let mut card = section(IconName::Sparkles, t("Theme"))
             .child(
-                div().pt_1().pb_1().child(ui::section_label("Window & interface")),
+                div().pt_1().pb_1().child(ui::section_label(t("Window & interface"))),
             )
             .child(glass_row(
-                "Transparency",
+                t("Transparency"),
                 &self.glass.transparency,
                 glass.transparency,
-                "How much the desktop or the theme's background shows through the window.",
+                t("How much the desktop or the theme's background shows through the window."),
                 true,
             ))
             .child(glass_row(
-                "Blur",
+                t("Blur"),
                 &self.glass.blur,
                 glass.blur,
                 blur_note,
                 blurrable,
             ))
             .child(glass_row(
-                "Opacity",
+                t("Opacity"),
                 &self.glass.opacity,
                 glass.opacity,
-                "How solid the areas with text are. Text always stays readable (WCAG AA).",
+                t("How solid the areas with text are. Text always stays readable (WCAG AA)."),
                 true,
             ))
             .child(interface_size_row(size))
-            .child(div().pt_1().pb_1().child(ui::section_label("Fonts")))
+            .child(div().pt_1().pb_1().child(ui::section_label(t("Fonts"))))
             // Above the rows, so a picker opening below never covers it.
             .child(self.reading_desk(cx))
             .children(self.fonts_rows(cx))
             .when(active.background.as_ref().is_some_and(backdrop::Backdrop::moves), |d| {
                 let motion = backdrop::motion(cx);
-                let labels = backdrop::Motion::ALL.map(backdrop::Motion::label);
+                let labels = backdrop::Motion::ALL.map(|motion| t(motion.label()));
                 // One line, like the other rows: what the choice does, or why
                 // the power state overrides it; the rules sit in the tooltip.
-                let note = backdrop::power_note(cx).unwrap_or(motion.summary());
+                let note = t(backdrop::power_note(cx).unwrap_or(motion.summary()));
                 d.child(
                     h_flex()
                         .pb_2()
@@ -254,7 +257,7 @@ impl SettingsView {
                                 .w(rems(120. / 16.))
                                 .text_sm()
                                 .text_color(ui::muted())
-                                .child("Scene motion"),
+                                .child(t("Scene motion")),
                         )
                         .child(ui::segmented(
                             "backdrop-motion",
@@ -291,9 +294,7 @@ impl SettingsView {
                                         // Three short lines: the tooltip has no width of its own.
                                         .tooltip(|window, cx| {
                                             ui::tooltip(
-                                                "Scenes only move while this window is in front.\n\
-                                                 On battery, they move at Calm at most.\n\
-                                                 While saving power, they hold still.",
+                                                t("Scenes only move while this window is in front.\nOn battery, they move at Calm at most.\nWhile saving power, they hold still."),
                                             )
                                             .build(window, cx)
                                         }),
@@ -304,7 +305,7 @@ impl SettingsView {
             .child({
                 use gentle_core::typing_kisses::TypingKisses;
                 let choice = crate::shared::kisses::typing(cx);
-                let labels = TypingKisses::ALL.map(TypingKisses::label);
+                let labels = TypingKisses::ALL.map(|choice| t(choice.label()));
                 h_flex()
                     .pb_2()
                     .gap_3()
@@ -313,7 +314,7 @@ impl SettingsView {
                             .w(rems(120. / 16.))
                             .text_sm()
                             .text_color(ui::muted())
-                            .child("Typing paws & notes"),
+                            .child(t("Typing paws & notes")),
                     )
                     .child(ui::segmented(
                         "typing-paws-notes",
@@ -331,7 +332,7 @@ impl SettingsView {
                             .truncate()
                             .text_xs()
                             .text_color(ui::faint())
-                            .child(choice.summary()),
+                            .child(t(choice.summary())),
                     )
             })
             .when(active.oled, |d| {
@@ -340,7 +341,7 @@ impl SettingsView {
                         .pb_2()
                         .text_xs()
                         .text_color(ui::muted())
-                        .child("OLED Black stays solid black at any transparency, so an OLED screen keeps those pixels off."),
+                        .child(t("OLED Black stays solid black at any transparency, so an OLED screen keeps those pixels off.")),
                 )
             })
             .when_some(backdrop::scene_error(&active.name), |d, error| {
@@ -349,7 +350,7 @@ impl SettingsView {
                         .pb_2()
                         .text_xs()
                         .text_color(ui::danger())
-                        .child(format!("This theme's scene stopped: {error}")),
+                        .child(t("This theme's scene stopped: {error}").replace("{error}", &error)),
                 )
             });
         let cards_of = |source: themes::Source, cx: &mut Context<Self>| -> Vec<Stateful<Div>> {
@@ -371,7 +372,7 @@ impl SettingsView {
             div()
                 .pt_3()
                 .pb_1()
-                .child(ui::section_label("Theme library")),
+                .child(ui::section_label(t("Theme library"))),
         );
         for (source, label) in groups {
             let cards = cards_of(source, cx);
@@ -398,20 +399,20 @@ impl SettingsView {
                 div()
                     .text_xs()
                     .text_color(ui::muted())
-                    .child("Ask an agent for one (\u{201c}a theme with koi in a pond, in my colors\u{201d}): it writes the theme and its scene to the app's themes folder and it shows up here. Share any of them with the share button on its card; import one you got with a link, Import\u{2026}, or by dropping its file here."),
+                    .child(t("Ask an agent for one (“a theme with koi in a pond, in my colors”): it writes the theme and its scene to the app's themes folder and it shows up here. Share any of them with the share button on its card; import one you got with a link, Import…, or by dropping its file here.")),
             )
             .child(
                 h_flex()
                     .gap_2()
                     .child(div().flex_1().child(Input::new(&share.url).small()))
                     .when(share.busy, |d| {
-                        d.child(div().text_xs().text_color(ui::muted()).child("Downloading…"))
+                        d.child(div().text_xs().text_color(ui::muted()).child(t("Downloading…")))
                     })
                     .child(
                         Button::new("theme-import")
                             .small()
                             .icon(Icon::new(IconName::Download))
-                            .label("Import…")
+                            .label(t("Import…"))
                             .on_click(cx.listener(|this, _, _, cx| this.import_theme_files(cx))),
                     )
                     .when_some(themes::app_themes_dir(), |d, dir| {
@@ -420,7 +421,7 @@ impl SettingsView {
                                 .small()
                                 .ghost()
                                 .icon(Icon::new(IconName::FolderOpen))
-                                .tooltip("Open the themes folder")
+                                .tooltip(t("Open the themes folder"))
                                 .on_click(move |_, _, cx| {
                                     let _ = std::fs::create_dir_all(&dir);
                                     cx.open_url(&format!("file://{}", dir.display()))
@@ -557,12 +558,10 @@ fn glass_row(
 /// Interface size: smaller and bigger a step at a time (also via the
 /// platform's shortcut keys), back to 100 %, and the size now.
 fn interface_size_row(size: u16) -> Div {
-    let keys = format!(
-        "{} bigger · {} smaller · {} resets",
-        ui::shortcut("="),
-        ui::shortcut("-"),
-        ui::shortcut("0")
-    );
+    let keys = t("{bigger} bigger · {smaller} smaller · {reset} resets")
+        .replace("{bigger}", &ui::shortcut("="))
+        .replace("{smaller}", &ui::shortcut("-"))
+        .replace("{reset}", &ui::shortcut("0"));
     h_flex()
         .pb_2()
         .gap_3()
@@ -571,7 +570,7 @@ fn interface_size_row(size: u16) -> Div {
                 .w(rems(120. / 16.))
                 .text_sm()
                 .text_color(ui::muted())
-                .child("Interface size"),
+                .child(t("Interface size")),
         )
         .child(
             h_flex()
@@ -582,7 +581,7 @@ fn interface_size_row(size: u16) -> Div {
                     Button::new("interface-smaller")
                         .small()
                         .icon(Icon::new(IconName::Minus))
-                        .tooltip("Smaller")
+                        .tooltip(t("Smaller"))
                         .disabled(size <= interface_size::MIN)
                         .on_click(move |_, _, cx| {
                             themes::set_interface_size(interface_size::smaller(size), cx)
@@ -592,7 +591,7 @@ fn interface_size_row(size: u16) -> Div {
                     Button::new("interface-bigger")
                         .small()
                         .icon(Icon::new(IconName::Plus))
-                        .tooltip("Bigger")
+                        .tooltip(t("Bigger"))
                         .disabled(size >= interface_size::MAX)
                         .on_click(move |_, _, cx| {
                             themes::set_interface_size(interface_size::bigger(size), cx)
@@ -603,7 +602,7 @@ fn interface_size_row(size: u16) -> Div {
                         Button::new("interface-reset")
                             .small()
                             .ghost()
-                            .label("Reset")
+                            .label(t("Reset"))
                             .on_click(|_, _, cx| {
                                 themes::set_interface_size(interface_size::DEFAULT, cx)
                             }),
@@ -717,7 +716,7 @@ fn theme_card(
                             .ghost()
                             .xsmall()
                             .icon(Icon::new(IconName::Share2))
-                            .tooltip("Share: save it as one file")
+                            .tooltip(t("Share: save it as one file"))
                             .on_click(cx.listener(move |this, _, _, cx| {
                                 cx.stop_propagation();
                                 this.share_theme(index, cx);

@@ -1,6 +1,7 @@
 //! What the backend sends a tab: RPC events, extension UI requests, stderr
 //! and exit, and the working-tree refreshes a turn's tool calls schedule.
 
+use crate::shared::i18n::t;
 use std::time::{Duration, Instant};
 
 use gpui_kit::component::WindowExt as _;
@@ -291,9 +292,10 @@ impl SessionView {
                         && let Some(error) = self.genui.outcome(line, cx)
                     {
                         self.toast(
-                            Notification::warning(format!(
-                                "The template couldn't be inserted: {error}"
-                            )),
+                            Notification::warning(
+                                t("The template couldn't be inserted: {error}")
+                                    .replace("{error}", &error),
+                            ),
                             cx,
                         );
                     }
@@ -534,10 +536,9 @@ impl SessionView {
         cx: &mut Context<Self>,
     ) {
         if !target.is_subagent() {
-            self.transcript.notice(
-                NoticeLevel::Warning,
-                desktop::supervision::Report::UnsupportedMethod.message(),
-            );
+            self.localized_notice(NoticeLevel::Warning, || {
+                desktop::supervision::Report::UnsupportedMethod.message()
+            });
             cx.notify();
             return;
         }
@@ -733,7 +734,9 @@ impl SessionView {
                 let this = cx.entity().downgrade();
                 self.run_extension_command(command.clone(), cx, move |result, cx| {
                     let note = match result {
-                        Ok(()) => Notification::success("Asked the agent to add it to the docs."),
+                        Ok(()) => {
+                            Notification::success(t("Asked the agent to add it to the docs."))
+                        }
                         Err(error) => Notification::warning(error),
                     };
                     let _ = this.update(cx, |this, cx| this.toast(note, cx));
@@ -745,12 +748,12 @@ impl SessionView {
                     line: code_ref.line,
                 }),
                 Some(_) => self.warn(
-                    format!("{} isn't in the workspace.", code_ref.path),
+                    t("{path} isn't in the workspace.").replace("{path}", &code_ref.path),
                     window,
                     cx,
                 ),
                 None => self.warn(
-                    format!("{} is outside the workspace.", code_ref.path),
+                    t("{path} is outside the workspace.").replace("{path}", &code_ref.path),
                     window,
                     cx,
                 ),
@@ -773,13 +776,19 @@ impl SessionView {
                 Some(template) => self.insert_template(&template, cx),
                 None => {
                     let names = manager.read(cx).names();
-                    let known = if names.is_empty() {
-                        "none saved yet".to_string()
-                    } else {
-                        names.join(", ")
-                    };
-                    self.note(
-                        format!("No UI template named “{}” ({known}).", name.trim()),
+                    let name = name.trim().to_string();
+                    self.localized_note(
+                        move || {
+                            let known = if names.is_empty() {
+                                t("none saved yet").to_string()
+                            } else {
+                                names.join(", ")
+                            };
+                            gentle_core::i18n::fill(
+                                t("No UI template named “{name}” ({known})."),
+                                &[("name", &name), ("known", &known)],
+                            )
+                        },
                         cx,
                     );
                 }

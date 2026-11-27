@@ -1,6 +1,7 @@
 //! The activity line over the composer: turn timer, phase, current tool and
 //! the session's status chips (jobs, widgets, usage, helpers, rate limits).
 
+use crate::shared::i18n::t;
 use gpui_kit::assets::IconName;
 use gpui_kit::component::button::{Button, ButtonCustomVariant, ButtonVariants as _};
 use gpui_kit::component::popover::{Popover, PopoverState};
@@ -46,7 +47,8 @@ impl SessionView {
                     status: ToolStatus::Running,
                     ..
                 } => {
-                    let s = tools::summarize(name, args, details);
+                    let s =
+                        tools::summarize_in(crate::shared::i18n::language(), name, args, details);
                     Some(if s.subject.is_empty() {
                         s.title
                     } else {
@@ -63,7 +65,7 @@ impl SessionView {
             .models
             .current
             .as_ref()
-            .map_or_else(|| "the agent".to_string(), |m| m.provider.clone());
+            .map_or_else(|| t("the agent").to_string(), |m| m.provider.clone());
         let sections = self.desktop.sections();
         // Gentle Shell's own ODD phase (`implementing…`) when its session feed
         // reports one; the phase inferred from tool calls otherwise.
@@ -76,75 +78,78 @@ impl SessionView {
             .map(|question| {
                 let text = gentle_core::text::first_line(&question.question, 80);
                 if question.terminal_only {
-                    format!("Answer in Gentle Shell's terminal: {text}")
+                    t("Answer in Gentle Shell's terminal: {text}").replace("{text}", &text)
                 } else {
-                    format!("Waiting for an answer: {text}")
+                    t("Waiting for an answer: {text}").replace("{text}", &text)
                 }
             });
 
-        let left = h_flex()
-            .flex_1()
-            .min_w_0()
-            .gap_2()
-            .overflow_hidden()
-            .whitespace_nowrap()
-            .when_some(question, |this, question| {
-                this.child(
-                    h_flex()
-                        .min_w_0()
-                        .gap_1()
-                        .text_color(ui::warning())
-                        .child(Icon::new(IconName::MessageSquare).xsmall())
-                        .child(
+        let left =
+            h_flex()
+                .flex_1()
+                .min_w_0()
+                .gap_2()
+                .overflow_hidden()
+                .whitespace_nowrap()
+                .when_some(question, |this, question| {
+                    this.child(
+                        h_flex()
+                            .min_w_0()
+                            .gap_1()
+                            .text_color(ui::warning())
+                            .child(Icon::new(IconName::MessageSquare).xsmall())
+                            .child(
+                                div()
+                                    .min_w_0()
+                                    .overflow_hidden()
+                                    .text_ellipsis()
+                                    .child(question),
+                            ),
+                    )
+                })
+                .when(busy, |this| {
+                    // The turn's clock; the composer's orbit shows it's live.
+                    this.when_some(since, |this, since| {
+                        this.child(
+                            div()
+                                .font_family(ui::mono())
+                                .text_size(ui::code_rems(11.))
+                                .text_color(ui::muted())
+                                .child(clock(since.elapsed())),
+                        )
+                        .child(ui::each_second())
+                    })
+                    .child(div().h(rems(10. / 16.)).w(px(1.)).bg(ui::border_strong()))
+                    .map(|this| match (waiting, feed_phase, self.activity.phase) {
+                        _ if stopping => {
+                            this.child(div().text_color(ui::muted()).child(t("✿ stopping…")))
+                        }
+                        (Some(_), _, _) => this.child(div().text_color(ui::petal()).child(
+                            t("✿ waiting for {provider}…").replace("{provider}", &provider),
+                        )),
+                        (None, Some(label), _) => {
+                            this.child(div().text_color(ui::petal()).child(format!("✿ {label}")))
+                        }
+                        (None, None, Some(phase)) => this.child(
+                            div()
+                                .text_color(ui::petal())
+                                .child(format!("✿ {}…", t(phase))),
+                        ),
+                        (None, None, None) => {
+                            this.child(div().text_color(ui::petal()).child(t("✿ working…")))
+                        }
+                    })
+                    .when_some(current_tool, |this, tool| {
+                        this.child(
                             div()
                                 .min_w_0()
                                 .overflow_hidden()
                                 .text_ellipsis()
-                                .child(question),
-                        ),
-                )
-            })
-            .when(busy, |this| {
-                // The turn's clock; the composer's orbit shows it's live.
-                this.when_some(since, |this, since| {
-                    this.child(
-                        div()
-                            .font_family(ui::mono())
-                            .text_size(ui::code_rems(11.))
-                            .text_color(ui::muted())
-                            .child(clock(since.elapsed())),
-                    )
-                    .child(ui::each_second())
-                })
-                .child(div().h(rems(10. / 16.)).w(px(1.)).bg(ui::border_strong()))
-                .map(|this| match (waiting, feed_phase, self.activity.phase) {
-                    _ if stopping => this.child(div().text_color(ui::muted()).child("✿ stopping…")),
-                    (Some(_), _, _) => this.child(
-                        div()
-                            .text_color(ui::petal())
-                            .child(format!("✿ waiting for {provider}…")),
-                    ),
-                    (None, Some(label), _) => {
-                        this.child(div().text_color(ui::petal()).child(format!("✿ {label}")))
-                    }
-                    (None, None, Some(phase)) => {
-                        this.child(div().text_color(ui::petal()).child(format!("✿ {phase}…")))
-                    }
-                    (None, None, None) => {
-                        this.child(div().text_color(ui::petal()).child("✿ working…"))
-                    }
-                })
-                .when_some(current_tool, |this, tool| {
-                    this.child(
-                        div()
-                            .min_w_0()
-                            .overflow_hidden()
-                            .text_ellipsis()
-                            .text_color(ui::muted())
-                            .child(tool),
-                    )
-                })
-            });
+                                .text_color(ui::muted())
+                                .child(tool),
+                        )
+                    })
+                });
 
         let width = self.pane_width.get();
         // Only what needs you shows by itself; the rest waits one hover away.
@@ -224,7 +229,7 @@ impl SessionView {
             })
             .when(self.activity.queued > 0, |this| {
                 this.child(ui::chip(
-                    format!("{} queued", self.activity.queued),
+                    t("{count} queued").replace("{count}", &self.activity.queued.to_string()),
                     ui::warning(),
                 ))
             })
@@ -318,15 +323,15 @@ impl SessionView {
             ui::muted()
         };
         let label = if running > 0 {
-            format!("{running} running")
+            t("{count} running").replace("{count}", &running.to_string())
         } else {
-            format!("Jobs {total}")
+            t("Jobs {total}").replace("{total}", &total.to_string())
         };
         let weak = cx.entity().downgrade();
         let closing = weak.clone();
         chip_popover(
             ChipPopoverOptions::new("jobs", IconName::Activity, color, label)
-                .title("Background jobs")
+                .title(t("Background jobs"))
                 .count(format!("{running}/{total}")),
             move || {
                 rows.iter()
@@ -451,8 +456,8 @@ impl SessionView {
                 color,
                 format!("{active}/{total}"),
             )
-            .title("Helpers")
-            .count(format!("{active} active"))
+            .title(t("Helpers"))
+            .count(t("{count} active").replace("{count}", &active.to_string()))
             .footer_action(Box::new(move |_window, cx| {
                 h_flex()
                     .pt_1()
@@ -461,7 +466,10 @@ impl SessionView {
                             .ghost()
                             .xsmall()
                             .icon(Icon::new(IconName::Users))
-                            .label(format!("Open Agents ({})", ui::shortcut_shift("A")))
+                            .label(
+                                t("Open Agents ({shortcut})")
+                                    .replace("{shortcut}", ui::shortcut_shift("A").as_ref()),
+                            )
                             .on_click(cx.listener({
                                 let open_agents = open_agents.clone();
                                 move |state: &mut PopoverState, _, window, cx| {
@@ -537,10 +545,12 @@ impl SessionView {
         if files == 0 {
             return None;
         }
-        let tip = format!(
-            "Review changes · {files} {}",
-            if files == 1 { "file" } else { "files" }
-        );
+        let tip = t(if files == 1 {
+            "Review changes · {count} file"
+        } else {
+            "Review changes · {count} files"
+        })
+        .replace("{count}", &files.to_string());
         Some(
             h_flex()
                 .id("review-changes")
@@ -587,18 +597,18 @@ impl SessionView {
         let rows: Vec<(&'static str, String)> = usage
             .map(|usage| {
                 vec![
-                    ("Input", format_tokens(usage.input)),
-                    ("Output", format_tokens(usage.output)),
-                    ("Cache read", format_tokens(usage.cache_read)),
+                    (t("Input"), format_tokens(usage.input)),
+                    (t("Output"), format_tokens(usage.output)),
+                    (t("Cache read"), format_tokens(usage.cache_read)),
                 ]
             })
             .unwrap_or_default()
             .into_iter()
-            .chain((cost > 0.0).then(|| ("Session cost", format!("${cost:.2}"))))
+            .chain((cost > 0.0).then(|| (t("Session cost"), format!("${cost:.2}"))))
             .collect();
         Some(chip_popover(
             ChipPopoverOptions::new("last-usage", icon, ui::faint(), label)
-                .title("Usage")
+                .title(t("Usage"))
                 .mono(),
             move || {
                 rows.iter()
@@ -630,9 +640,9 @@ fn render_memory_button(
     cx: &mut Context<SessionView>,
 ) -> impl IntoElement + use<> {
     let opens = match (target.observation, &target.project) {
-        (Some(id), _) => format!("Open memory #{id}"),
-        (None, Some(project)) => format!("Open {project}'s memories"),
-        (None, None) => "Open Memory".to_string(),
+        (Some(id), _) => t("Open memory #{id}").replace("{id}", &id.to_string()),
+        (None, Some(project)) => t("Open {project}'s memories").replace("{project}", project),
+        (None, None) => t("Open Memory").to_string(),
     };
     let tip = format!("{status}\n{opens}");
     h_flex()
@@ -822,7 +832,7 @@ pub(super) fn chip_popover(
                             Tooltip::element(|_, _| {
                                 div()
                                     .debug_selector(|| "context-ring-tooltip".into())
-                                    .child("Context usage and compaction")
+                                    .child(t("Context usage and compaction"))
                             })
                             .build(window, cx)
                         })

@@ -2,6 +2,8 @@
 //! conversation (now or once the turn ends), resuming a saved session and
 //! the conversation state a fresh start or switch resets.
 
+use crate::shared::i18n::t;
+
 use std::path::PathBuf;
 use std::time::Duration;
 
@@ -63,7 +65,10 @@ impl SessionView {
             self.start(window, cx);
         } else {
             self.restart_when_idle(
-                "New sign-in saved; this tab reloads its models when the current turn ends.",
+                || {
+                    t("New sign-in saved; this tab reloads its models when the current turn ends.")
+                        .into()
+                },
                 window,
                 cx,
             );
@@ -141,7 +146,10 @@ impl SessionView {
             return;
         }
         self.restart_when_idle(
-            "Gentle Shell was updated; this tab switches to it when the current turn ends.",
+            || {
+                t("Gentle Shell was updated; this tab switches to it when the current turn ends.")
+                    .into()
+            },
             window,
             cx,
         );
@@ -152,8 +160,8 @@ impl SessionView {
     pub(super) fn reload(&mut self, cx: &mut Context<Self>) {
         if self.transcript.running || !self.extension.dialogs.is_empty() {
             self.backend.restart_pending = true;
-            self.note(
-                "Gentle Shell reloads in this tab when the current turn ends.".into(),
+            self.localized_note(
+                || t("Gentle Shell reloads in this tab when the current turn ends.").into(),
                 cx,
             );
             return;
@@ -195,10 +203,10 @@ impl SessionView {
     ) {
         let config = pi_rpc::resolve_homes().config;
         if let Err(error) = crate::shared::gentle_state::save_default_mode(&config, mode) {
-            self.transcript.notice(
-                NoticeLevel::Error,
-                format!("Could not save the permission mode: {error}"),
-            );
+            self.localized_notice(NoticeLevel::Error, move || {
+                t("Could not save the permission mode: {error}")
+                    .replace("{error}", &error.to_string())
+            });
             cx.notify();
             return;
         }
@@ -213,16 +221,16 @@ impl SessionView {
             self.start(window, cx);
         } else {
             self.restart_when_idle(
-                &format!(
-                    "Permissions switch to {} when the current turn ends.",
-                    mode.label()
-                ),
+                move || {
+                    t("Permissions switch to {mode} when the current turn ends.")
+                        .replace("{mode}", t(mode.label()))
+                },
                 window,
                 cx,
             );
         }
         window.push_notification(
-            Notification::info(format!("Permissions: {}", mode.label())),
+            Notification::info(t("Permissions: {mode}").replace("{mode}", t(mode.label()))),
             cx,
         );
         cx.notify();
@@ -239,10 +247,10 @@ impl SessionView {
     ) {
         let config = pi_rpc::resolve_homes().config;
         if let Err(error) = crate::shared::gentle_state::save_default_mode(&config, mode) {
-            self.transcript.notice(
-                NoticeLevel::Error,
-                format!("Could not save the permission mode: {error}"),
-            );
+            self.localized_notice(NoticeLevel::Error, move || {
+                t("Could not save the permission mode: {error}")
+                    .replace("{error}", &error.to_string())
+            });
             cx.notify();
             return;
         }
@@ -252,22 +260,24 @@ impl SessionView {
             return;
         }
         self.backend.restart_pending = true;
-        self.transcript.notice(
-            NoticeLevel::Info,
-            format!(
-                "Permissions switch to {} when the current turn ends.",
-                mode.label()
-            ),
-        );
+        self.localized_notice(NoticeLevel::Info, move || {
+            t("Permissions switch to {mode} when the current turn ends.")
+                .replace("{mode}", t(mode.label()))
+        });
         cx.notify();
     }
 
     /// Restart the backend on the same conversation now, or, mid-turn or with
     /// a dialog open, once that settles (`waiting` tells the user).
-    fn restart_when_idle(&mut self, waiting: &str, window: &mut Window, cx: &mut Context<Self>) {
+    fn restart_when_idle(
+        &mut self,
+        waiting: impl Fn() -> String + 'static,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
         if self.transcript.running || !self.extension.dialogs.is_empty() {
             self.backend.restart_pending = true;
-            self.transcript.notice(NoticeLevel::Info, waiting.into());
+            self.localized_notice(NoticeLevel::Info, waiting);
             cx.notify();
         } else {
             self.restart_backend(window, cx);
@@ -302,6 +312,7 @@ impl SessionView {
         self.desktop.reset();
         self.permission.reset(self.desktop.session());
         self.transcript = Transcript::default();
+        self.localized_notices.clear();
         self.markdown.clear();
         self.expanded.clear();
         self.live = view::Live::default();
@@ -454,6 +465,7 @@ impl SessionView {
     /// Forget the conversation shown, for another one on the same backend.
     pub(super) fn reset_conversation(&mut self) {
         self.transcript = Transcript::default();
+        self.localized_notices.clear();
         self.markdown.clear();
         self.expanded.clear();
         self.todo.apply(Vec::new());

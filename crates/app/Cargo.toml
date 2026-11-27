@@ -50,6 +50,9 @@ imagesize = "0.15"
 # the app and every process under it. The version another dependency
 # already locks; only process data, read on one thread.
 sysinfo = { version = "0.31", default-features = false, features = ["system"] }
+# The system language, for the interface's default (Settings › Language).
+# The version another dependency already locks.
+sys-locale = "0.3"
 
 # UI tests drive real views in headless windows (GPUI's `TestAppContext`):
 # the generative UI diagram's and panels' pointer and keyboard. Only GPUI's

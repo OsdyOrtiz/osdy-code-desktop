@@ -7,7 +7,7 @@ use gpui_kit::component::input::InputState;
 use gpui_kit::*;
 use pi_rpc::{AuthEvent, AuthPrompt, LoginHelper, LoginMessage, ProviderInfo};
 
-use super::{Flow, ProvidersEvent, ProvidersView};
+use super::{Flow, ProvidersEvent, ProvidersView, SignInError};
 
 impl ProvidersView {
     /// Resolving the launcher can wait on the login-shell PATH probe, and
@@ -30,7 +30,7 @@ impl ProvidersView {
                         Some(rx)
                     }
                     Err(error) => {
-                        this.error = Some(format!("{error:#}"));
+                        this.error = Some(SignInError::Detail(format!("{error:#}")));
                         None
                     }
                 }
@@ -101,12 +101,12 @@ impl ProvidersView {
                     flow.finished = Some(Err(message));
                     flow.prompt = None;
                 }
-                None => self.error = Some(message),
+                None => self.error = Some(SignInError::Detail(message)),
             },
             LoginMessage::Exited => {
                 self.helper = None;
                 if self.error.is_none() {
-                    self.error = Some("The sign-in helper stopped.".into());
+                    self.error = Some(SignInError::HelperStopped);
                 }
             }
         }
@@ -122,7 +122,7 @@ impl ProvidersView {
     ) {
         let Some(helper) = &self.helper else { return };
         if let Err(error) = helper.login(&provider.id, oauth) {
-            self.error = Some(format!("{error:#}"));
+            self.error = Some(SignInError::Detail(format!("{error:#}")));
             return;
         }
         self.flow = Some(Flow {

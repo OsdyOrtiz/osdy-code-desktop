@@ -59,7 +59,7 @@ enum Metric {
 #[derive(Debug, PartialEq)]
 enum UsageState {
     Loading,
-    Failed(String),
+    Failed(UsageText),
     Loaded {
         cards: Vec<ProviderCard>,
         others: Vec<String>,
@@ -67,6 +67,37 @@ enum UsageState {
         /// reuses the legacy sign-in prompt.
         empty: UsageEmpty,
     },
+}
+
+/// Keep app-owned messages untranslated until render, while passing external
+/// diagnostics through verbatim.
+#[derive(Clone, Debug, PartialEq)]
+enum UsageText {
+    Key(&'static str),
+    Detail(&'static str, String),
+    PathError(String, String),
+    External(String),
+}
+
+impl From<&'static str> for UsageText {
+    fn from(key: &'static str) -> Self {
+        Self::Key(key)
+    }
+}
+
+impl UsageText {
+    fn render(&self) -> String {
+        use crate::shared::i18n::t;
+        match self {
+            Self::Key(key) => t(key).to_string(),
+            Self::Detail(key, detail) => t(key).replace("{detail}", detail),
+            Self::PathError(path, error) => gentle_core::i18n::fill(
+                t("Could not read {path}: {error}"),
+                &[("path", path), ("error", error)],
+            ),
+            Self::External(text) => text.clone(),
+        }
+    }
 }
 
 /// What the Subscription tab shows when there are no provider cards.
@@ -105,7 +136,10 @@ enum StatsSource {
     Files { data: Arc<StatsData>, offset: i64 },
     /// Gentle Shell's own aggregation for the range shown, with what it left
     /// out. `day_cost` when its days carry their cost (5.0.0 on).
-    Shell { notes: Vec<String>, day_cost: bool },
+    Shell {
+        notes: Vec<&'static str>,
+        day_cost: bool,
+    },
 }
 
 /// Where Local stats come from.
@@ -256,7 +290,7 @@ fn rpc_usage_state(
             empty: UsageEmpty::Reported,
         }
     } else if let Some(error) = error {
-        UsageState::Failed(error)
+        UsageState::Failed(UsageText::External(error))
     } else {
         UsageState::Loaded {
             cards: Vec::new(),
@@ -722,6 +756,16 @@ mod tests {
         rpc_provider_title, rpc_usage_state, usage_action,
     };
     use crate::features::usage::credentials::CardState;
+
+    #[test]
+    fn t14_usage_path_error_keeps_external_details_verbatim() {
+        use crate::shared::i18n::with_test_language;
+        use gentle_core::i18n::Language;
+
+        let text = super::UsageText::PathError("log-{error}".into(), "cannot open {path}".into());
+        let actual = with_test_language(Language::English, || text.render());
+        assert_eq!(actual, "Could not read log-{error}: cannot open {path}");
+    }
 
     const NOW: i64 = 1_762_400_000_000;
 

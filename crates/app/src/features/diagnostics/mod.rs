@@ -100,9 +100,18 @@ pub fn start(cx: &mut App) {
 /// Start a new recording (ending any running one); its file's path.
 pub fn start_recording(cx: &mut App) -> Result<PathBuf, String> {
     stop_recording(cx);
-    let dir = folder().ok_or("no data folder to record into")?;
-    let recorder = Recorder::open(&dir)
-        .map_err(|error| format!("could not start a recording in {}: {error}", dir.display()))?;
+    use crate::shared::i18n::t;
+
+    let dir = folder().ok_or_else(|| t("no data folder to record into"))?;
+    let recorder = Recorder::open(&dir).map_err(|error| {
+        gentle_core::i18n::fill(
+            t("could not start a recording in {folder}: {error}"),
+            &[
+                ("folder", &dir.to_string_lossy()),
+                ("error", &error.to_string()),
+            ],
+        )
+    })?;
     let path = recorder.path.clone();
     eprintln!("Diagnostics: recording to {}", path.display());
     set_enabled(true);

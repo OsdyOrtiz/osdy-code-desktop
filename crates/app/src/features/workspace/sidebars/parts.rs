@@ -39,16 +39,24 @@ impl Workspace {
                     || self.spaces[index].tabs[tab.index]
                         .leaves()
                         .iter()
-                        .any(|id| self.pane_title(*id).to_lowercase().contains(&query))
+                        .any(|id| {
+                            self.panes.get(id).is_some_and(|pane| {
+                                // Only the built Canvas title is translated.
+                                pane.title.to_lowercase().contains(&query)
+                                    || (pane.item.kind == PaneKind::Canvas
+                                        && CanvasView::TITLE.to_lowercase().contains(&query))
+                            })
+                        })
                     || self.spaces[index].tabs[tab.index]
                         .state
                         .unbuilt()
                         .is_some_and(|saved| {
-                            saved
-                                .layout
-                                .leaves()
-                                .iter()
-                                .any(|pane| saved_title(pane).to_lowercase().contains(&query))
+                            saved.layout.leaves().iter().any(|pane| {
+                                saved_title(pane).to_lowercase().contains(&query)
+                                    || saved_title_in(pane, gentle_core::i18n::Language::English)
+                                        .to_lowercase()
+                                        .contains(&query)
+                            })
                         })
             });
         }
@@ -66,13 +74,13 @@ impl Workspace {
             .pt_2()
             .pb_1()
             .justify_between()
-            .child(ui::section_label("Workspaces"))
+            .child(ui::section_label(t("Workspaces")))
             .child(
                 Button::new("sidebar-new-workspace")
                     .ghost()
                     .xsmall()
                     .icon(Icon::new(IconName::FolderPlus))
-                    .tooltip("New workspace")
+                    .tooltip(t("New workspace"))
                     .on_click(cx.listener(|this, _, window, cx| {
                         this.pick_workspace_folder(None, window, cx);
                     })),
@@ -89,7 +97,7 @@ impl Workspace {
             (count > 0).then(|| {
                 div()
                     .text_color(ui::light_color(light))
-                    .child(light.badge(count))
+                    .child(light.badge_in(crate::shared::i18n::language(), count))
             })
         };
         h_flex()
@@ -100,12 +108,12 @@ impl Workspace {
             .child(
                 div()
                     .text_color(ui::accent())
-                    .child(format!("{} running", total.working)),
+                    .child(t("{count} running").replace("{count}", &total.working.to_string())),
             )
             .child(
                 div()
                     .text_color(ui::warning())
-                    .child(format!("{} waiting", total.needs_you)),
+                    .child(t("{count} waiting").replace("{count}", &total.needs_you.to_string())),
             )
             .children(background(Light::Subagents))
             .children(background(Light::Jobs))
@@ -400,7 +408,7 @@ impl Workspace {
                     .hover(|d| d.bg(ui::surface_hover()))
                     .when(!self.popups_open(), |d| {
                         d.tooltip(|window, cx| {
-                            Tooltip::new("New agent or terminal in this workspace")
+                            Tooltip::new(t("New agent or terminal in this workspace"))
                                 .build(window, cx)
                         })
                     })
@@ -430,5 +438,46 @@ impl Workspace {
             .on_drop(cx.listener(move |this, drag: &WorkspaceDrag, window, cx| {
                 this.move_workspace(drag.index, index, window, cx);
             }))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::PaneKind;
+    use crate::features::canvas::CanvasView;
+    use crate::features::workspace::stages::tests::with_workspace;
+    use crate::shared::i18n::with_test_language;
+    use gentle_core::i18n::Language;
+    use gpui_kit::TestAppContext;
+
+    #[gpui::test]
+    fn t14_tab_search_finds_a_built_canvas_in_both_languages(cx: &mut TestAppContext) {
+        let board =
+            std::env::temp_dir().join(format!("ocd-tab-search-{}.json", std::process::id()));
+        with_workspace(cx, |workspace, window, cx| {
+            crate::app::integration::register(cx);
+            with_test_language(Language::Spanish, || {
+                workspace.update(cx, |w, cx| {
+                    w.open_tab(PaneKind::Canvas, board, None, None, window, cx);
+                    let pane = w.focused_pane().expect("the canvas pane was built");
+                    assert!(
+                        w.panes[&pane]
+                            .item
+                            .view
+                            .clone()
+                            .downcast::<CanvasView>()
+                            .is_ok()
+                    );
+                    for query in ["lienzo", "canvas"] {
+                        w.tab_search
+                            .update(cx, |state, cx| state.set_value(query, window, cx));
+                        let tabs = w.visible_tabs(0, cx);
+                        assert_eq!(tabs.len(), 1, "{query}");
+                        assert_eq!(tabs[0].pane, Some(pane));
+                        assert_eq!(tabs[0].title.as_ref(), "Lienzo");
+                    }
+                });
+            });
+        });
     }
 }

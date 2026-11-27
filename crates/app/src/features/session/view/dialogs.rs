@@ -1,6 +1,7 @@
 //! Extension dialogs (`select`, `confirm`, `input`, `editor`): the card over
 //! the composer and its keyboard handling.
 
+use crate::shared::i18n::t;
 use gpui_kit::assets::IconName;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::input::Textarea;
@@ -96,10 +97,10 @@ impl SessionView {
             UiMethod::Confirm { title, .. } => (IconName::ShieldCheck, title.as_str()),
             UiMethod::Input { title, .. } => (IconName::SquareTerminal, title.as_str()),
             UiMethod::Editor { title, .. } => (IconName::FilePen, title.as_str()),
-            _ => (IconName::Info, "Extension request"),
+            _ => (IconName::Info, t("Extension request")),
         };
         let (title, current) = split_current(raw_title);
-        let title = if title.is_empty() { "Choose" } else { title };
+        let title = if title.is_empty() { t("Choose") } else { title };
 
         let header = h_flex()
             .gap_2p5()
@@ -124,7 +125,13 @@ impl SessionView {
                     .child(title.to_string()),
             )
             .when_some(current, |this, current| {
-                this.child(ui::chip(format!("current: {current}"), ui::accent()).flex_shrink_0())
+                this.child(
+                    ui::chip(
+                        t("current: {current}").replace("{current}", current),
+                        ui::accent(),
+                    )
+                    .flex_shrink_0(),
+                )
             });
 
         let mut hints: Vec<(&str, &str, Option<KeyAction>)> = Vec::new();
@@ -134,11 +141,11 @@ impl SessionView {
                     .get(cursor.min(options.len().saturating_sub(1)))
                     .map(|o| KeyAction::Answer(UiAnswer::Value(o.clone())));
                 hints = vec![
-                    ("↑↓", "navigate", None),
-                    ("↵", "choose", choose),
+                    ("↑↓", t("navigate"), None),
+                    ("↵", t("choose"), choose),
                     (
                         "esc",
-                        "cancel",
+                        t("cancel"),
                         Some(KeyAction::Answer(UiAnswer::Cancelled)),
                     ),
                 ];
@@ -211,17 +218,17 @@ impl SessionView {
                 hints = vec![
                     (
                         "↵",
-                        "yes",
+                        t("yes"),
                         Some(KeyAction::Answer(UiAnswer::Confirmed(true))),
                     ),
                     (
                         "n",
-                        "no",
+                        t("no"),
                         Some(KeyAction::Answer(UiAnswer::Confirmed(false))),
                     ),
                     (
                         "esc",
-                        "cancel",
+                        t("cancel"),
                         Some(KeyAction::Answer(UiAnswer::Cancelled)),
                     ),
                 ];
@@ -244,7 +251,7 @@ impl SessionView {
                                     .primary()
                                     .small()
                                     .icon(Icon::new(IconName::Check))
-                                    .label("Yes")
+                                    .label(t("Yes"))
                                     .on_click(cx.listener(|this, _, window, cx| {
                                         this.answer_dialog(UiAnswer::Confirmed(true), window, cx)
                                     })),
@@ -253,7 +260,7 @@ impl SessionView {
                                 Button::new("confirm-no")
                                     .ghost()
                                     .small()
-                                    .label("No")
+                                    .label(t("No"))
                                     .on_click(cx.listener(|this, _, window, cx| {
                                         this.answer_dialog(UiAnswer::Confirmed(false), window, cx)
                                     })),
@@ -270,12 +277,12 @@ impl SessionView {
                         } else {
                             "↵"
                         },
-                        "submit",
+                        t("submit"),
                         Some(KeyAction::SubmitInput),
                     ),
                     (
                         "esc",
-                        "cancel",
+                        t("cancel"),
                         Some(KeyAction::Answer(UiAnswer::Cancelled)),
                     ),
                 ];
@@ -298,7 +305,7 @@ impl SessionView {
                             Button::new("dialog-submit")
                                 .primary()
                                 .small()
-                                .label("Submit")
+                                .label(t("Submit"))
                                 .on_click(cx.listener(|this, _, window, cx| {
                                     let value = this.dialog_input.read(cx).value().to_string();
                                     this.answer_dialog(UiAnswer::Value(value), window, cx)
@@ -336,13 +343,16 @@ impl SessionView {
             )
             .child(div().flex_1())
             .when(waiting > 0, |this| {
-                this.child(ui::chip(format!("{waiting} more waiting"), ui::warning()))
+                this.child(ui::chip(
+                    t("{count} more waiting").replace("{count}", &waiting.to_string()),
+                    ui::warning(),
+                ))
             })
             .child(
                 Button::new("dialog-cancel")
                     .ghost()
                     .xsmall()
-                    .label("Cancel")
+                    .label(t("Cancel"))
                     .on_click(cx.listener(|this, _, window, cx| {
                         this.answer_dialog(UiAnswer::Cancelled, window, cx)
                     })),

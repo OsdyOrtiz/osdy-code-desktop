@@ -41,14 +41,28 @@ const MONTHS: [&str; 12] = [
 
 /// "Mar 4".
 pub fn short_date(day: i64) -> String {
+    short_date_in(day, crate::i18n::Language::English)
+}
+
+pub fn short_date_in(day: i64, language: crate::i18n::Language) -> String {
+    use crate::i18n::tr;
     let (_, m, d) = civil_from_days(day);
-    format!("{} {d}", MONTHS[(m - 1) as usize])
+    tr(language, "{month} {day}")
+        .replace("{month}", tr(language, MONTHS[(m - 1) as usize]))
+        .replace("{day}", &d.to_string())
 }
 
 /// "Mar 2026".
 pub fn month_label(day: i64) -> String {
+    month_label_in(day, crate::i18n::Language::English)
+}
+
+pub fn month_label_in(day: i64, language: crate::i18n::Language) -> String {
     let (y, m, _) = civil_from_days(day);
-    format!("{} {y}", MONTHS[(m - 1) as usize])
+    format!(
+        "{} {y}",
+        crate::i18n::tr(language, MONTHS[(m - 1) as usize])
+    )
 }
 
 /// The day of the month (1-based) and whether `day` is a Monday.
@@ -930,17 +944,26 @@ pub fn link(from: &Rect, to: &Rect) -> EdgePath {
 
 /// The header's counts.
 pub fn counts(timeline: &Timeline) -> String {
+    counts_in(timeline, crate::i18n::Language::English)
+}
+
+pub fn counts_in(timeline: &Timeline, language: crate::i18n::Language) -> String {
+    let count = super::edits::count_in(
+        language,
+        timeline.tasks.len(),
+        "{count} task",
+        "{count} tasks",
+    );
     let (Some(first), Some(last)) = (
         timeline.tasks.iter().map(|t| t.start).min(),
         timeline.tasks.iter().map(|t| t.end).max(),
     ) else {
-        return plural(0, "task");
+        return count;
     };
     format!(
-        "{} · {} – {}",
-        plural(timeline.tasks.len(), "task"),
-        short_date(first),
-        short_date(last)
+        "{count} · {} – {}",
+        short_date_in(first, language),
+        short_date_in(last, language)
     )
 }
 

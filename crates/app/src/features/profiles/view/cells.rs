@@ -14,7 +14,7 @@ use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
 
 use crate::features::profiles::{ALL_ROW, ProfilesView};
-use crate::shared::ui;
+use crate::shared::{i18n::t, ui};
 
 use super::{EFFORT_W, TIER_W};
 
@@ -60,12 +60,12 @@ impl ProfilesView {
 
     pub(super) fn render_model_cell(&self, key: &str, cx: &mut Context<Self>) -> AnyElement {
         let current = self.current_value(key, |e| &e.model);
-        let inherit = self.inherit_label(key);
+        let inherit = t(self.inherit_label(key));
         let label = match &current {
             Ok(Some(model)) => model.clone(),
-            Ok(None) if key != ORCHESTRATOR && is_review_role(key) => "Pi default".into(),
+            Ok(None) if key != ORCHESTRATOR && is_review_role(key) => t("Pi default").into(),
             Ok(None) => inherit.to_string(),
-            Err(()) => "mixed".into(),
+            Err(()) => t("mixed").into(),
         };
         let edited = self.is_edited(key, |e| &e.model);
         let color = if edited {
@@ -108,7 +108,7 @@ impl ProfilesView {
                 .px_2()
                 .text_xs()
                 .text_color(ui::faint())
-                .child("follows model")
+                .child(t("follows model"))
                 .into_any_element();
         }
         let supported = if key == ALL_ROW {
@@ -137,9 +137,9 @@ impl ProfilesView {
                 }
                 _ => level.clone(),
             },
-            Ok(None) if is_review_role(key) => "Pi default".into(),
-            Ok(None) => "inherit".into(),
-            Err(()) => "mixed".into(),
+            Ok(None) if is_review_role(key) => t("Pi default").into(),
+            Ok(None) => t("inherit").into(),
+            Err(()) => t("mixed").into(),
         };
         let edited = self.is_edited(key, |e| &e.thinking);
         let color = if edited {
@@ -154,11 +154,11 @@ impl ProfilesView {
             .copied()
             .filter(|l| supported.as_ref().is_none_or(|s| s.contains(l)))
             .collect();
-        let inherit = if is_review_role(key) {
+        let inherit = t(if is_review_role(key) {
             "Pi persisted default effort"
         } else {
             "Inherit effort"
-        };
+        });
         let weak = cx.entity().downgrade();
         let toggle = weak.clone();
         let open = self.effort_menu.as_deref() == Some(key);
@@ -267,7 +267,7 @@ impl ProfilesView {
         }
         if !self.fast_capable(model) {
             let text = match tier {
-                Some(tier) => format!("{tier} (n/a)"),
+                Some(tier) => t("{tier} (n/a)").replace("{tier}", tier),
                 None => "—".into(),
             };
             return cell
@@ -286,12 +286,8 @@ impl ProfilesView {
                 .when(!fast, |b| b.ghost())
                 .when(edited, |b| b.text_color(ui::warning()))
                 .icon(Icon::new(IconName::Zap).when(fast, |i| i.text_color(ui::champagne())))
-                .label(match tier {
-                    Some("fast") => "Fast",
-                    Some(_) => "Standard",
-                    None => "Standard",
-                })
-                .tooltip("OpenAI Fast (service_tier priority): 2.5x subscription usage or 2x purchased credits")
+                .label(t(if fast { "Fast" } else { "Standard" }))
+                .tooltip(t("OpenAI Fast (service_tier priority): 2.5x subscription usage or 2x purchased credits"))
                 .disabled(self.busy)
                 .on_click(cx.listener(move |this, _, _, cx| this.toggle_tier(&key, cx))),
         )

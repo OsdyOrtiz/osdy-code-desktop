@@ -29,8 +29,10 @@ pub(super) fn pump() {
 }
 
 /// GTK, initialized on first use (always from the main thread).
-static GTK: LazyLock<Result<(), String>> = LazyLock::new(|| {
-    gtk::init().map_err(|error| format!("The browser could not start GTK: {error}"))
+static GTK: LazyLock<Result<(), super::NativeFailure>> = LazyLock::new(|| {
+    gtk::init().map_err(|error| {
+        super::NativeFailure::with_error("The browser could not start GTK: {error}", error)
+    })
 });
 
 /// The app's X window, as the Xlib handle `wry` asks for.
@@ -44,16 +46,14 @@ impl HasWindowHandle for Host {
     }
 }
 
-pub(super) fn host(window: &Window) -> Result<Host, String> {
+pub(super) fn host(window: &Window) -> Result<Host, super::NativeFailure> {
     // GPUI's own `Window::window_handle` shadows the trait's.
     match HasWindowHandle::window_handle(window).map(|handle| handle.as_raw()) {
         Ok(RawWindowHandle::Xcb(handle)) => Ok(Host(handle.window.get() as c_ulong)),
         Ok(RawWindowHandle::Xlib(handle)) => Ok(Host(handle.window)),
-        _ => Err(
-            "The in-app browser needs an X11 session; on Wayland the canvas \
-                  opens in your browser."
-                .into(),
-        ),
+        _ => Err(super::NativeFailure::new(
+            "The in-app browser needs an X11 session; on Wayland the canvas opens in your browser.",
+        )),
     }
 }
 
@@ -74,7 +74,7 @@ impl NativeView {
         sandbox: Option<&super::Sandbox>,
         profile: &Profile,
         relays: super::Relays,
-    ) -> Result<Self, String> {
+    ) -> Result<Self, super::NativeFailure> {
         GTK.clone()?;
         // Keep every persistent profile, including Shared, under app data.
         let mut context = (!profile.is_private())
@@ -97,7 +97,10 @@ impl NativeView {
         }
         .build_as_child(&host)
         .map_err(|error| {
-            format!("The browser could not start: {error}. It needs WebKitGTK 4.1.")
+            super::NativeFailure::with_error(
+                "The browser could not start: {error}. It needs WebKitGTK 4.1.",
+                error,
+            )
         })?;
         Ok(Self {
             webview,

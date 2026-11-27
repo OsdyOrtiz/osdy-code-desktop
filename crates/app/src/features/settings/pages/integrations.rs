@@ -11,6 +11,7 @@ use super::super::{
     navigation::SettingsPage,
     snapshot::Snapshot,
 };
+use crate::shared::i18n::t;
 use crate::shared::ui;
 
 pub(super) fn render(
@@ -21,9 +22,9 @@ pub(super) fn render(
     v_flex()
         .gap_3()
         .child(
-            section(IconName::Bot, "MCP servers")
+            section(IconName::Bot, t("MCP servers"))
                 .child(row(
-                    "Configured servers",
+                    t("Configured servers"),
                     if snapshot.mcp_servers.is_empty() {
                         "—".into()
                     } else {
@@ -31,9 +32,9 @@ pub(super) fn render(
                     },
                 ))
                 .child(
-                    div().pt_2().text_xs().text_color(ui::faint()).child(
+                    div().pt_2().text_xs().text_color(ui::faint()).child(t(
                         "Detected from Gentle Shell's MCP configuration; edit the server definitions in the terminal configuration.",
-                    ),
+                    )),
                 ),
         )
         .child(view.maestro_section(cx))
@@ -43,7 +44,7 @@ pub(super) fn render(
                     .ghost()
                     .small()
                     .icon(Icon::new(IconName::Smartphone))
-                    .label("Configure devices")
+                    .label(t("Configure devices"))
                     .on_click(cx.listener(|this, _, _, cx| {
                         this.navigate_to(SettingsPage::Devices, cx)
                     })),

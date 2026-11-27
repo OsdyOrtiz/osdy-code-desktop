@@ -346,6 +346,12 @@ impl Profile {
 
     /// What the card's menu calls it, and the kind beside it.
     pub fn label(&self) -> (String, &'static str) {
+        self.localized_label(crate::i18n::Language::English)
+    }
+
+    /// A label for the UI, without translating user-defined names or paths.
+    pub fn localized_label(&self, language: crate::i18n::Language) -> (String, &'static str) {
+        let tr = |text| crate::i18n::tr(language, text);
         let leaf = |path: &str| {
             path.trim_end_matches(['/', '\\'])
                 .rsplit(['/', '\\'])
@@ -354,12 +360,12 @@ impl Profile {
                 .to_string()
         };
         match self {
-            Profile::Shared => ("Shared".into(), ""),
-            Profile::Agent => ("Agent".into(), ""),
-            Profile::Private => ("Private".into(), ""),
-            Profile::Repository(path) => (leaf(path), "Repository"),
-            Profile::Session(id) => (id.chars().take(8).collect(), "Session"),
-            Profile::Named(name) => (name.clone(), "Profile"),
+            Profile::Shared => (tr("Shared").into(), ""),
+            Profile::Agent => (tr("Agent").into(), ""),
+            Profile::Private => (tr("Private").into(), ""),
+            Profile::Repository(path) => (leaf(path), tr("Repository")),
+            Profile::Session(id) => (id.chars().take(8).collect(), tr("Session")),
+            Profile::Named(name) => (name.clone(), tr("Profile")),
         }
     }
 

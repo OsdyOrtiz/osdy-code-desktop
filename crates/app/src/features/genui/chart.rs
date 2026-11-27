@@ -572,7 +572,7 @@ impl PanelView {
                                     .xsmall()
                                     .text_color(ui::muted())
                                     .icon(Icon::new(IconName::MessageSquare))
-                                    .label("Ask about this")
+                                    .label(crate::shared::i18n::t("Ask about this"))
                                     .on_click(cx.listener(|this, _, _, cx| this.ask_point(cx))),
                             ),
                         ),

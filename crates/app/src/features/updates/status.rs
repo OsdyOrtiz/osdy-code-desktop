@@ -11,6 +11,7 @@ use pi_rpc::desktop_rpc::{
 };
 
 use super::UpdateOffer;
+use crate::shared::i18n::t;
 
 /// The "Gentle Shell X is available" offer from Gentle Shell's answer: only
 /// a release (or bundled) install with a newer stable release, never a
@@ -57,14 +58,19 @@ fn is_managed(channel: ShellChannel, managed: bool) -> bool {
 pub fn status_rows(status: &UpdateStatus, managed: bool) -> Vec<(&'static str, String)> {
     let shell = &status.gentle_shell;
     let managed = is_managed(shell.channel, managed);
-    let mut rows = vec![("Channel", channel_label(shell.channel, managed).to_string())];
+    let mut rows = vec![(
+        t("Channel"),
+        channel_label(shell.channel, managed).to_string(),
+    )];
     let shell_state = match shell.state {
-        _ if managed => "updated by gentle-ai".to_string(),
+        _ if managed => t("updated by gentle-ai").to_string(),
         UpdateState::UpToDate => up_to_date(shell.current.as_deref()),
         UpdateState::UpdateAvailable => match (shell.channel, shell.latest.as_deref()) {
-            (ShellChannel::Main, Some(latest)) => format!("newer commit {latest} on main"),
-            (_, Some(latest)) => format!("{latest} is available"),
-            (_, None) => "an update is available".to_string(),
+            (ShellChannel::Main, Some(latest)) => {
+                t("newer commit {latest} on main").replace("{latest}", latest)
+            }
+            (_, Some(latest)) => t("{latest} is available").replace("{latest}", latest),
+            (_, None) => t("an update is available").to_string(),
         },
         UpdateState::Unknown => not_checked(status.offline, shell.checked_at.as_deref()),
     };
@@ -73,60 +79,70 @@ pub fn status_rows(status: &UpdateStatus, managed: bool) -> Vec<(&'static str, S
     // `gentle-shell upgrade`: gentle-ai updates it, so no command.
     let foreign = managed && shell.channel != ShellChannel::GentleAiManaged;
     if let Some(command) = shell.command.as_ref().filter(|_| !foreign) {
-        rows.push(("Update command", command.clone()));
+        rows.push((t("Update command"), command.clone()));
     }
     let pi = &status.pi;
     let pi_state = match pi.state {
         UpdateState::UpToDate => up_to_date(pi.current.as_deref()),
         UpdateState::UpdateAvailable => {
-            let latest = pi.latest.as_deref().unwrap_or("a newer version");
+            let latest = pi.latest.as_deref().unwrap_or_else(|| t("a newer version"));
             let current = pi
                 .current
                 .as_deref()
-                .map(|c| format!(" (you have {c})"))
+                .map(|version| t(" (you have {version})").replace("{version}", version))
                 .unwrap_or_default();
-            format!("{latest} is available{current} · run `{}`", pi.command)
+            gentle_core::i18n::fill(
+                t("{latest} is available{current} · run `{command}`"),
+                &[
+                    ("latest", latest),
+                    ("current", &current),
+                    ("command", &pi.command),
+                ],
+            )
         }
         // Gentle Shell looked itself up but not Pi: it checks Pi only on a
         // bundled install.
         UpdateState::Unknown
             if !status.offline && pi.checked_at.is_none() && shell.checked_at.is_some() =>
         {
-            "not checked: Gentle Shell checks Pi only on bundled installs".to_string()
+            t("not checked: Gentle Shell checks Pi only on bundled installs").to_string()
         }
         UpdateState::Unknown => not_checked(status.offline, pi.checked_at.as_deref()),
     };
     rows.push(("Pi", pi_state));
     if let Some(at) = &shell.checked_at {
-        rows.push(("Last checked", checked_at_label(at)));
+        rows.push((t("Last checked"), checked_at_label(at)));
     }
     rows
 }
 
 fn channel_label(channel: ShellChannel, managed: bool) -> &'static str {
-    match channel {
+    t(match channel {
         _ if managed => "managed by gentle-ai",
         ShellChannel::Release => "release",
         ShellChannel::Main => "main",
         ShellChannel::Bundled => "bundled",
         ShellChannel::GentleAiManaged => "managed by gentle-ai",
         ShellChannel::Unknown => "unknown",
-    }
+    })
 }
 
 fn up_to_date(current: Option<&str>) -> String {
-    current.map_or_else(|| "up to date".to_string(), |c| format!("up to date ({c})"))
+    current.map_or_else(
+        || t("up to date").to_string(),
+        |version| t("up to date ({version})").replace("{version}", version),
+    )
 }
 
 /// Why a state is `unknown`: never "up to date".
 fn not_checked(offline: bool, checked_at: Option<&str>) -> String {
-    if offline {
+    t(if offline {
         "not checked: Gentle Shell is offline (PI_OFFLINE)"
     } else if checked_at.is_none() {
         "not checked yet"
     } else {
         "couldn't check"
-    }
+    })
     .to_string()
 }
 
@@ -145,14 +161,13 @@ fn checked_at_label(at: &str) -> String {
 /// that is not "up to date" either.
 pub fn package_chip(item: &PackageUpdate) -> Option<String> {
     match item.state {
-        PackageUpdateState::UpdateAvailable => Some(
-            item.latest
-                .as_deref()
-                .map_or_else(|| "update".to_string(), |l| format!("update → {l}")),
-        ),
-        _ if item.pinned == Some(true) => Some("pinned".to_string()),
+        PackageUpdateState::UpdateAvailable => Some(item.latest.as_deref().map_or_else(
+            || t("update").to_string(),
+            |latest| t("update → {latest}").replace("{latest}", latest),
+        )),
+        _ if item.pinned == Some(true) => Some(t("pinned").to_string()),
         PackageUpdateState::Skipped | PackageUpdateState::Unknown => {
-            Some("not checked".to_string())
+            Some(t("not checked").to_string())
         }
         PackageUpdateState::NoUpdateReported => None,
     }
@@ -188,9 +203,11 @@ pub fn package_status<'a>(source: &str, items: &'a [PackageUpdate]) -> Option<&'
 pub fn packages_note(status: &UpdateStatus, with_updates: usize) -> Option<&'static str> {
     let packages = &status.packages;
     if !packages.available {
-        Some("Gentle Shell couldn't read Pi's package list, so updates weren't checked")
+        Some(t(
+            "Gentle Shell couldn't read Pi's package list, so updates weren't checked",
+        ))
     } else if with_updates == 0 && !packages.items.is_empty() {
-        Some("Pi's check reported no package updates")
+        Some(t("Pi's check reported no package updates"))
     } else {
         None
     }

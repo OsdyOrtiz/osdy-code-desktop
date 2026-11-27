@@ -1,5 +1,6 @@
 //! Cards for extension custom messages, styled from their type and details.
 
+use crate::shared::i18n::t;
 use gpui_kit::assets::IconName;
 use gpui_kit::component::{Icon, Sizable as _, h_flex, v_flex};
 use gpui_kit::prelude::FluentBuilder as _;
@@ -59,7 +60,10 @@ impl SessionView {
                                 div()
                                     .text_size(rems(11. / 16.))
                                     .text_color(ui::faint())
-                                    .child(format!("… {hidden} more lines not shown")),
+                                    .child(
+                                        t("… {count} more lines not shown")
+                                            .replace("{count}", &hidden.to_string()),
+                                    ),
                             )
                         })
                         .child(
@@ -97,9 +101,9 @@ impl SessionView {
                 this.child(div().pb_1().child(self.fold_toggle(
                     key,
                     if open {
-                        "Show less".into()
+                        t("Show less").into()
                     } else {
-                        format!("{more} more lines")
+                        t("{count} more lines").replace("{count}", &more.to_string())
                     },
                     open,
                     cx,
@@ -230,7 +234,7 @@ fn custom_look(kind: &str, details: &serde_json::Value) -> CustomLook {
                 title: agent["agent"]
                     .as_str()
                     .filter(|a| !a.is_empty())
-                    .map_or("Agent answer".into(), str::to_string),
+                    .map_or(t("Agent answer").into(), str::to_string),
                 tone,
                 badge: status.map(|s| (s.replace('_', " "), tone)),
                 body: CustomBody::Markdown,
@@ -240,16 +244,18 @@ fn custom_look(kind: &str, details: &serde_json::Value) -> CustomLook {
             let agent = details["gentleAgents"]["agent"]
                 .as_str()
                 .filter(|a| !a.is_empty());
-            let title = agent.map_or("Message".into(), |a| format!("{a} message"));
+            let title = agent.map_or(t("Message").into(), |a| {
+                t("{agent} message").replace("{agent}", a)
+            });
             look(IconName::MessageSquare, &title, Tone::Info)
         }
         // background-jobs-tools.ts: `{gentleJobs: {label, status, exitCode, kind, event}}`.
         "gentle-jobs.notice" => {
             let job = &details["gentleJobs"];
             let fallback = if job["kind"] == "monitor" {
-                "Monitor"
+                t("Monitor")
             } else {
-                "Background job"
+                t("Background job")
             };
             let title = job["label"]
                 .as_str()
@@ -261,8 +267,11 @@ fn custom_look(kind: &str, details: &serde_json::Value) -> CustomLook {
                 (Tone::Info, None)
             } else {
                 match (job["status"].as_str(), exit) {
-                    (Some("exited"), Some(0)) => (Tone::Success, Some("exit 0".to_string())),
-                    (_, Some(code)) => (Tone::Danger, Some(format!("exit {code}"))),
+                    (Some("exited"), Some(0)) => (Tone::Success, Some(t("exit 0").to_string())),
+                    (_, Some(code)) => (
+                        Tone::Danger,
+                        Some(t("exit {code}").replace("{code}", &code.to_string())),
+                    ),
                     (Some(status), None) => (Tone::Danger, Some(status.replace('_', " "))),
                     (None, None) => (Tone::Muted, None),
                 }
@@ -275,11 +284,15 @@ fn custom_look(kind: &str, details: &serde_json::Value) -> CustomLook {
                 body: CustomBody::Tail,
             }
         }
-        "gentle-pi.review-preflight" => look(IconName::ShieldCheck, "Review preflight", Tone::Info),
-        "gentle-pi.exploration-budget" => look(IconName::Gauge, "Exploration budget", Tone::Info),
+        "gentle-pi.review-preflight" => {
+            look(IconName::ShieldCheck, t("Review preflight"), Tone::Info)
+        }
+        "gentle-pi.exploration-budget" => {
+            look(IconName::Gauge, t("Exploration budget"), Tone::Info)
+        }
         "gentle-pi.verifier-settle-reminder" => look(
             IconName::TriangleAlert,
-            "Verification reminder",
+            t("Verification reminder"),
             Tone::Warning,
         ),
         other => look(IconName::Info, other, Tone::Muted),

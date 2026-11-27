@@ -21,7 +21,10 @@ use serde_json::Value;
 
 use super::diagram::DiagramEvent;
 use super::store;
-use crate::shared::ui;
+use crate::shared::{
+    i18n::{Message, t},
+    ui,
+};
 
 /// How long a code ref's "is the file there" answer is trusted.
 const CHECK_FOR: Duration = Duration::from_secs(5);
@@ -128,20 +131,55 @@ fn palette() -> Palette {
     }
 }
 
+#[derive(Debug)]
+enum ExportFailure {
+    Validation(export::Error),
+    Image(Message),
+}
+
+impl ExportFailure {
+    fn render(&self) -> String {
+        match self {
+            Self::Validation(error) => render_validation_error(error),
+            Self::Image(message) => message.render(),
+        }
+    }
+}
+
+fn render_validation_error(error: &export::Error) -> String {
+    match error {
+        export::Error::Unsupported { kind, format } => Message::with(
+            "a {kind} can't be exported as {format}",
+            [
+                ("{kind}", kind.clone()),
+                ("{format}", t(format.name()).to_string()),
+            ],
+        )
+        .render(),
+        export::Error::InvalidSpec(errors) => super::diagnostic::render_all(errors, "; "),
+        export::Error::NoDocsFormat(kind) => {
+            Message::with("a {kind} has no docs format", [("{kind}", kind.clone())]).render()
+        }
+    }
+}
+
 /// The export's bytes: text, or a PNG drawn from the SVG at 2×.
-fn bytes(source: &Source, format: Format, palette: &Palette) -> Result<Vec<u8>, String> {
-    let text = export::render(&source.kind, &source.title, &source.spec, format, palette)?;
+fn bytes(source: &Source, format: Format, palette: &Palette) -> Result<Vec<u8>, ExportFailure> {
+    let text = export::render_detailed(&source.kind, &source.title, &source.spec, format, palette)
+        .map_err(ExportFailure::Validation)?;
     if format != Format::Png {
         return Ok(text.into_bytes());
     }
-    let size = svg_size(&text).ok_or("the picture has no size")?;
+    let size = svg_size(&text)
+        .ok_or_else(|| ExportFailure::Image(Message::new("the picture has no size")))?;
     crate::shared::backdrop::preview::rasterize_at(
         &text,
         ((size.0 * 2.) as u32, (size.1 * 2.) as u32),
         2.,
-    )?
+    )
+    .map_err(|error| ExportFailure::Image(Message::raw(error)))?
     .encode_png()
-    .map_err(|e| e.to_string())
+    .map_err(|error| ExportFailure::Image(Message::raw(error.to_string())))
 }
 
 /// The `width` and `height` of an SVG's root element.
@@ -193,9 +231,19 @@ pub fn run<V: EventEmitter<DiagramEvent>>(action: Action, source: Source, cx: &m
                                     String::from_utf8_lossy(&bytes).into_owned(),
                                 ));
                             }
-                            Ok(format!("Copied “{}” as {}", source.title, format.name()))
+                            Ok(crate::shared::i18n::Message::with(
+                                "Copied “{title}” as {format}",
+                                [
+                                    ("{title}", source.title.clone()),
+                                    (
+                                        "{format}",
+                                        crate::shared::i18n::t(format.name()).to_string(),
+                                    ),
+                                ],
+                            )
+                            .render())
                         }
-                        (_, Err(error)) => Err(error),
+                        (_, Err(error)) => Err(error.render()),
                     };
                     cx.emit(DiagramEvent::Notice(notice));
                 });
@@ -204,12 +252,17 @@ pub fn run<V: EventEmitter<DiagramEvent>>(action: Action, source: Source, cx: &m
             return;
         }
         Action::Docs => {
-            match export::docs_command(&source.id, &source.kind, &source.title, &source.spec) {
+            match export::docs_command_detailed(
+                &source.id,
+                &source.kind,
+                &source.title,
+                &source.spec,
+            ) {
                 Ok(command) => {
                     cx.emit(DiagramEvent::Request(command));
                     return;
                 }
-                Err(error) => Err(error),
+                Err(error) => Err(render_validation_error(&error)),
             }
         }
         Action::Template => save_template(&source, cx),
@@ -229,9 +282,24 @@ fn save<V: EventEmitter<DiagramEvent>>(
     cx.spawn(async move |this, cx| {
         let notice = match picked.await {
             Ok(Ok(Some(path))) => std::fs::write(&path, &bytes)
-                .map(|()| format!("Saved {}", path.display()))
-                .map_err(|e| format!("Couldn't save {}: {e}", path.display())),
-            Ok(Err(error)) => Err(format!("Couldn't ask where to save: {error}")),
+                .map(|()| {
+                    crate::shared::i18n::t("Saved {path}")
+                        .replace("{path}", &path.display().to_string())
+                })
+                .map_err(|e| {
+                    crate::shared::i18n::Message::with(
+                        "Couldn't save {path}: {error}",
+                        [
+                            ("{path}", path.display().to_string()),
+                            ("{error}", e.to_string()),
+                        ],
+                    )
+                    .render()
+                }),
+            Ok(Err(error)) => Err(
+                crate::shared::i18n::t("Couldn't ask where to save: {error}")
+                    .replace("{error}", &error.to_string()),
+            ),
             // Cancelled.
             _ => return,
         };
@@ -241,7 +309,8 @@ fn save<V: EventEmitter<DiagramEvent>>(
 }
 
 fn save_template<V>(source: &Source, cx: &mut Context<V>) -> Result<String, String> {
-    let dir = store::dir(cx).ok_or("no data folder to keep templates in")?;
+    let dir = store::dir(cx)
+        .ok_or_else(|| crate::shared::i18n::t("no data folder to keep templates in"))?;
     let saved_at = std::time::SystemTime::now()
         .duration_since(std::time::UNIX_EPOCH)
         .map_or(0, |d| d.as_secs());
@@ -257,9 +326,10 @@ fn save_template<V>(source: &Source, cx: &mut Context<V>) -> Result<String, Stri
         .ok()
         .and_then(|text| Template::parse(&text).ok())
         .map_or_else(|| source.title.clone(), |t| t.name);
-    Ok(format!(
-        "Saved the template “{name}”; insert it with /ui-template"
-    ))
+    Ok(
+        crate::shared::i18n::t("Saved the template “{name}”; insert it with /ui-template")
+            .replace("{name}", &name),
+    )
 }
 
 /// The toolbar's pin button and Export menu for view `V`; `source` reads
@@ -299,11 +369,11 @@ pub fn tools<V: EventEmitter<DiagramEvent>>(
                 } else {
                     IconName::Pin
                 }))
-                .tooltip(if pinned {
+                .tooltip(crate::shared::i18n::t(if pinned {
                     "Unpin from the side panel"
                 } else {
                     "Pin to the side panel"
-                })
+                }))
                 .on_click(cx.listener(move |_, _, _, cx| cx.emit(DiagramEvent::Pin(!pinned)))),
         )
         .child(
@@ -313,20 +383,20 @@ pub fn tools<V: EventEmitter<DiagramEvent>>(
                 .xsmall()
                 .text_color(ui::muted())
                 .icon(Icon::new(IconName::Share2))
-                .tooltip("Export")
+                .tooltip(crate::shared::i18n::t("Export"))
                 .dropdown_menu(move |menu: PopupMenu, window, cx| {
                     let copy_items = item.clone();
                     let save_items = item.clone();
                     let menu = menu
                         .submenu_with_icon(
                             Some(Icon::new(IconName::Copy)),
-                            "Copy to clipboard",
+                            crate::shared::i18n::t("Copy to clipboard"),
                             window,
                             cx,
                             move |mut menu, _, _| {
                                 for format in formats {
                                     menu = menu.item(copy_items(
-                                        format.name().to_string(),
+                                        crate::shared::i18n::t(format.name()).to_string(),
                                         None,
                                         Action::Copy(*format),
                                     ));
@@ -336,13 +406,17 @@ pub fn tools<V: EventEmitter<DiagramEvent>>(
                         )
                         .submenu_with_icon(
                             Some(Icon::new(IconName::Save)),
-                            "Save to file…",
+                            crate::shared::i18n::t("Save to file…"),
                             window,
                             cx,
                             move |mut menu, _, _| {
                                 for format in formats {
                                     menu = menu.item(save_items(
-                                        format!("{} (.{})", format.name(), format.extension()),
+                                        format!(
+                                            "{} (.{})",
+                                            crate::shared::i18n::t(format.name()),
+                                            format.extension()
+                                        ),
                                         None,
                                         Action::Save(*format),
                                     ));
@@ -352,7 +426,7 @@ pub fn tools<V: EventEmitter<DiagramEvent>>(
                         );
                     let menu = if has_docs {
                         menu.item(item(
-                            "Ask agent to add to docs".into(),
+                            crate::shared::i18n::t("Ask agent to add to docs").into(),
                             Some(IconName::BookOpen),
                             Action::Docs,
                         ))
@@ -360,7 +434,7 @@ pub fn tools<V: EventEmitter<DiagramEvent>>(
                         menu
                     };
                     menu.separator().item(item(
-                        "Save as template".into(),
+                        crate::shared::i18n::t("Save as template").into(),
                         Some(IconName::LayoutTemplate),
                         Action::Template,
                     ))
@@ -461,6 +535,26 @@ mod tests {
                 Err("\"series\" must be an array".into())
             ]
         );
+    }
+
+    #[gpui::test]
+    fn an_export_validation_error_uses_the_display_language(cx: &mut TestAppContext) {
+        use crate::shared::i18n::with_test_language;
+        use gentle_core::i18n::Language;
+
+        let (probe, notices) = probe(cx);
+        for (language, expected) in [
+            (Language::English, "\"series\" must be an array"),
+            (Language::Spanish, "\"series\" debe ser una lista"),
+        ] {
+            with_test_language(language, || {
+                let broken = chart(json!({"series": 3}), None);
+                probe.update(cx, |_, cx| run(Action::Copy(Format::Png), broken, cx));
+                cx.run_until_parked();
+            });
+            assert_eq!(notices.borrow_mut().pop(), Some(Err(expected.into())));
+            assert!(cx.read_from_clipboard().is_none());
+        }
     }
 
     #[gpui::test]

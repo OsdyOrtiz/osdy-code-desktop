@@ -5,6 +5,7 @@ use std::time::Duration;
 use gentle_core::usage::subscription::{group_usage_limits, parse_codex_usage, parse_nan_quota};
 use serde_json::Value;
 
+use super::UsageText;
 use super::credentials::{CardState, Fetch, resolve_config_value};
 
 const CODEX_USAGE_URL: &str = "https://chatgpt.com/backend-api/wham/usage";
@@ -26,23 +27,23 @@ fn get_json(
     agent: &ureq::Agent,
     url: &str,
     headers: &[(&str, &str)],
-) -> Result<(u16, Option<Value>), String> {
+) -> Result<(u16, Option<Value>), UsageText> {
     let mut request = agent.get(url);
     for (name, value) in headers {
         request = request.header(*name, *value);
     }
     let mut response = request
         .call()
-        .map_err(|error| format!("Network error: {error}"))?;
+        .map_err(|error| UsageText::Detail("Network error: {detail}", error.to_string()))?;
     let status = response.status().as_u16();
     if !(200..300).contains(&status) {
         return Ok((status, None));
     }
-    let body = response
-        .body_mut()
-        .read_to_string()
-        .map_err(|error| format!("Could not read the response: {error}"))?;
-    let json = serde_json::from_str(&body).map_err(|_| "The response was not JSON.".to_string())?;
+    let body = response.body_mut().read_to_string().map_err(|error| {
+        UsageText::Detail("Could not read the response: {detail}", error.to_string())
+    })?;
+    let json =
+        serde_json::from_str(&body).map_err(|_| UsageText::Key("The response was not JSON."))?;
     Ok((status, Some(json)))
 }
 
@@ -70,9 +71,10 @@ pub(super) fn run_fetch(fetch: Fetch, now: i64) -> CardState {
                 Ok((401 | 403, None)) => {
                     CardState::SignIn("ChatGPT rejected the stored token — sign in again.".into())
                 }
-                Ok((status, None)) => {
-                    CardState::Failed(format!("Usage request failed (HTTP {status})."))
-                }
+                Ok((status, None)) => CardState::Failed(UsageText::Detail(
+                    "Usage request failed (HTTP {detail}).",
+                    status.to_string(),
+                )),
                 Err(error) => CardState::Failed(error),
             }
         }
@@ -101,12 +103,14 @@ pub(super) fn run_fetch(fetch: Fetch, now: i64) -> CardState {
                 Ok((401 | 403, None)) => CardState::SignIn(
                     "NaN rejected the API key — set it again in Providers.".into(),
                 ),
-                Ok((status @ 300..=399, None)) => CardState::Failed(format!(
-                    "Refused a redirect from the quota endpoint (HTTP {status})."
+                Ok((status @ 300..=399, None)) => CardState::Failed(UsageText::Detail(
+                    "Refused a redirect from the quota endpoint (HTTP {detail}).",
+                    status.to_string(),
                 )),
-                Ok((status, None)) => {
-                    CardState::Failed(format!("Quota request failed (HTTP {status})."))
-                }
+                Ok((status, None)) => CardState::Failed(UsageText::Detail(
+                    "Quota request failed (HTTP {detail}).",
+                    status.to_string(),
+                )),
                 Err(error) => CardState::Failed(error),
             }
         }

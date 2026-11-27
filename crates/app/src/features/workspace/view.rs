@@ -76,7 +76,11 @@ impl Workspace {
             Some(Light::Jobs) => "Switch workspace · jobs are running in another one",
             None => "Switch workspace",
         };
-        let tip: SharedString = match elsewhere.background.describe() {
+        let what = crate::shared::i18n::t(what);
+        let tip: SharedString = match elsewhere
+            .background
+            .describe_in(crate::shared::i18n::language())
+        {
             Some(background) if matches!(light, Some(Light::NeedsYou | Light::Working)) => {
                 format!("{what} · {background}").into()
             }
@@ -306,7 +310,9 @@ impl Workspace {
                                     .whitespace_nowrap()
                                     .when(active, |d| d.font_weight(FontWeight::MEDIUM))
                                     .when(!self.popups_open(), |d| {
-                                        let tip: SharedString = match background.describe() {
+                                        let tip: SharedString = match background
+                                            .describe_in(crate::shared::i18n::language())
+                                        {
                                             Some(background) => {
                                                 format!("{title} · {background}").into()
                                             }
@@ -401,7 +407,9 @@ impl Workspace {
             .on_mouse_down(MouseButton::Left, |_, _, cx| cx.stop_propagation())
             .child(
                 title_button("title-layout", IconName::LayoutDashboard)
-                    .tooltip("Panes: tile, split or close the focused one")
+                    .tooltip(crate::shared::i18n::t(
+                        "Panes: tile, split or close the focused one",
+                    ))
                     .dropdown_menu(move |menu, window, _| {
                         type Act = fn(&mut Workspace, &mut Window, &mut Context<Workspace>);
                         let entry = |icon: IconName,
@@ -425,12 +433,10 @@ impl Workspace {
                                     .w_full()
                                     .child(Icon::new(IconName::X).small().text_color(ui::danger()))
                                     .child(
-                                        div()
-                                            .flex_1()
-                                            .min_w_0()
-                                            .truncate()
-                                            .text_sm()
-                                            .child(format!("Close \u{201c}{target}\u{201d}")),
+                                        div().flex_1().min_w_0().truncate().text_sm().child(
+                                            crate::shared::i18n::t("Close “{target}”")
+                                                .replace("{target}", &target),
+                                        ),
                                     )
                                     .child(ui::kbd(ui::platform_shortcut("⌘W", "Ctrl+W")))
                             })
@@ -443,15 +449,15 @@ impl Workspace {
                         menu.min_w(rems(280. / 16.).to_pixels(window.rem_size()))
                             .item(entry(
                                 IconName::LayoutDashboard,
-                                "New pane, tiled",
-                                "Same kind, beside the focused one",
+                                crate::shared::i18n::t("New pane, tiled"),
+                                crate::shared::i18n::t("Same kind, beside the focused one"),
                                 ui::platform_shortcut("⌘D", "Ctrl+Shift+D"),
                                 |this, window, cx| this.on_tile_pane(&TilePane, window, cx),
                             ))
                             .item(entry(
                                 IconName::Columns2,
-                                "Split right",
-                                "Same kind, to the right",
+                                crate::shared::i18n::t("Split right"),
+                                crate::shared::i18n::t("Same kind, to the right"),
                                 "",
                                 |this, window, cx| {
                                     this.split(SplitAxis::Horizontal, None, window, cx)
@@ -459,8 +465,8 @@ impl Workspace {
                             ))
                             .item(entry(
                                 IconName::Rows2,
-                                "Split down",
-                                "Same kind, below",
+                                crate::shared::i18n::t("Split down"),
+                                crate::shared::i18n::t("Same kind, below"),
                                 ui::platform_shortcut("⌘⇧D", "Ctrl+Shift+E"),
                                 |this, window, cx| this.on_split_down(&SplitDown, window, cx),
                             ))
@@ -494,10 +500,12 @@ impl Workspace {
             .child(
                 title_button("title-screens", IconName::Settings)
                     .selected(open_screen)
-                    .tooltip(format!(
-                        "Configuration, profiles, memory, sessions, providers ({})",
-                        ui::platform_shortcut("⌘,", "Ctrl+,")
-                    ))
+                    .tooltip(
+                        crate::shared::i18n::t(
+                            "Configuration, profiles, memory, sessions, providers ({shortcut})",
+                        )
+                        .replace("{shortcut}", ui::platform_shortcut("⌘,", "Ctrl+,")),
+                    )
                     .dropdown_menu(move |menu, window, _| {
                         type Open = fn(&mut Workspace, &mut Window, &mut Context<Workspace>);
                         let entry = |icon: IconName,
@@ -514,22 +522,22 @@ impl Workspace {
                         menu.min_w(rems(280. / 16.).to_pixels(window.rem_size()))
                             .item(entry(
                                 IconName::Settings,
-                                "Configuration",
-                                "Theme, models, integrations, updates",
+                                crate::shared::i18n::t("Configuration"),
+                                crate::shared::i18n::t("Theme, models, integrations, updates"),
                                 ui::platform_shortcut("⌘,", "Ctrl+,"),
                                 |this, window, cx| this.open_settings(window, cx),
                             ))
                             .item(entry(
                                 IconName::Route,
-                                "Profiles",
-                                "Model and effort per agent",
+                                crate::shared::i18n::t("Profiles"),
+                                crate::shared::i18n::t("Model and effort per agent"),
                                 "",
                                 |this, window, cx| this.open_profiles(window, cx),
                             ))
                             .item(entry(
                                 IconName::Brain,
-                                "Memory",
-                                "Engram observations",
+                                crate::shared::i18n::t("Memory"),
+                                crate::shared::i18n::t("Engram observations"),
                                 "",
                                 |this, window, cx| {
                                     let cwd = this.active_cwd(cx);
@@ -538,15 +546,15 @@ impl Workspace {
                             ))
                             .item(entry(
                                 IconName::RotateCcwClock,
-                                "Sessions",
-                                "Resume a past session",
+                                crate::shared::i18n::t("Sessions"),
+                                crate::shared::i18n::t("Resume a past session"),
                                 ui::platform_shortcut("⌘⇧O", "Ctrl+Shift+O"),
                                 |this, window, cx| this.open_sessions(window, cx),
                             ))
                             .item(entry(
                                 IconName::KeyRound,
-                                "Providers",
-                                "Sign-in and API keys",
+                                crate::shared::i18n::t("Providers"),
+                                crate::shared::i18n::t("Sign-in and API keys"),
                                 "",
                                 |this, window, cx| this.open_providers(window, cx),
                             ))
@@ -843,13 +851,13 @@ impl Workspace {
                 .gap_3()
                 .text_sm()
                 .text_color(ui::muted())
-                .child("No agents in this workspace yet")
+                .child(crate::shared::i18n::t("No agents in this workspace yet"))
                 .child(
                     Button::new("empty-new-tab")
                         .primary()
                         .small()
                         .icon(Icon::new(IconName::Plus))
-                        .label("Open agent")
+                        .label(crate::shared::i18n::t("Open agent"))
                         .on_click(
                             cx.listener(|this, _, window, cx| this.on_new_tab(&NewTab, window, cx)),
                         ),
@@ -882,8 +890,8 @@ pub(super) fn new_tab_menu(
         .item(
             item(
                 IconName::Bot,
-                "Agent tab",
-                "Gentle Shell in this folder",
+                crate::shared::i18n::t("Agent tab"),
+                crate::shared::i18n::t("Gentle Shell in this folder"),
                 ui::platform_shortcut("⌘T", "Ctrl+T"),
             )
             .on_click(move |_, window, cx| {
@@ -893,8 +901,8 @@ pub(super) fn new_tab_menu(
         .item(
             item(
                 IconName::SquareTerminal,
-                "Terminal tab",
-                "A shell in this folder",
+                crate::shared::i18n::t("Terminal tab"),
+                crate::shared::i18n::t("A shell in this folder"),
                 ui::platform_shortcut("⌘⇧T", "Ctrl+Shift+T"),
             )
             .on_click(move |_, window, cx| {
@@ -906,8 +914,8 @@ pub(super) fn new_tab_menu(
         .item(
             item(
                 IconName::PenTool,
-                "Canvas tab",
-                "A whiteboard: ink, shapes, notes",
+                crate::shared::i18n::t("Canvas tab"),
+                crate::shared::i18n::t("A whiteboard: ink, shapes, notes"),
                 ui::platform_shortcut("⌘⇧E", "Ctrl+Alt+Shift+E"),
             )
             .on_click(move |_, window, cx| {
@@ -919,8 +927,8 @@ pub(super) fn new_tab_menu(
         .item(
             item(
                 IconName::Building2,
-                "Tower tab",
-                "Gentle Tower: every session as a floor",
+                crate::shared::i18n::t("Tower tab"),
+                crate::shared::i18n::t("Gentle Tower: every session as a floor"),
                 "",
             )
             .on_click(move |_, window, cx| {
@@ -1040,6 +1048,7 @@ mod tests {
                         workspace_rename: None,
                         tab_selection: None,
                         tab_search: cx.new(|cx| InputState::new(window, cx)),
+                        tab_search_language: crate::shared::i18n::language(),
                         save_task: Some(gpui_kit::Task::ready(())),
                         _title_poll: gpui_kit::Task::ready(()),
                         _lifecycle: Vec::new(),

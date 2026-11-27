@@ -1,5 +1,7 @@
 //! Time helpers (no date crate: ISO-8601 UTC strings and civil-day math).
 
+use crate::i18n::{Language, tr};
+
 pub(super) const MINUTE: i64 = 60;
 pub(super) const HOUR: i64 = 3_600;
 pub const DAY: i64 = 86_400;
@@ -116,11 +118,17 @@ pub(super) fn local_day(ms: i64, offset_secs: i64) -> i64 {
 }
 
 pub fn day_label(day: i64) -> String {
+    day_label_in(Language::English, day)
+}
+
+pub fn day_label_in(language: Language, day: i64) -> String {
     const MONTHS: [&str; 12] = [
         "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec",
     ];
     let (_, month, day) = civil_from_days(day);
-    format!("{} {day}", MONTHS[(month - 1) as usize])
+    tr(language, "{month} {day}")
+        .replace("{month}", tr(language, MONTHS[(month - 1) as usize]))
+        .replace("{day}", &day.to_string())
 }
 
 #[cfg(test)]

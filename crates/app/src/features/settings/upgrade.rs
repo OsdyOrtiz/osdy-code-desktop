@@ -17,6 +17,7 @@ use super::{SettingsEvent, SettingsView};
 use crate::features::session::{ReadFailure, ReadOutcome, ReadRequest, ReadSupport, ReadTicket};
 use crate::features::updates::UpdateOffer;
 use crate::features::updates::status::offer_from_status;
+use crate::shared::i18n::t;
 use crate::shared::ui;
 
 /// How long "Waiting for the agent tab to start…" shows. A tab whose probe
@@ -365,7 +366,7 @@ impl SettingsView {
             .as_ref()
             .map(UpgradeTarget::channel)
             == Some(channel))
-        .then(|| self.busy_label("Updating…"))
+        .then(|| self.busy_label(t("Updating…")))
     }
 
     fn shell_job_running(&self) -> bool {
@@ -427,7 +428,9 @@ impl SettingsView {
 
     fn skip_update(&mut self, version: String, cx: &mut Context<Self>) {
         if let Err(error) = crate::features::updates::skip(&version) {
-            self.shell_update.skip_error = Some(format!("Could not remember the skip: {error}"));
+            self.shell_update.skip_error = Some(
+                t("Could not remember the skip: {error}").replace("{error}", &error.to_string()),
+            );
         }
         self.reload(cx);
     }
@@ -447,7 +450,7 @@ impl SettingsView {
         update_card(
             "update",
             "Gentle Shell",
-            "Runs gentle-shell upgrade. Open agent tabs then restart on the new version and keep their conversations; a tab mid-turn switches when the turn ends.",
+            t("Runs gentle-shell upgrade. Open agent tabs then restart on the new version and keep their conversations; a tab mid-turn switches when the turn ends."),
             &offer,
             update_now_button("update", busy)
                 .disabled(!running && self.shell_job_running())
@@ -466,9 +469,9 @@ impl SettingsView {
         let busy = self.upgrading_on(UpgradeChannel::Main);
         let running = busy.is_some();
         update_card_body(
-            format!("Gentle Shell main has a newer commit {commit}"),
+            t("Gentle Shell main has a newer commit {commit}").replace("{commit}", commit),
             None,
-            "Runs gentle-shell upgrade --channel main. Open agent tabs then restart on the new build and keep their conversations; a tab mid-turn switches when the turn ends.",
+            t("Runs gentle-shell upgrade --channel main. Open agent tabs then restart on the new build and keep their conversations; a tab mid-turn switches when the turn ends."),
         )
         .child(
             h_flex().child(
@@ -503,9 +506,9 @@ impl SettingsView {
                 let mut lines = last_output_lines(&text);
                 if lines.is_empty() {
                     lines.push(if failed {
-                        "The Pi update didn't finish.".into()
+                        t("The Pi update didn't finish.").into()
                     } else {
-                        "The Pi update finished.".into()
+                        t("The Pi update finished.").into()
                     });
                 }
                 this.shell_update.pi_running = false;
@@ -535,9 +538,9 @@ impl SettingsView {
                                 .ghost()
                                 .icon(Icon::new(IconName::ArrowUp))
                                 .label(if running {
-                                    self.busy_label("Updating Pi…")
+                                    self.busy_label(t("Updating Pi…"))
                                 } else {
-                                    "Update Pi".to_string()
+                                    t("Update Pi").to_string()
                                 })
                                 .tooltip("gentle-shell update")
                                 .loading(running)
@@ -552,7 +555,7 @@ impl SettingsView {
                             .pt_1()
                             .text_xs()
                             .text_color(ui::muted())
-                            .child("This can take several minutes."),
+                            .child(t("This can take several minutes.")),
                     )
                 })
                 .children(output.map(|(lines, failed)| upgrade_output(lines.clone(), *failed))),
@@ -576,9 +579,7 @@ impl SettingsView {
                 let mut shown = lines[lines.len().saturating_sub(8)..].to_vec();
                 let failed = result.is_err();
                 shown.push(match result {
-                    Ok(version) => format!(
-                        "Engram {version} is installed. An Engram server that's already running keeps the old version until it restarts."
-                    ),
+                    Ok(version) => t("Engram {version} is installed. An Engram server that's already running keeps the old version until it restarts.").replace("{version}", &version),
                     Err(error) => error,
                 });
                 this.engram.result = Some((shown, failed));
@@ -591,7 +592,9 @@ impl SettingsView {
 
     fn skip_engram(&mut self, version: String, cx: &mut Context<Self>) {
         if let Err(error) = crate::features::updates::engram::skip(&version) {
-            self.engram.skip_error = Some(format!("Could not remember the skip: {error}"));
+            self.engram.skip_error = Some(
+                t("Could not remember the skip: {error}").replace("{error}", &error.to_string()),
+            );
         }
         self.reload(cx);
     }
@@ -607,11 +610,11 @@ impl SettingsView {
             update_card(
                 "engram-update",
                 "Engram",
-                "Updates Engram the way it was installed (Homebrew, or the release the app downloaded). Your memories stay.",
+                t("Updates Engram the way it was installed (Homebrew, or the release the app downloaded). Your memories stay."),
                 &offer,
                 update_now_button(
                     "engram-update",
-                    self.engram.upgrading.then(|| "Updating…".to_string()),
+                    self.engram.upgrading.then(|| t("Updating…").to_string()),
                 )
                 .on_click(cx.listener(|this, _, _, cx| this.run_engram_upgrade(cx))),
                 self.engram.upgrading,
@@ -662,7 +665,9 @@ fn update_card(
 ) -> Div {
     let notes = offer.notes_url.clone();
     update_card_body(
-        format!("{tool} {} is available", offer.latest),
+        t("{tool} {version} is available")
+            .replace("{tool}", tool)
+            .replace("{version}", &offer.latest),
         Some(&offer.current),
         what_it_does,
     )
@@ -675,14 +680,14 @@ fn update_card(
                     .ghost()
                     .small()
                     .icon(Icon::new(IconName::ExternalLink))
-                    .label("Release notes")
+                    .label(t("Release notes"))
                     .on_click(move |_, _, cx| cx.open_url(&notes)),
             )
             .child(
                 Button::new((id, 2usize))
                     .ghost()
                     .small()
-                    .label("Skip this version")
+                    .label(t("Skip this version"))
                     .disabled(busy)
                     .on_click(on_skip),
             ),
@@ -700,16 +705,15 @@ fn update_now_button(id: &'static str, busy: Option<String>) -> Button {
         .small()
         // `loading` draws its spinner in the icon slot.
         .when(loading, |button| button.icon(Icon::new(IconName::ArrowUp)))
-        .label(busy.unwrap_or_else(|| "Update now".to_string()))
+        .label(busy.unwrap_or_else(|| t("Update now").to_string()))
         .loading(loading)
 }
 
 /// Shown while Gentle Shell upgrades: it prints nothing until it ends.
 fn upgrade_wait_note() -> Div {
-    div()
-        .text_xs()
-        .text_color(ui::muted())
-        .child("This can take several minutes. Open agent tabs restart when it ends.")
+    div().text_xs().text_color(ui::muted()).child(t(
+        "This can take several minutes. Open agent tabs restart when it ends.",
+    ))
 }
 
 fn update_card_body(title: String, current: Option<&str>, what_it_does: &'static str) -> Div {
@@ -738,7 +742,7 @@ fn update_card_body(title: String, current: Option<&str>, what_it_does: &'static
                     div()
                         .text_xs()
                         .text_color(ui::muted())
-                        .child(format!("you have {version}"))
+                        .child(t("you have {version}").replace("{version}", version))
                 })),
         )
         .child(div().text_xs().text_color(ui::muted()).child(what_it_does))
@@ -751,33 +755,28 @@ pub(super) fn upgrade_result(result: &UpgradeResult) -> Div {
         UpgradeOutcome::Installed(version) => (
             IconName::CircleCheck,
             ui::success(),
-            format!("Gentle Shell {version} is installed"),
-            "Open agent tabs restarted on it and kept their conversations. Nothing else to do."
+            t("Gentle Shell {version} is installed").replace("{version}", version),
+            t("Open agent tabs restarted on it and kept their conversations. Nothing else to do.")
                 .to_string(),
         ),
         UpgradeOutcome::Stale { running, launcher } => (
             IconName::TriangleAlert,
             ui::warning(),
-            format!(
-                "Gentle Shell {} installed, but the app still runs {running}",
-                result.target
-            ),
-            format!(
-                "{launcher} comes first. Remove the old package with `npm uninstall -g gentle-pi`, then open Configuration again."
-            ),
+            t("Gentle Shell {version} installed, but the app still runs {running}").replace("{version}", &result.target).replace("{running}", running),
+            t("{launcher} comes first. Remove the old package with `npm uninstall -g gentle-pi`, then open Configuration again.").replace("{launcher}", launcher),
         ),
         UpgradeOutcome::Incomplete(version) => (
             IconName::TriangleAlert,
             ui::warning(),
-            format!("Gentle Shell {version} is installed, but the update didn't finish"),
-            "Open agent tabs restarted on it. Gentle Shell's output below says what is left to do."
+            t("Gentle Shell {version} is installed, but the update didn't finish").replace("{version}", version),
+            t("Open agent tabs restarted on it. Gentle Shell's output below says what is left to do.")
                 .to_string(),
         ),
         UpgradeOutcome::Failed => (
             IconName::CircleX,
             ui::danger(),
-            "The update didn't finish".to_string(),
-            "Gentle Shell's output is below; the version you had keeps running.".to_string(),
+            t("The update didn't finish").to_string(),
+            t("Gentle Shell's output is below; the version you had keeps running.").to_string(),
         ),
     };
     let failed = matches!(

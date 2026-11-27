@@ -85,11 +85,13 @@ fn register_class() {
 /// The app's window, which owns the popup.
 pub(super) struct Host(HWND);
 
-pub(super) fn host(window: &Window) -> Result<Host, String> {
+pub(super) fn host(window: &Window) -> Result<Host, super::NativeFailure> {
     // GPUI's own `Window::window_handle` shadows the trait's.
     match HasWindowHandle::window_handle(window).map(|handle| handle.as_raw()) {
         Ok(RawWindowHandle::Win32(handle)) => Ok(Host(HWND(handle.hwnd.get() as *mut c_void))),
-        _ => Err("The browser could not find the app's window.".into()),
+        _ => Err(super::NativeFailure::new(
+            "The browser could not find the app's window.",
+        )),
     }
 }
 
@@ -105,11 +107,12 @@ impl NativeView {
         sandbox: Option<&super::Sandbox>,
         profile: &Profile,
         relays: super::Relays,
-    ) -> Result<Self, String> {
+    ) -> Result<Self, super::NativeFailure> {
         let owner = host.0;
         register_class();
         let popup = unsafe {
-            let module = GetModuleHandleW(None).map_err(|error| error.to_string())?;
+            let module = GetModuleHandleW(None)
+                .map_err(|error| super::NativeFailure::raw(error.to_string()))?;
             CreateWindowExW(
                 WS_EX_TOOLWINDOW,
                 CLASS,
@@ -124,7 +127,9 @@ impl NativeView {
                 Some(module.into()),
                 None,
             )
-            .map_err(|error| format!("The browser could not start: {error}"))?
+            .map_err(|error| {
+                super::NativeFailure::with_error("The browser could not start: {error}", error)
+            })?
         };
         unsafe {
             let corners = DWMWCP_ROUND;
@@ -171,8 +176,9 @@ impl NativeView {
                 unsafe {
                     let _ = DestroyWindow(popup);
                 }
-                Err(format!(
-                    "The browser could not start: {error}. It needs the Microsoft Edge WebView2 Runtime."
+                Err(super::NativeFailure::with_error(
+                    "The browser could not start: {error}. It needs the Microsoft Edge WebView2 Runtime.",
+                    error,
                 ))
             }
         }

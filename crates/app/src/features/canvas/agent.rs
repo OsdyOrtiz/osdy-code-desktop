@@ -287,7 +287,12 @@ impl CanvasView {
                         .px_3()
                         .py_2()
                         .child(Icon::new(IconName::Bot).small().text_color(ui::petal()))
-                        .child(div().text_sm().text_color(ui::fg()).child("Agent"))
+                        .child(
+                            div()
+                                .text_sm()
+                                .text_color(ui::fg())
+                                .child(crate::shared::i18n::t("Agent")),
+                        )
                         .child(
                             div()
                                 .flex_1()
@@ -295,18 +300,25 @@ impl CanvasView {
                                 .truncate()
                                 .text_xs()
                                 .text_color(ui::muted())
-                                .child("sees and draws on this canvas"),
+                                .child(crate::shared::i18n::t("sees and draws on this canvas")),
                         )
                         .child(
-                            button("canvas-agent-hide", IconName::Minus, "Hide (keeps working)")
-                                .on_click(
-                                    cx.listener(|this, _, window, cx| {
-                                        this.toggle_agent(window, cx)
-                                    }),
-                                ),
+                            button(
+                                "canvas-agent-hide",
+                                IconName::Minus,
+                                crate::shared::i18n::t("Hide (keeps working)"),
+                            )
+                            .on_click(
+                                cx.listener(|this, _, window, cx| this.toggle_agent(window, cx)),
+                            ),
                         )
                         .child(
-                            button("canvas-agent-close", IconName::X, "End this agent").on_click(
+                            button(
+                                "canvas-agent-close",
+                                IconName::X,
+                                crate::shared::i18n::t("End this agent"),
+                            )
+                            .on_click(
                                 cx.listener(|this, _, window, cx| this.close_agent(window, cx)),
                             ),
                         ),

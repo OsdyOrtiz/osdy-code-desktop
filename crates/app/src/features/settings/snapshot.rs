@@ -6,6 +6,7 @@ use std::path::{Path, PathBuf};
 use serde_json::Value;
 
 use super::background::{BackgroundPolicy, resolve_background_policy};
+use crate::shared::i18n::t;
 
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct Snapshot {
@@ -78,13 +79,11 @@ pub fn npm_name(source: &str) -> Option<&str> {
 /// `pink · rose on · text on`: a `banner.json` (or Gentle Shell's `banner`
 /// store) in words, defaults where a setting is missing.
 pub(super) fn describe_banner(banner: &Value) -> String {
-    let on_off = |value: &Value| if *value == false { "off" } else { "on" };
-    format!(
-        "{} · rose {} · text {}",
-        banner["color"].as_str().unwrap_or("pink"),
-        on_off(&banner["showRose"]),
-        on_off(&banner["showTextLogo"]),
-    )
+    let on_off = |value: &Value, on, off| if *value == false { t(off) } else { t(on) };
+    t("{color} · {rose} · text {text}")
+        .replace("{rose}", on_off(&banner["showRose"], "rose on", "rose off"))
+        .replace("{text}", on_off(&banner["showTextLogo"], "on", "off"))
+        .replace("{color}", banner["color"].as_str().unwrap_or("pink"))
 }
 
 /// Everything readable without running anything but `--version`.

@@ -14,6 +14,7 @@ use gpui_kit::*;
 use super::SettingsView;
 use super::layout::{control, section};
 use crate::features::backend;
+use crate::shared::i18n::t;
 use crate::shared::ui;
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -35,9 +36,9 @@ impl Kind {
 
     fn label(self) -> &'static str {
         match self {
-            Kind::Local => "This computer",
+            Kind::Local => t("This computer"),
             Kind::Wsl => "WSL",
-            Kind::Command => "Command",
+            Kind::Command => t("Command"),
         }
     }
 
@@ -224,7 +225,7 @@ impl SettingsView {
             Kind::Local => div().into_any_element(),
             Kind::Wsl => self.render_distros(cx).into_any_element(),
             Kind::Command => control(
-                "Command",
+                t("Command"),
                 false,
                 ui::field()
                     .flex_1()
@@ -239,9 +240,9 @@ impl SettingsView {
             )
             .into_any_element(),
         };
-        section(IconName::Server, "Where agents run")
+        section(IconName::Server, t("Where agents run"))
             .child(control(
-                "Agents run on",
+                t("Agents run on"),
                 false,
                 ui::segmented("runs-on", &labels, selected, pick),
             ))
@@ -254,14 +255,10 @@ impl SettingsView {
                     .text_color(ui::faint())
                     .child(match self.runs_on.kind {
                         Kind::Command => {
-                            "A command that runs a program in that environment, as argv \
-                             (OrbStack: orb -m dev --, Lima: limactl shell dev, a container: \
-                             docker exec -i dev). Press Enter to use it."
+                            t("A command that runs a program in that environment, as argv (OrbStack: orb -m dev --, Lima: limactl shell dev, a container: docker exec -i dev). Press Enter to use it.")
                         }
                         _ => {
-                            "Agents, terminals, git and Setup run here; open agent tabs stay \
-                             where they started. A project opened from \
-                             \\\\wsl.localhost\\<distro>\\ always runs in that distro."
+                            t("Agents, terminals, git and Setup run here; open agent tabs stay where they started. A project opened from \\\\wsl.localhost\\<distro>\\ always runs in that distro.")
                         }
                     }),
             )
@@ -270,24 +267,24 @@ impl SettingsView {
     fn render_distros(&self, cx: &mut Context<Self>) -> Div {
         let Some(distros) = &self.runs_on.distros else {
             return control(
-                "Distro",
+                t("Distro"),
                 false,
                 h_flex()
                     .gap_2()
                     .text_xs()
                     .text_color(ui::muted())
                     .child(Spinner::new().xsmall().color(ui::muted()))
-                    .child("Looking for WSL distros…"),
+                    .child(t("Looking for WSL distros…")),
             );
         };
         if distros.is_empty() {
             return control(
-                "Distro",
+                t("Distro"),
                 false,
                 div()
                     .text_xs()
                     .text_color(ui::muted())
-                    .child("No WSL distros found. Install one with wsl --install."),
+                    .child(t("No WSL distros found. Install one with wsl --install.")),
             );
         }
         let current = match &self.runs_on.choice {
@@ -298,10 +295,10 @@ impl SettingsView {
             let selected = current.is_some_and(|c| c.eq_ignore_ascii_case(&distro.name));
             let name = distro.name.clone();
             let note = match (found, distro.default) {
-                (true, true) => "default · gentle-shell found",
-                (true, false) => "gentle-shell found",
-                (false, true) => "default · no gentle-shell",
-                (false, false) => "no gentle-shell",
+                (true, true) => t("default · gentle-shell found"),
+                (true, false) => t("gentle-shell found"),
+                (false, true) => t("default · no gentle-shell"),
+                (false, false) => t("no gentle-shell"),
             };
             h_flex()
                 .id(("runs-on-distro", ix))
@@ -338,7 +335,7 @@ impl SettingsView {
                 )
         });
         control(
-            "Distro",
+            t("Distro"),
             false,
             v_flex().flex_1().min_w_0().gap_px().children(rows),
         )
@@ -368,16 +365,17 @@ impl SettingsView {
                 .text_xs()
                 .text_color(ui::muted())
                 .child(Spinner::new().xsmall().color(ui::muted()))
-                .child(format!("Checking {label}…")),
+                .child(t("Checking {label}…").replace("{label}", &label)),
             (_, false, Some(true)) => line(
                 IconName::CircleCheck,
                 ui::success(),
-                format!("New agent tabs run on {label}."),
+                t("New agent tabs run on {label}.").replace("{label}", &label),
             ),
             (_, false, Some(false)) => line(
                 IconName::CircleAlert,
                 ui::warning(),
-                format!("gentle-shell wasn't found on {label}. Install it there first."),
+                t("gentle-shell wasn't found on {label}. Install it there first.")
+                    .replace("{label}", &label),
             ),
             (_, false, None) => div(),
         }

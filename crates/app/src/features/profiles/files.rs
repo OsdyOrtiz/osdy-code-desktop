@@ -349,39 +349,46 @@ pub(super) fn profiles_write(file: &ProfilesFile) -> Result<ConfigWrite, String>
 // Loading the screen
 // ---------------------------------------------------------------------------
 
+use super::{ProfileText, profile_msg};
+
 #[derive(Debug)]
 pub(super) struct Loaded {
     pub(super) file: ProfilesFile,
     pub(super) names: Vec<String>,
     pub(super) pin: Option<PinStatus>,
-    pub(super) notices: Vec<String>,
+    pub(super) notices: Vec<ProfileText>,
     pub(super) pi_default: Option<RouteEntry>,
-    pub(super) status: Option<String>,
+    pub(super) status: Option<ProfileText>,
 }
 
-pub(super) fn load_screen(env: &Env) -> Result<Loaded, String> {
+pub(super) fn load_screen(env: &Env) -> Result<Loaded, ProfileText> {
     let path = env.profiles_path();
     let agents = discover_agents(env);
     let mut notices = Vec::new();
     let mut status = None;
     let file = match read_store(&path) {
         StoreRead::Invalid => {
-            return Err(format!(
-                "Cannot open agent profiles because {} is invalid JSON or not a profiles file. Fix or remove the file, then open Profiles again.",
-                path.display()
+            return Err(profile_msg!(
+                "Cannot open agent profiles because {path} is invalid JSON or not a profiles file. Fix or remove the file, then open Profiles again.",
+                path = path.display().to_string()
             ));
         }
         StoreRead::Valid(file, drops) => {
-            notices.extend(drops_notice(&drops, &path.display().to_string()));
+            notices.extend(drops_notice(&drops, path.display().to_string().into()));
             file
         }
         StoreRead::Missing => {
             let file = seed_profiles(env, &agents);
-            write_atomic(&path, &serialize_profiles(&file))
-                .map_err(|e| format!("Could not create {}: {e}", path.display()))?;
-            status = Some(format!(
-                "Seeded the \"current\" profile in {} from the routing currently in effect.",
-                path.display()
+            write_atomic(&path, &serialize_profiles(&file)).map_err(|e| {
+                profile_msg!(
+                    "Could not create {path}: {error}",
+                    path = path.display().to_string(),
+                    error = e.to_string()
+                )
+            })?;
+            status = Some(profile_msg!(
+                "Seeded the \"current\" profile in {path} from the routing currently in effect.",
+                path = path.display().to_string()
             ));
             file
         }
@@ -399,10 +406,13 @@ pub(super) fn load_screen(env: &Env) -> Result<Loaded, String> {
 }
 
 /// What normalization dropped while loading `origin`, said once.
-fn drops_notice(drops: &Drops, origin: &str) -> Option<String> {
+fn drops_notice(drops: &Drops, origin: ProfileText) -> Option<ProfileText> {
     let mut parts = Vec::new();
     if !drops.profiles.is_empty() {
-        parts.push(format!("profiles: {}", drops.profiles.join(", ")));
+        parts.push(profile_msg!(
+            "profiles: {entries}",
+            entries = drops.profiles.join(", ")
+        ));
     }
     if !drops.agents.is_empty() {
         let list: Vec<String> = drops
@@ -410,10 +420,16 @@ fn drops_notice(drops: &Drops, origin: &str) -> Option<String> {
             .iter()
             .map(|(p, a)| format!("{p}/{a}"))
             .collect();
-        parts.push(format!("routing entries: {}", list.join(", ")));
+        parts.push(profile_msg!(
+            "routing entries: {entries}",
+            entries = list.join(", ")
+        ));
     }
     if let Some(active) = &drops.active {
-        parts.push(format!("active marker: {active}"));
+        parts.push(profile_msg!(
+            "active marker: {active}",
+            active = active.clone()
+        ));
     }
     if !drops.workflow.is_empty() {
         let list: Vec<String> = drops
@@ -421,12 +437,16 @@ fn drops_notice(drops: &Drops, origin: &str) -> Option<String> {
             .iter()
             .map(|(p, mode)| format!("{p} ({mode})"))
             .collect();
-        parts.push(format!("orchestrator modes: {}", list.join(", ")));
+        parts.push(profile_msg!(
+            "orchestrator modes: {entries}",
+            entries = list.join(", ")
+        ));
     }
     (!parts.is_empty()).then(|| {
-        format!(
-            "Dropped invalid entries while loading {origin} — {}.",
-            parts.join("; ")
+        profile_msg!(
+            "Dropped invalid entries while loading {origin} — {entries}.",
+            origin = origin,
+            entries = ProfileText::Joined(parts, "; ")
         )
     })
 }
@@ -441,7 +461,7 @@ pub(super) enum RpcLoad {
     Ready {
         file: ProfilesFile,
         pin: Option<PinStatus>,
-        notices: Vec<String>,
+        notices: Vec<ProfileText>,
     },
     /// The `profiles` store does not exist yet: write this seed first, like
     /// the direct-file path creates `profiles.json`.
@@ -451,11 +471,14 @@ pub(super) enum RpcLoad {
 /// Build the screen from the stores last read. Only the `profiles` store is
 /// required; the others add the pin and the read-only notes, or say why they
 /// could not be read.
-pub(super) fn rpc_load<K>(remote: &Remote<K>) -> Result<RpcLoad, String> {
+pub(super) fn rpc_load<K>(remote: &Remote<K>) -> Result<RpcLoad, ProfileText> {
     let Some(profiles) = remote.state(ConfigStore::Profiles) else {
         return Err(match remote.failure(ConfigStore::Profiles) {
-            Some(failure) => format!("Cannot open agent profiles: {}", failure.message()),
-            None => "Gentle Shell has not sent the profiles store yet.".to_string(),
+            Some(failure) => profile_msg!(
+                "Cannot open agent profiles: {error}",
+                error = failure.text()
+            ),
+            None => "Gentle Shell has not sent the profiles store yet.".into(),
         });
     };
     let file = match (profiles.status, profiles.value.as_ref()) {
@@ -474,10 +497,10 @@ pub(super) fn rpc_load<K>(remote: &Remote<K>) -> Result<RpcLoad, String> {
     let Some((file, drops)) = file else {
         return Err(
             "Cannot open agent profiles because Gentle Shell reports its profiles store as invalid. Fix or remove profiles.json, then open Profiles again."
-                .to_string(),
+                .into(),
         );
     };
-    let mut notices: Vec<String> = drops_notice(&drops, "the profiles store")
+    let mut notices: Vec<ProfileText> = drops_notice(&drops, "the profiles store".into())
         .into_iter()
         .collect();
     let pin = match remote.state(ConfigStore::Pins) {
@@ -488,19 +511,16 @@ pub(super) fn rpc_load<K>(remote: &Remote<K>) -> Result<RpcLoad, String> {
         }
         None => {
             if let Some(failure) = remote.failure(ConfigStore::Pins) {
-                notices.push(format!(
-                    "The repository pins could not be read: {}",
-                    failure.message()
+                notices.push(profile_msg!(
+                    "The repository pins could not be read: {error}",
+                    error = failure.text()
                 ));
             }
             None
         }
     };
     if let Some(failure) = remote.failure(ConfigStore::ProfileFallbacks) {
-        notices.push(format!(
-            "The profile fallbacks could not be read, so a rename or delete leaves them as they are: {}",
-            failure.message()
-        ));
+        notices.push(profile_msg!("The profile fallbacks could not be read, so a rename or delete leaves them as they are: {error}", error = failure.text()));
     }
     notices.extend(read_only_summary(remote));
     Ok(RpcLoad::Ready { file, pin, notices })
@@ -508,69 +528,77 @@ pub(super) fn rpc_load<K>(remote: &Remote<K>) -> Result<RpcLoad, String> {
 
 /// One line for the stores the screen shows but never writes, only when
 /// one of them is invalid or unreadable: healthy stores need no warning.
-fn read_only_summary<K>(remote: &Remote<K>) -> Option<String> {
-    let count = |n: usize, one: &str| {
-        if n == 1 {
-            format!("1 {one}")
-        } else {
-            format!("{n} {one}s")
-        }
+fn read_only_summary<K>(remote: &Remote<K>) -> Option<ProfileText> {
+    let count = |n: usize, one: &'static str, many: &'static str| {
+        profile_msg!(if n == 1 { one } else { many }, count = n.to_string())
     };
     let mut trouble = false;
-    let mut describe = |store: ConfigStore, ok: &dyn Fn(&Value) -> String| -> Option<String> {
-        if let Some(state) = remote.state(store) {
-            let broken: Vec<String> = state
-                .layers
-                .iter()
-                .filter(|layer| layer.status == ConfigStatus::Invalid)
-                .map(|layer| format!("{} layer invalid", layer.source))
-                .collect();
-            let base = match (state.status, state.value.as_ref()) {
-                (ConfigStatus::Ok, Some(value)) => ok(value),
-                (ConfigStatus::Missing, _) => "none".to_string(),
-                _ => {
+    let mut describe =
+        |store: ConfigStore, ok: &dyn Fn(&Value) -> ProfileText| -> Option<ProfileText> {
+            if let Some(state) = remote.state(store) {
+                let broken: Vec<ProfileText> = state
+                    .layers
+                    .iter()
+                    .filter(|layer| layer.status == ConfigStatus::Invalid)
+                    .map(|layer| {
+                        profile_msg!("{source} layer invalid", source = layer.source.to_string())
+                    })
+                    .collect();
+                let base = match (state.status, state.value.as_ref()) {
+                    (ConfigStatus::Ok, Some(value)) => ok(value),
+                    (ConfigStatus::Missing, _) => "none".into(),
+                    _ => {
+                        trouble = true;
+                        "invalid".into()
+                    }
+                };
+                Some(if broken.is_empty() {
+                    base
+                } else {
                     trouble = true;
-                    "invalid".to_string()
-                }
-            };
-            Some(if broken.is_empty() {
-                base
+                    profile_msg!(
+                        "{base} ({details})",
+                        base = base,
+                        details = ProfileText::Joined(broken, ", ")
+                    )
+                })
             } else {
-                trouble = true;
-                format!("{base} ({})", broken.join(", "))
-            })
-        } else {
-            remote.failure(store).map(|failure| {
-                trouble = true;
-                format!("unreadable ({})", failure.message())
-            })
-        }
-    };
-    let parts: Vec<String> = [
+                remote.failure(store).map(|failure| {
+                    trouble = true;
+                    profile_msg!("unreadable ({error})", error = failure.text())
+                })
+            }
+        };
+    let parts: Vec<ProfileText> = [
         describe(ConfigStore::Models, &|value| {
-            count(value.as_object().map_or(0, Map::len), "saved agent route")
+            count(
+                value.as_object().map_or(0, Map::len),
+                "{count} saved agent route",
+                "{count} saved agent routes",
+            )
         })
-        .map(|text| format!("global routing: {text}")),
-        describe(ConfigStore::Subagents, &|_| "present".to_string())
-            .map(|text| format!("subagent settings: {text}")),
+        .map(|text| profile_msg!("global routing: {text}", text = text)),
+        describe(ConfigStore::Subagents, &|_| "present".into())
+            .map(|text| profile_msg!("subagent settings: {text}", text = text)),
         describe(ConfigStore::ManagedAssets, &|value| {
             count(
                 value
                     .get("assets")
                     .and_then(Value::as_object)
                     .map_or(0, Map::len),
-                "installer-managed file",
+                "{count} installer-managed file",
+                "{count} installer-managed files",
             )
         })
-        .map(|text| format!("managed assets: {text}")),
+        .map(|text| profile_msg!("managed assets: {text}", text = text)),
     ]
     .into_iter()
     .flatten()
     .collect();
     (trouble && !parts.is_empty()).then(|| {
-        format!(
-            "Shown read-only from Gentle Shell — {}. Make default rewrites the routing.",
-            parts.join(" · ")
+        profile_msg!(
+            "Shown read-only from Gentle Shell — {details}. Make default rewrites the routing.",
+            details = ProfileText::Joined(parts, " · ")
         )
     })
 }
@@ -580,21 +608,21 @@ fn read_only_summary<K>(remote: &Remote<K>) -> Option<String> {
 /// write is open and no read of the store is open or owed, so it can never be
 /// older than a write that landed. On success every store write is held until
 /// the job releases it, so none can land while it writes the files.
-pub(super) fn files_job_start<K>(remote: &mut Remote<K>) -> Result<ProfilesFile, String> {
+pub(super) fn files_job_start<K>(remote: &mut Remote<K>) -> Result<ProfilesFile, ProfileText> {
     if remote.held() {
-        return Err("Make default is already running; wait for it to finish.".to_string());
+        return Err("Make default is already running; wait for it to finish.".into());
     }
     if remote.applying() {
-        return Err("Gentle Shell is still applying a profile; wait for it to finish.".to_string());
+        return Err("Gentle Shell is still applying a profile; wait for it to finish.".into());
     }
     if remote.writing() {
         return Err(
-            "A profile change is still being saved; Make default again once it lands.".to_string(),
+            "A profile change is still being saved; Make default again once it lands.".into(),
         );
     }
     if !remote.settled(ConfigStore::Profiles) {
         return Err(
-            "The profiles store is still being read; Make default again in a moment.".to_string(),
+            "The profiles store is still being read; Make default again in a moment.".into(),
         );
     }
     match rpc_load(remote)? {
@@ -602,8 +630,8 @@ pub(super) fn files_job_start<K>(remote: &mut Remote<K>) -> Result<ProfilesFile,
             remote.hold();
             Ok(file)
         }
-        RpcLoad::Seed(_) => Err(
-            "The profiles store does not exist yet; open Profiles again to create it.".to_string(),
-        ),
+        RpcLoad::Seed(_) => {
+            Err("The profiles store does not exist yet; open Profiles again to create it.".into())
+        }
     }
 }

@@ -5,6 +5,8 @@ use std::path::PathBuf;
 
 use serde_json::{Value, json};
 
+use crate::i18n::{Language, tr};
+
 use super::pretty;
 use super::store::{ProfilesFile, is_valid_profile_name};
 
@@ -75,25 +77,44 @@ pub fn evaluate_pin(status: Option<&PinStatus>, file: &ProfilesFile) -> PinEval 
 /// What the screen must not hide about the repository pins
 /// (`routingScreenNotices`, `profilePinScopeNote`).
 pub fn pin_notes(pin: Option<&PinStatus>, file: &ProfilesFile) -> Vec<String> {
-    let eval = evaluate_pin(pin, file);
-    let mut notes = Vec::new();
-    for (layer, path) in &eval.invalid {
-        notes.push(format!(
-            "The {layer} pin file {} is not a valid pin and is ignored. Fix or remove it.",
-            path.display()
-        ));
+    evaluate_pin(pin, file).notes_in(Language::English)
+}
+
+impl PinEval {
+    pub fn notes_in(&self, language: Language) -> Vec<String> {
+        let label = |layer: &str| {
+            tr(
+                language,
+                if layer == "local" {
+                    "local pin"
+                } else {
+                    "repo pin"
+                },
+            )
+        };
+        let mut notes = Vec::new();
+        for (layer, path) in &self.invalid {
+            notes.push(
+                tr(
+                    language,
+                    "The {pin} file {path} is not a valid pin and is ignored. Fix or remove it.",
+                )
+                .replace("{pin}", label(layer))
+                .replace("{path}", &path.display().to_string()),
+            );
+        }
+        for (layer, profile, path) in &self.stale {
+            notes.push(tr(language, "The {pin} names \"{profile}\", which no profile defines, so it is ignored ({path}).")
+                .replace("{pin}", label(layer))
+                .replace("{profile}", profile)
+                .replace("{path}", &path.display().to_string()));
+        }
+        if let Some((layer, profile, path)) = &self.winner {
+            notes.push(tr(language, "This repository pins \"{profile}\" ({pin} at {path}), so its subagent launches resolve that profile instead of the global routing.")
+                .replace("{pin}", label(layer))
+                .replace("{profile}", profile)
+                .replace("{path}", &path.display().to_string()));
+        }
+        notes
     }
-    for (layer, profile, path) in &eval.stale {
-        notes.push(format!(
-            "The {layer} pin names \"{profile}\", which no profile defines, so it is ignored ({}).",
-            path.display()
-        ));
-    }
-    if let Some((layer, profile, path)) = &eval.winner {
-        notes.push(format!(
-            "This repository pins \"{profile}\" ({layer} pin at {}), so its subagent launches resolve that profile instead of the global routing.",
-            path.display()
-        ));
-    }
-    notes
 }

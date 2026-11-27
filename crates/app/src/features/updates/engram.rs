@@ -76,7 +76,8 @@ pub fn check(installed: &str) -> Option<UpdateOffer> {
 
 /// "Skip this version".
 pub fn skip(version: &str) -> std::io::Result<()> {
-    let path = store().ok_or_else(|| std::io::Error::other("no data folder"))?;
+    let path =
+        store().ok_or_else(|| std::io::Error::other(crate::shared::i18n::t("no data folder")))?;
     let mut saved = read(&path);
     saved["skipped"] = json!(version);
     write(&path, &saved);

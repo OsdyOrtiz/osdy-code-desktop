@@ -307,6 +307,19 @@ impl Workspace {
         })
     }
 
+    pub(super) fn refresh_stage_summaries(&mut self, cx: &App) {
+        for stage in &mut self.stages {
+            stage.summary = Stage::summary(&stage.panel, cx);
+        }
+    }
+
+    pub(super) fn stage_title(&self, id: u64) -> Option<String> {
+        self.stages
+            .iter()
+            .find(|stage| stage.id == id)
+            .map(|stage| stage.summary.0.clone())
+    }
+
     /// A switcher command for the card it was opened on.
     pub(super) fn run_card_command(
         &mut self,
@@ -522,7 +535,7 @@ impl Workspace {
                 serde_json::json!({
                     "tab": self.tab_label(stage.id, cx),
                     "url": panel.url(),
-                    "title": panel.title(),
+                    "title": panel.protocol_title(),
                     "shown": stage.shown,
                     "driven": panel.is_driven(),
                     "profile": panel.profile(cx).key(),
@@ -797,7 +810,7 @@ fn tray_panel(
                 .text_size(rems(13. / 16.))
                 .font_weight(FontWeight::SEMIBOLD)
                 .text_color(ui::fg())
-                .child("Pages"),
+                .child(crate::shared::i18n::t("Pages")),
         )
         .child(div().flex_1())
         .when(any_shown, |d| {
@@ -814,7 +827,7 @@ fn tray_panel(
                     .text_color(ui::muted())
                     .cursor_pointer()
                     .hover(|s| s.bg(ui::surface_hover()).text_color(ui::fg()))
-                    .child("Hide all")
+                    .child(crate::shared::i18n::t("Hide all"))
                     .on_click(move |_, _, cx| {
                         let _ = workspace.update(cx, |this, cx| this.hide_all_stages(cx));
                     }),
@@ -899,7 +912,7 @@ fn tray_panel(
                             } else {
                                 IconName::Eye
                             }))
-                            .tooltip(if shown { "Hide" } else { "Show" })
+                            .tooltip(crate::shared::i18n::t(if shown { "Hide" } else { "Show" }))
                             .on_click(move |_, window, cx| {
                                 let _ = toggle.update(cx, |this, cx| {
                                     this.set_stage_shown(id, !shown, window, cx)
@@ -911,7 +924,7 @@ fn tray_panel(
                             .ghost()
                             .xsmall()
                             .icon(Icon::new(IconName::X))
-                            .tooltip("Close")
+                            .tooltip(crate::shared::i18n::t("Close"))
                             .on_click(move |_, window, cx| {
                                 let _ =
                                     close.update(cx, |this, cx| this.remove_stage(id, window, cx));
@@ -968,7 +981,9 @@ impl RenderOnce for TrayTrigger {
             .hover(|s| s.bg(ui::surface_hover()))
             .when(self.open, |d| d.bg(ui::surface_hover()))
             .when(!self.open, |d| {
-                d.tooltip(|window, cx| Tooltip::new("Pages agents opened").build(window, cx))
+                d.tooltip(|window, cx| {
+                    Tooltip::new(crate::shared::i18n::t("Pages agents opened")).build(window, cx)
+                })
             })
             .child(Icon::new(IconName::Globe).small())
             .child(
@@ -1008,7 +1023,7 @@ fn opens_outside(canvas: &CanvasNotice) -> bool {
 }
 
 #[cfg(test)]
-mod tests {
+pub(super) mod tests {
     use std::collections::HashMap;
 
     use gpui_kit::component::input::InputState;
@@ -1022,7 +1037,7 @@ mod tests {
 
     /// A bare workspace in a test window; pages open with "Open pages" never
     /// chosen (settings.json without `agentPages`).
-    fn with_workspace(
+    pub(in crate::features::workspace) fn with_workspace(
         cx: &mut TestAppContext,
         test: impl FnOnce(&Entity<Workspace>, &mut Window, &mut App),
     ) {
@@ -1056,6 +1071,7 @@ mod tests {
                     workspace_rename: None,
                     tab_selection: None,
                     tab_search: cx.new(|cx| InputState::new(window, cx)),
+                    tab_search_language: crate::shared::i18n::language(),
                     save_task: Some(Task::ready(())),
                     _title_poll: Task::ready(()),
                     _lifecycle: Vec::new(),
@@ -1101,6 +1117,40 @@ mod tests {
         let (reply, _answer) = std::sync::mpsc::channel();
         let op = serde_json::json!({"op": "open", "url": CANVAS, "name": "gentle-design"});
         workspace.update(cx, |w, cx| w.browser_request(op, reply, window, cx));
+    }
+
+    #[gpui::test]
+    fn browser_tabs_reply_is_independent_of_ui_language(cx: &mut TestAppContext) {
+        use crate::shared::i18n::with_test_language;
+        use gentle_core::i18n::Language;
+        use serde_json::json;
+
+        with_workspace(cx, |workspace, window, cx| {
+            for (url, title) in [
+                (CANVAS.to_string(), "Design canvas"),
+                (format!("{CANVAS}d/settings/"), "Design · settings"),
+            ] {
+                let notice = CanvasNotice::Open {
+                    url: url.clone(),
+                    refreshed: false,
+                };
+                workspace.update(cx, |w, cx| w.show_design_canvas(notice, 1, window, cx));
+                let expected = json!({"ok": {"tabs": [{
+                    "tab": "1", "url": url, "title": title, "shown": false,
+                    "driven": false, "profile": "shared"
+                }]}});
+                for language in Language::ALL {
+                    let answer = with_test_language(language, || {
+                        let (reply, answer) = std::sync::mpsc::channel();
+                        workspace.update(cx, |w, cx| {
+                            w.browser_request(json!({"op": "tabs"}), reply, window, cx)
+                        });
+                        answer.try_recv().expect("tabs answers synchronously")
+                    });
+                    assert_eq!(answer, expected, "{language:?}");
+                }
+            }
+        });
     }
 
     /// What the agent in the bug report did: the design tool opened the

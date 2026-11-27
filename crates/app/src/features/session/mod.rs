@@ -1,5 +1,6 @@
 //! One tab: a `gentle-shell --mode rpc` backend and its conversation UI.
 
+use crate::shared::i18n::t;
 use std::collections::{HashMap, HashSet};
 use std::path::PathBuf;
 
@@ -105,6 +106,8 @@ struct Chrome {
     models: u64,
     skills: usize,
 }
+
+type NoticeRenderer = Box<dyn Fn() -> String>;
 
 pub struct SessionView {
     cwd: PathBuf,
@@ -235,6 +238,10 @@ pub struct SessionView {
     /// View-only state: live timers, the prompt in flight, picker highlights.
     live: view::Live,
     model_search: Entity<InputState>,
+    model_search_language: gentle_core::i18n::Language,
+    composer_language: gentle_core::i18n::Language,
+    /// Only app-owned notices have a renderer; Shell payloads stay verbatim.
+    localized_notices: HashMap<usize, NoticeRenderer>,
     /// The `notify` output of the extension command last sent.
     capture: Option<builtins::Capture>,
     /// Numbers [`builtins::Capture`]s, to match Pi's replies.
@@ -267,10 +274,11 @@ impl SessionView {
             TextareaState::new(window, cx)
                 .auto_grow(1, 10)
                 .submit_on_enter(true)
-                .placeholder("What are we cooking?")
+                .placeholder(t("What are we cooking?"))
         });
         let dialog_input = cx.new(|cx| TextareaState::new(window, cx).auto_grow(1, 8));
-        let model_search = cx.new(|cx| InputState::new(window, cx).placeholder("Search models…"));
+        let model_search =
+            cx.new(|cx| InputState::new(window, cx).placeholder(t("Search models…")));
         // GPUI keeps decoded images until told to drop them.
         cx.on_release(|this, cx| {
             this.image_cache.release_all(cx);
@@ -425,6 +433,9 @@ impl SessionView {
             _subscriptions: subscriptions,
             live: view::Live::default(),
             model_search,
+            model_search_language: crate::shared::i18n::language(),
+            composer_language: crate::shared::i18n::language(),
+            localized_notices: HashMap::new(),
             capture: None,
             capture_seq: 0,
             window_handle: window.window_handle(),
@@ -498,16 +509,41 @@ impl SessionView {
         cx.notify();
     }
 
+    fn localized_notice(&mut self, level: NoticeLevel, message: impl Fn() -> String + 'static) {
+        let index = self.transcript.items.len();
+        self.transcript.notice(level, message());
+        self.localized_notices.insert(index, Box::new(message));
+    }
+
+    fn localized_note(&mut self, message: impl Fn() -> String + 'static, cx: &mut Context<Self>) {
+        self.localized_notice(NoticeLevel::Info, message);
+        cx.notify();
+    }
+
     /// Commands for the `/` menu and the palette: Pi's built-ins the app
     /// runs, then the other Pi built-ins Gentle Shell's session feed lists
     /// (terminal-only ones marked), then Gentle Shell's, without the ones
     /// that do nothing here.
     pub fn commands(&self) -> Vec<gentle_core::commands::SlashCommand> {
+        let localized = builtins::BUILTINS
+            .iter()
+            .map(|&(name, description)| (name, t(description)))
+            .collect::<Vec<_>>();
         gentle_core::commands::menu(
-            builtins::BUILTINS,
+            &localized,
             &self.desktop.sections().pi_commands(),
             &self.commands,
         )
+    }
+
+    /// The app-owned command's English search text, if this is one of its
+    /// descriptions. Do not interpret descriptions reported by Gentle Shell.
+    pub(crate) fn builtin_english_description(name: &str, detail: &str) -> Option<&'static str> {
+        let &(_, english) = builtins::BUILTINS.iter().find(|&&(key, _)| key == name)?;
+        gentle_core::i18n::Language::ALL
+            .iter()
+            .any(|&language| gentle_core::i18n::tr(language, english) == detail)
+            .then_some(english)
     }
 
     /// Where skill `name` lives, if this tab's Gentle Shell has it.
@@ -608,7 +644,7 @@ impl SessionView {
     /// Put `text` on the clipboard and say so.
     fn copy_text(&mut self, text: String, cx: &mut Context<Self>) {
         cx.write_to_clipboard(ClipboardItem::new_string(text));
-        self.toast(Notification::success("Copied to the clipboard."), cx);
+        self.toast(Notification::success(t("Copied to the clipboard.")), cx);
     }
 
     /// Run `f` with this tab's window, after the current update.

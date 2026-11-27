@@ -119,7 +119,7 @@ impl Geometry {
 pub struct TerminalView {
     term: Arc<FairMutex<Term<Listener>>>,
     pty: Option<EventLoopSender>,
-    error: Option<SharedString>,
+    error: Option<String>,
     focus_handle: FocusHandle,
     cwd: PathBuf,
     osc_title: Option<String>,
@@ -271,13 +271,7 @@ impl TerminalView {
         let (pty, shell_idle, error) =
             match spawn_pty(&cwd, term.clone(), listener, geometry.window_size()) {
                 Ok((sender, shell_idle)) => (Some(sender), shell_idle, None),
-                Err(err) => (
-                    None,
-                    None,
-                    Some(SharedString::from(format!(
-                        "Could not start the shell: {err}"
-                    ))),
-                ),
+                Err(err) => (None, None, Some(err.to_string())),
             };
 
         cx.spawn(async move |this, cx| {
@@ -1154,7 +1148,10 @@ impl Render for TerminalView {
                             ui::well_box()
                                 .text_size(rems(12. / 16.))
                                 .text_color(ui::danger())
-                                .child(error),
+                                .child(
+                                    crate::shared::i18n::t("Could not start the shell: {error}")
+                                        .replace("{error}", &error),
+                                ),
                         ),
                 )
             })
@@ -1164,7 +1161,10 @@ impl Render for TerminalView {
                         .absolute()
                         .bottom(rems(PADDING / 16.))
                         .right(rems(PADDING / 16.))
-                        .child(ui::chip("Process exited", ui::faint())),
+                        .child(ui::chip(
+                            crate::shared::i18n::t("Process exited"),
+                            ui::faint(),
+                        )),
                 )
             })
             .when(self.double_interrupt.armed().is_some(), |this| {

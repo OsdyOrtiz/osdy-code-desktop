@@ -114,7 +114,7 @@ async fn running(surface: &Entity<WebSurface>, cx: &mut AsyncWindowContext) -> R
     loop {
         let state = surface.update_in(cx, |s, window, cx| {
             s.ensure_running(window, cx);
-            (s.is_running(), s.failure().map(str::to_string))
+            (s.is_running(), s.failure())
         });
         match state {
             Ok((true, _)) => return Ok(()),

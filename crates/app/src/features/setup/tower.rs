@@ -17,6 +17,7 @@ use super::probe::run_logged;
 use super::{Log, toolchain_dir};
 use crate::features::app_update::extract_tar_gz;
 use crate::features::backend;
+use crate::shared::i18n::t;
 use gentle_core::backend::Backend;
 
 const REPO_TARBALL: &str =
@@ -125,16 +126,19 @@ const REMOTE_BUILD: &str = r#"set -e; d="$(mktemp -d)"; trap 'rm -rf "$d"' EXIT;
 
 fn remote_install(choice: &Backend, log: &Log) -> Result<(), String> {
     let label = choice.label();
-    let found = remote_status(choice)
-        .ok_or_else(|| format!("Couldn't find Gentle Shell's package folder in {label}."))?;
+    let found = remote_status(choice).ok_or_else(|| {
+        t("Couldn't find Gentle Shell's package folder in {label}.").replace("{label}", &label)
+    })?;
     if found.built {
         log("Gentle Tower is already there.".into());
         return Ok(());
     }
     let (Some(package), Some(version)) = (found.package, found.version) else {
-        return Err(format!("Couldn't read Gentle Shell's version in {label}."));
+        return Err(
+            t("Couldn't read Gentle Shell's version in {label}.").replace("{label}", &label)
+        );
     };
-    let toolchain = toolchain_dir().ok_or("This system has no app data folder.")?;
+    let toolchain = toolchain_dir().ok_or_else(|| t("This system has no app data folder."))?;
     fs::create_dir_all(&toolchain).map_err(|e| e.to_string())?;
     let staging = Staging::new(&toolchain, "tower")?;
     log(format!(
@@ -144,13 +148,14 @@ fn remote_install(choice: &Backend, log: &Log) -> Result<(), String> {
     download(&format!("{REPO_TARBALL}/v{version}"), &archive, log)?;
     let there = format!(
         "{}/tower-source-{version}.tar.gz",
-        backend::toolchain(choice).ok_or_else(|| format!("Couldn't reach {label}."))?
+        backend::toolchain(choice)
+            .ok_or_else(|| t("Couldn't reach {label}.").replace("{label}", &label))?
     );
     backend::put_file(choice, &archive, &there, false)?;
     log(format!("Building Gentle Tower in {label} (pnpm)…"));
     let package = package.to_string_lossy();
     let command = backend::in_root(choice, &["sh", "-c", REMOTE_BUILD, "sh", &there, &package])
-        .ok_or_else(|| format!("Couldn't reach {label}."))?;
+        .ok_or_else(|| t("Couldn't reach {label}.").replace("{label}", &label))?;
     run_logged(command, "Gentle Tower's build", log)?;
     log(format!("Gentle Tower is ready in {package}/web/tower."));
     Ok(())
@@ -186,7 +191,7 @@ fn pnpm(node: &Path, args: &[&str], dir: &Path) -> Result<Command, String> {
         }
         None => Command::new(
             pi_rpc::find_program("npx")
-                .ok_or("npx was not found next to Node.js or on the PATH.")?,
+                .ok_or_else(|| t("npx was not found next to Node.js or on the PATH."))?,
         ),
     };
     command.arg("-y").arg(PNPM).args(args).current_dir(dir);
@@ -224,17 +229,18 @@ pub fn install(log: &Log) -> Result<(), String> {
     }
     let home = dirs::home_dir().unwrap_or_else(std::env::temp_dir);
     let spec = pi_rpc::resolve_backend(&home).map_err(|e| format!("{e:#}"))?;
-    let package = package_root(&spec).ok_or("Couldn't find Gentle Shell's package folder.")?;
+    let package =
+        package_root(&spec).ok_or_else(|| t("Couldn't find Gentle Shell's package folder."))?;
     if index(&package).is_file() {
         log("Gentle Tower is already there.".into());
         return Ok(());
     }
-    let version = version_of(&package).ok_or("Couldn't read Gentle Shell's version.")?;
+    let version = version_of(&package).ok_or_else(|| t("Couldn't read Gentle Shell's version."))?;
     let node = match &spec.bundled {
         Some(bundled) => bundled.node.clone(),
         None => pi_rpc::resolve_node(&home).map_err(|e| format!("{e:#}"))?,
     };
-    let toolchain = toolchain_dir().ok_or("This system has no app data folder.")?;
+    let toolchain = toolchain_dir().ok_or_else(|| t("This system has no app data folder."))?;
     fs::create_dir_all(&toolchain).map_err(|e| e.to_string())?;
     let staging = Staging::new(&toolchain, "tower")?;
 
@@ -244,14 +250,17 @@ pub fn install(log: &Log) -> Result<(), String> {
     let archive = staging.0.join("source.tar.gz");
     download(&format!("{REPO_TARBALL}/v{version}"), &archive, log)?;
     let source = staging.0.join("source");
-    extract_tar_gz(&archive, &source).map_err(|e| format!("Couldn't unpack the source: {e}"))?;
+    extract_tar_gz(&archive, &source)
+        .map_err(|e| t("Couldn't unpack the source: {error}").replace("{error}", &e.to_string()))?;
     // GitHub's tarball has one top folder (`gentle-shell-<version>`).
     let tower = fs::read_dir(&source)
         .map_err(|e| e.to_string())?
         .filter_map(Result::ok)
         .map(|entry| entry.path().join("web").join("tower"))
         .find(|dir| dir.join("package.json").is_file())
-        .ok_or(format!("Gentle Shell {version}'s source has no web/tower."))?;
+        .ok_or_else(|| {
+            t("Gentle Shell {version}'s source has no web/tower.").replace("{version}", &version)
+        })?;
 
     log("Installing the web app's dependencies (pnpm)…".into());
     run_logged(
@@ -263,7 +272,7 @@ pub fn install(log: &Log) -> Result<(), String> {
     run_logged(pnpm(&node, &["build"], &tower)?, "pnpm build", log)?;
     let built = tower.join("dist");
     if !built.join("index.html").is_file() {
-        return Err("The build finished without dist/index.html.".into());
+        return Err(t("The build finished without dist/index.html.").into());
     }
 
     // Copied beside, then renamed into place: never half a dist.
@@ -274,7 +283,10 @@ pub fn install(log: &Log) -> Result<(), String> {
         .and_then(|()| fs::rename(&partial, web.join("dist")))
         .map_err(|e| {
             let _ = fs::remove_dir_all(&partial);
-            format!("Couldn't write into {}: {e}", web.display())
+            gentle_core::i18n::fill(
+                t("Couldn't write into {path}: {error}"),
+                &[("path", &web.to_string_lossy()), ("error", &e.to_string())],
+            )
         })?;
     log(format!("Gentle Tower is ready in {}.", web.display()));
     Ok(())

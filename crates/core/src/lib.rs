@@ -25,6 +25,7 @@ pub mod genui;
 pub mod git;
 pub mod glass;
 pub mod hydration;
+pub mod i18n;
 pub mod ides;
 pub mod input_style;
 pub mod interface_size;

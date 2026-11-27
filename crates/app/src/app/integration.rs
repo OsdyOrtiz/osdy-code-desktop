@@ -184,9 +184,9 @@ pub fn attach_sidebar(
                     FileTreeEvent::InsertPath(text) => {
                         if !workspace.insert_into_composer(text, window, cx) {
                             window.push_notification(
-                                Notification::info(
+                                Notification::info(crate::shared::i18n::t(
                                     "Open an agent to insert paths into its prompt.",
-                                ),
+                                )),
                                 cx,
                             );
                         }

@@ -4,6 +4,8 @@
 
 use serde_json::{Map, Value, json};
 
+use crate::i18n::{Language, tr};
+
 pub const THINKING_LEVELS: [&str; 7] = ["off", "minimal", "low", "medium", "high", "xhigh", "max"];
 /// Reserved routing key: the orchestrator lives in Pi's `settings.json`, never
 /// in `subagents.json` or an agent file.
@@ -250,23 +252,30 @@ pub fn normalize_routing(value: &Value) -> Option<Routing> {
 
 /// `formatOrchestratorSelection`.
 pub fn format_selection(entry: Option<&RouteEntry>) -> String {
-    let Some(entry) = entry else {
-        return "inherit".into();
-    };
-    match &entry.model {
-        None => match &entry.thinking {
-            None => "inherit".into(),
-            Some(t) => format!("inherit · {t}"),
-        },
-        Some(model) => {
-            let mut parts = vec![model.clone()];
-            parts.extend(entry.thinking.clone());
-            match entry.tier.as_deref() {
-                Some("fast") => parts.push("Fast".into()),
-                Some("standard") => parts.push("Standard".into()),
-                _ => {}
+    RouteEntry::format_selection_in(entry, Language::English)
+}
+
+impl RouteEntry {
+    pub fn format_selection_in(entry: Option<&Self>, language: Language) -> String {
+        let inherit = tr(language, "inherit");
+        let Some(entry) = entry else {
+            return inherit.into();
+        };
+        match &entry.model {
+            None => match &entry.thinking {
+                None => inherit.into(),
+                Some(t) => format!("{inherit} · {t}"),
+            },
+            Some(model) => {
+                let mut parts = vec![model.as_str()];
+                parts.extend(entry.thinking.as_deref());
+                match entry.tier.as_deref() {
+                    Some("fast") => parts.push(tr(language, "Fast")),
+                    Some("standard") => parts.push(tr(language, "Standard")),
+                    _ => {}
+                }
+                parts.join(" · ")
             }
-            parts.join(" · ")
         }
     }
 }

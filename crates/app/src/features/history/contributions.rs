@@ -18,7 +18,7 @@ use gentle_core::git::activity::{
 use gentle_core::git::avatar::{github_commits_url, github_repo, parse_commits_login};
 
 use super::avatars::{Answer, get};
-use crate::features::git;
+use crate::features::{files::Text, git};
 
 pub struct Contributions {
     pub login: String,
@@ -28,7 +28,7 @@ pub struct Contributions {
 
 /// The calendar, or why it can't be shown. `github` is the repository's
 /// `(owner, repo)` when known; otherwise `origin` is read for it.
-pub fn read(toplevel: &Path, github: Option<(String, String)>) -> Result<Contributions, String> {
+pub fn read(toplevel: &Path, github: Option<(String, String)>) -> Result<Contributions, Text> {
     let agent: ureq::Agent = ureq::Agent::config_builder()
         .http_status_as_error(false)
         .timeout_global(Some(Duration::from_secs(15)))
@@ -36,21 +36,22 @@ pub fn read(toplevel: &Path, github: Option<(String, String)>) -> Result<Contrib
         .into();
     let github = github
         .or_else(|| git::config(toplevel, "remote.origin.url").and_then(|url| github_repo(&url)));
-    let login = login(toplevel, github.as_ref(), &agent).ok_or_else(|| {
+    let login = login(toplevel, github.as_ref(), &agent).ok_or(
         "Couldn't tell your GitHub account. Set it with \
-         `git config --global github.user <login>`."
-            .to_string()
-    })?;
+         `git config --global github.user <login>`.",
+    )?;
     match get(&agent, &contributions_url(&login), false) {
         Answer::Body(html) => {
             let days = parse_contributions(&String::from_utf8_lossy(&html));
             if days.is_empty() {
-                Err(format!("GitHub showed no calendar for @{login}."))
+                Err(Text::from("GitHub showed no calendar for @{login}.").with("{login}", login))
             } else {
                 Ok(Contributions { login, days })
             }
         }
-        Answer::NotFound => Err(format!("GitHub has no account @{login}.")),
+        Answer::NotFound => {
+            Err(Text::from("GitHub has no account @{login}.").with("{login}", login))
+        }
         Answer::Refused => Err("GitHub is limiting requests; try again in a while.".into()),
         Answer::Offline => Err("Couldn't reach GitHub.".into()),
     }

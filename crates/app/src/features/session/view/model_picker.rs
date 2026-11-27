@@ -1,5 +1,6 @@
 //! The composer's model picker: trigger, searchable list and its keys.
 
+use crate::shared::i18n::t;
 use gpui_kit::assets::IconName;
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::input::Input;
@@ -127,7 +128,7 @@ impl SessionView {
             .current
             .as_ref()
             .map(|m| m.name.clone())
-            .unwrap_or_else(|| "No model".into());
+            .unwrap_or_else(|| t("No model").into());
         let dot = self
             .models
             .current
@@ -137,7 +138,7 @@ impl SessionView {
             .ghost()
             .xsmall()
             .text_color(ui::info())
-            .tooltip("Choose model")
+            .tooltip(t("Choose model"))
             .child(div().size(rems(7. / 16.)).rounded_full().bg(dot))
             .child(
                 div()
@@ -160,10 +161,8 @@ impl SessionView {
             Some(choice)
                 if !has_any && !loading && *choice != gentle_core::backend::Backend::Local =>
             {
-                format!(
-                    "No models yet. Gentle Shell on {} signs in there: /login.",
-                    choice.label()
-                )
+                t("No models yet. Gentle Shell on {backend} signs in there: /login.")
+                    .replace("{backend}", &choice.label())
             }
             _ => empty_message.to_string(),
         };
@@ -242,7 +241,9 @@ impl SessionView {
                             })
                             .when(model.reasoning, |this| {
                                 this.child(
-                                    ui::chip("reasoning", ui::petal()).border_0().rounded_full(),
+                                    ui::chip(t("reasoning"), ui::petal())
+                                        .border_0()
+                                        .rounded_full(),
                                 )
                             })
                             .when(is_current, |this| {
@@ -294,9 +295,9 @@ impl SessionView {
                                 .w_full()
                                 .icon(Icon::new(IconName::LogIn))
                                 .label(if has_any {
-                                    "Sign in to another provider…"
+                                    t("Sign in to another provider…")
                                 } else {
-                                    "Sign in to a provider…"
+                                    t("Sign in to a provider…")
                                 })
                                 .on_click(move |_, window, cx| {
                                     let _ = sign_in.update(cx, |this, cx| {
@@ -327,11 +328,11 @@ fn models_loading(loaded: bool, status: &BackendStatus) -> bool {
 
 fn model_picker_empty_state(loading: bool, has_any: bool) -> (&'static str, bool) {
     if has_any {
-        ("No models match.", true)
+        (t("No models match."), true)
     } else if loading {
-        ("Loading models…", false)
+        (t("Loading models…"), false)
     } else {
-        ("No models yet. Sign in to a provider.", true)
+        (t("No models yet. Sign in to a provider."), true)
     }
 }
 

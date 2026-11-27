@@ -9,7 +9,7 @@ use gpui_kit::*;
 
 use super::credentials::CardState;
 use super::{StatsSource, StatsState, Tab, UsageEvent, UsageState, UsageView};
-use crate::shared::ui;
+use crate::shared::{i18n::t, ui};
 
 mod stats;
 pub(crate) mod subscription;
@@ -55,27 +55,28 @@ impl Render for UsageView {
         };
         let (subtitle, status) = match self.tab {
             Tab::Usage => (
-                "Subscription windows of signed-in providers",
+                t("Subscription windows of signed-in providers"),
                 match &self.usage {
-                    UsageState::Loaded { cards, .. } => format!(
-                        "{} provider{}",
-                        cards.len(),
-                        if cards.len() == 1 { "" } else { "s" }
-                    ),
+                    UsageState::Loaded { cards, .. } => t(if cards.len() == 1 {
+                        "{count} provider"
+                    } else {
+                        "{count} providers"
+                    })
+                    .replace("{count}", &cards.len().to_string()),
                     _ => String::new(),
                 },
             ),
             Tab::Stats => (
-                "Token and cost totals from local sessions",
+                t("Token and cost totals from local sessions"),
                 match &self.stats {
                     StatsState::Loaded {
                         source: StatsSource::Files { data, .. },
                         ..
-                    } => format!("{} session files", data.files),
+                    } => t("{count} session files").replace("{count}", &data.files.to_string()),
                     StatsState::Loaded {
                         source: StatsSource::Shell { .. },
                         ..
-                    } => "From Gentle Shell".to_string(),
+                    } => t("From Gentle Shell").to_string(),
                     _ => String::new(),
                 },
             ),
@@ -104,7 +105,7 @@ impl Render for UsageView {
                                 .text_base()
                                 .font_weight(FontWeight::SEMIBOLD)
                                 .text_color(ui::fg())
-                                .child("Usage"),
+                                .child(t("Usage")),
                         )
                         .child(
                             div()
@@ -119,13 +120,13 @@ impl Render for UsageView {
                             segmented()
                                 .child(tab_button(
                                     "usage-tab-usage",
-                                    "Subscription",
+                                    t("Subscription"),
                                     IconName::Zap,
                                     Tab::Usage,
                                 ))
                                 .child(tab_button(
                                     "usage-tab-stats",
-                                    "Local stats",
+                                    t("Local stats"),
                                     IconName::ChartPie,
                                     Tab::Stats,
                                 )),
@@ -168,7 +169,7 @@ impl Render for UsageView {
                                 .primary()
                                 .small()
                                 .icon(Icon::new(IconName::RefreshCw))
-                                .label("Refresh")
+                                .label(t("Refresh"))
                                 .loading(busy)
                                 .on_click(cx.listener(|this, _, _, cx| this.refresh(cx))),
                         ),

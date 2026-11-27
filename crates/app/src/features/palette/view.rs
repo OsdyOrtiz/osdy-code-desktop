@@ -11,7 +11,10 @@ use gpui_kit::*;
 use crate::shared::ui;
 use gentle_core::background::Light;
 
-use super::{Activity, CATEGORIES, Category, Line, PaletteAction, PaletteEvent, PaletteView, Row};
+use super::{
+    Activity, CATEGORIES, Category, Line, PaletteAction, PaletteEvent, PaletteView, Row, language,
+    t,
+};
 
 impl PaletteView {
     fn render_categories(&self, cx: &mut Context<Self>) -> impl IntoElement {
@@ -47,7 +50,7 @@ impl PaletteView {
                     .on_click(cx.listener(move |this, _, window, cx| {
                         this.set_category(category, window, cx)
                     }))
-                    .child(*label)
+                    .child(t(label))
             }))
     }
 
@@ -179,7 +182,7 @@ impl PaletteView {
                                 .ghost()
                                 .xsmall()
                                 .icon(Icon::new(IconName::Pencil))
-                                .tooltip("Rename")
+                                .tooltip(t("Rename"))
                                 .on_click(cx.listener(move |this, _, window, cx| {
                                     cx.stop_propagation();
                                     this.start_rename(index, window, cx);
@@ -191,7 +194,7 @@ impl PaletteView {
                                     .ghost()
                                     .xsmall()
                                     .icon(Icon::new(IconName::X))
-                                    .tooltip("Delete workspace")
+                                    .tooltip(t("Delete workspace"))
                                     .on_click(cx.listener(move |_, _, _, cx| {
                                         cx.stop_propagation();
                                         cx.emit(PaletteEvent::Run(PaletteAction::DeleteWorkspace(
@@ -210,7 +213,7 @@ impl PaletteView {
             Category::Branches => self.branches.is_none(),
             _ => false,
         };
-        let text = if loading {
+        let text = t(if loading {
             if self.category == Category::Files {
                 "Indexing files…"
             } else {
@@ -220,7 +223,7 @@ impl PaletteView {
             "No local branches here"
         } else {
             "No matches"
-        };
+        });
         h_flex()
             .justify_center()
             .gap_2()
@@ -248,7 +251,9 @@ fn activity_badge(activity: Activity) -> Option<Div> {
             .text_xs()
             .text_color(color)
             .child(ui::light_dot(light, 6.))
-            .when(foreground, |d| d.child(light.badge(activity.count(light))))
+            .when(foreground, |d| {
+                d.child(light.badge_in(crate::shared::i18n::language(), activity.count(light)))
+            })
             .children(ui::background_marks(activity.background)),
     )
 }
@@ -259,12 +264,24 @@ fn hint(keys: impl IntoIterator<Item = impl IntoElement>, label: &'static str) -
             .pl_0p5()
             .text_xs()
             .text_color(ui::muted())
-            .child(label),
+            .child(t(label)),
     )
 }
 
 impl Render for PaletteView {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+        if self.language != language() {
+            crate::shared::i18n::sync_placeholder(
+                &self.query,
+                self.category.placeholder(),
+                &mut self.language,
+                window,
+                cx,
+            );
+            self.localized_commands =
+                Self::app_commands(self.browser_card.as_ref(), self.tab_layout, self.language);
+            self.refresh_rows(cx);
+        }
         let empty = self.rows.is_empty();
         let mut list = v_flex()
             .id("palette-list")
@@ -285,7 +302,7 @@ impl Render for PaletteView {
                         .text_size(rems(12. / 16.))
                         .font_weight(FontWeight::MEDIUM)
                         .text_color(ui::muted())
-                        .child(*group),
+                        .child(t(group)),
                 ),
                 Line::Row(i) => list.child(self.render_row(*i, &self.rows[*i], cx)),
             };

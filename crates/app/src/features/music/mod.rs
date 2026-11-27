@@ -28,6 +28,7 @@ use gpui_kit::component::slider::{SliderEvent, SliderState};
 use gpui_kit::*;
 
 use crate::features::setup::music::{self as setup, MusicStatus};
+use crate::shared::i18n::Message;
 
 /// How often a window in the background checks whether it came back.
 const INACTIVE_POLL: Duration = Duration::from_secs(2);
@@ -62,7 +63,7 @@ fn run_request(
     value: Option<&str>,
     shell: Option<&Path>,
     timeout: Duration,
-) -> Result<Option<MusicState>, String> {
+) -> Result<Option<MusicState>, Message> {
     let Some(player) = setup::player() else {
         return Ok(None);
     };
@@ -80,6 +81,13 @@ pub enum Job {
     Composing(String),
 }
 
+#[derive(PartialEq, Eq)]
+enum PlayerNote {
+    MissingShell,
+    NowPlaying(String),
+    Error(Message),
+}
+
 /// The title-bar button's look changed (installed, playing, paused).
 pub struct MusicChanged;
 
@@ -88,11 +96,12 @@ pub struct Music {
     /// `None`: nothing is playing.
     state: Option<MusicState>,
     job: Option<Job>,
-    /// The last mood's result or the last error: text and whether it went well.
-    note: Option<(String, bool)>,
+    /// The last mood's result or the last error.
+    note: Option<PlayerNote>,
     /// The player is open: poll faster.
     watching: bool,
     mood: Entity<InputState>,
+    mood_language: gentle_core::i18n::Language,
     volume: Entity<SliderState>,
     /// The user is dragging the volume: the player's value doesn't move it.
     sliding: bool,
@@ -108,7 +117,9 @@ impl EventEmitter<MusicChanged> for Music {}
 
 impl Music {
     pub fn new(window: &mut Window, cx: &mut Context<Self>) -> Self {
-        let mood = cx.new(|cx| InputState::new(window, cx).placeholder("Describe a mood…"));
+        let mood = cx.new(|cx| {
+            InputState::new(window, cx).placeholder(crate::shared::i18n::t("Describe a mood…"))
+        });
         let volume = cx.new(|_| {
             SliderState::new()
                 .min(0.)
@@ -145,6 +156,7 @@ impl Music {
             note: None,
             watching: false,
             mood,
+            mood_language: crate::shared::i18n::language(),
             volume,
             sliding: false,
             started_here: false,
@@ -235,7 +247,7 @@ impl Music {
 
     fn apply(
         &mut self,
-        result: Result<Option<MusicState>, String>,
+        result: Result<Option<MusicState>, Message>,
         window: &mut Window,
         cx: &mut Context<Self>,
     ) {
@@ -262,7 +274,7 @@ impl Music {
                 }
             }
             Err(error) => {
-                let note = Some((error, false));
+                let note = Some(PlayerNote::Error(error));
                 changed = self.note != note;
                 self.note = note;
             }
@@ -347,10 +359,7 @@ impl Music {
             PathBuf::from("gentle-shell")
         } else {
             let Ok(spec) = pi_rpc::resolve_backend(&std::env::temp_dir()) else {
-                self.note = Some((
-                    "Install Gentle Shell first: it reads the mood.".into(),
-                    false,
-                ));
+                self.note = Some(PlayerNote::MissingShell);
                 cx.notify();
                 return;
             };
@@ -393,7 +402,7 @@ impl Music {
             let result = cx
                 .background_executor()
                 .spawn(async move {
-                    let mut last: Result<Option<MusicState>, String> = Ok(None);
+                    let mut last: Result<Option<MusicState>, Message> = Ok(None);
                     for request in requests {
                         last = run_request(
                             request.action,
@@ -412,10 +421,10 @@ impl Music {
                 this.job = None;
                 this.note = match &result {
                     Ok(Some(state)) if note_on_success => {
-                        Some((format!("Now playing {}", state.name), true))
+                        Some(PlayerNote::NowPlaying(state.name.clone()))
                     }
                     Ok(_) => None,
-                    Err(error) => Some((error.clone(), false)),
+                    Err(error) => Some(PlayerNote::Error(error.clone())),
                 };
                 // Show the new piece now rather than at the next slow poll.
                 this.send_status(cx);

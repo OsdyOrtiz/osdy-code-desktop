@@ -5,6 +5,9 @@ use std::path::{Path, PathBuf};
 
 use serde_json::Value;
 
+use super::Detail;
+use crate::shared::i18n::t;
+
 use super::probe::{
     Version, capture, go_version, output_of, parse_version, run_logged, show_version,
 };
@@ -75,15 +78,25 @@ pub fn check_gentle_shell(launcher: &Result<Launcher, String>) -> (Status, Fix) 
     };
     let Some(version) = &launcher.version else {
         let stderr = pi_rpc::version_stderr(&launcher.spec);
+        let path = &launcher.spec.launcher;
+        let reason = gentle_core::setup::failed_version(path, stderr.as_deref());
         return (
-            Status::Failed(gentle_core::setup::failed_version(
-                &launcher.spec.launcher,
-                stderr.as_deref(),
-            )),
+            Status::Failed(version_failure_detail(path, reason)),
             Fix::Auto,
         );
     };
     launcher_status(version)
+}
+
+fn version_failure_detail(path: &Path, reason: String) -> Detail {
+    if reason == gentle_core::setup::failed_version(path, None) {
+        Detail::template(
+            "{path} didn't report its version (Node.js or Pi may be missing)",
+            [("{path}", path.to_string_lossy().into_owned())],
+        )
+    } else {
+        reason.into()
+    }
 }
 
 /// What a launcher's `--version` says about it: Pi next to it, Pi's floor,
@@ -99,20 +112,26 @@ fn launcher_status(version: &LauncherVersion) -> (Status, Fix) {
     let shell = &version.gentle_shell;
     if parse_version(shell).is_some_and(|v| v < MIN_GENTLE_SHELL) {
         return (
-            Status::Outdated(format!(
-                "gentle-shell {shell} — needs {} or newer for Gentle Desktop",
-                show_version(MIN_GENTLE_SHELL)
+            Status::Outdated(Detail::template(
+                "gentle-shell {shell} — needs {minimum} or newer for Gentle Desktop",
+                [
+                    ("{shell}", shell.clone()),
+                    ("{minimum}", show_version(MIN_GENTLE_SHELL)),
+                ],
             )),
             Fix::Auto,
         );
     }
     match parse_version(pi) {
         Some(v) if v >= MIN_PI => (
-            Status::Ok(format!("gentle-shell {shell} · pi {pi}")),
+            Status::Ok(format!("gentle-shell {shell} · pi {pi}").into()),
             Fix::None,
         ),
         _ => (
-            Status::Outdated(format!("pi {pi} — needs {} or newer", show_version(MIN_PI))),
+            Status::Outdated(Detail::template(
+                "pi {pi} — needs {minimum} or newer",
+                [("{pi}", pi.clone()), ("{minimum}", show_version(MIN_PI))],
+            )),
             Fix::Auto,
         ),
     }
@@ -193,6 +212,18 @@ fn installation_action(
         protected,
         stderr: stderr.as_deref(),
     }))
+    .map_err(|message| {
+        // Keep the core's repair decision and verbatim tool stderr; only
+        // its own final sentence belongs to the app's interface.
+        const NOTE: &str = "No second gentle-pi copy was installed.";
+        match (found, message.rsplit_once('\n')) {
+            (Some(launcher), Some((reason, NOTE))) => {
+                let detail = version_failure_detail(&launcher.spec.launcher, reason.to_string());
+                format!("{detail}\n{}", t(NOTE))
+            }
+            _ => message,
+        }
+    })
 }
 
 fn install_found(found: Option<Launcher>, log: &Log) -> Result<(), String> {
@@ -210,13 +241,12 @@ fn install_found(found: Option<Launcher>, log: &Log) -> Result<(), String> {
             .and_then(|go| output_of(&go, &["version"]))
             .and_then(|out| go_version(&out));
         if go.is_none_or(|v: Version| v < MIN_GO) {
-            return Err(format!(
-                "On Windows gentle-pi builds its Gentle AI companion with Go {} or newer. Install Go first, then try again.",
-                show_version(MIN_GO)
-            ));
+            return Err(t("On Windows gentle-pi builds its Gentle AI companion with Go {version} or newer. Install Go first, then try again.")
+                .replace("{version}", &show_version(MIN_GO)));
         }
     }
-    let npm = pi_rpc::find_program("npm").ok_or("npm wasn't found. Install Node.js first.")?;
+    let npm =
+        pi_rpc::find_program("npm").ok_or_else(|| t("npm wasn't found. Install Node.js first."))?;
     let mut command = pi_rpc::command(&npm);
     command.args([
         "install",
@@ -230,15 +260,22 @@ fn install_found(found: Option<Launcher>, log: &Log) -> Result<(), String> {
             "npm's global folder needs admin rights; installing into {} instead.",
             prefix.display()
         ));
-        std::fs::create_dir_all(prefix_bin(&prefix, cfg!(windows)))
-            .map_err(|e| format!("Couldn't create {}: {e}", prefix.display()))?;
+        std::fs::create_dir_all(prefix_bin(&prefix, cfg!(windows))).map_err(|e| {
+            gentle_core::i18n::fill(
+                t("Couldn't create {path}: {error}"),
+                &[
+                    ("path", &prefix.to_string_lossy()),
+                    ("error", &e.to_string()),
+                ],
+            )
+        })?;
         command.arg("--prefix").arg(&prefix);
     }
     log("Installing gentle-pi with npm…".into());
     run_logged(command, "npm install -g gentle-pi", log)?;
     refresh_paths();
     let spec = pi_rpc::resolve_backend(&user_home()).map_err(|_| {
-        "gentle-pi was installed, but gentle-shell still isn't on the PATH.".to_string()
+        t("gentle-pi was installed, but gentle-shell still isn't on the PATH.").to_string()
     })?;
     log(format!("gentle-shell is at {}.", spec.launcher.display()));
     Ok(())
@@ -262,9 +299,10 @@ fn upgrade_gentle_shell(spec: &pi_rpc::LaunchSpec, log: &Log) -> Result<(), Stri
             log(format!("Now running {found}."));
             Ok(())
         }
-        (Status::Missing(why) | Status::Outdated(why) | Status::Failed(why), _) => Err(format!(
-            "gentle-shell upgrade finished, but the launcher the app runs still reports: {why}"
-        )),
+        (Status::Missing(why) | Status::Outdated(why) | Status::Failed(why), _) => Err(t(
+            "gentle-shell upgrade finished, but the launcher the app runs still reports: {reason}",
+        )
+        .replace("{reason}", &why.to_string())),
     }
 }
 
@@ -377,12 +415,18 @@ pub fn check_setup(launcher: &Result<Launcher, String>) -> (Status, Fix) {
     if version.home_mode.as_deref() == Some("link") {
         return if lists_package(&home, "gentle-engram") {
             (
-                Status::Ok(format!("Linked to {}", home.display())),
+                Status::Ok(Detail::template(
+                    "Linked to {home}",
+                    [("{home}", home.to_string_lossy().into_owned())],
+                )),
                 Fix::None,
             )
         } else {
             (
-                Status::Missing(format!("{} isn't set up yet", home.display())),
+                Status::Missing(Detail::template(
+                    "{home} isn't set up yet",
+                    [("{home}", home.to_string_lossy().into_owned())],
+                )),
                 Fix::Auto,
             )
         };
@@ -397,10 +441,12 @@ pub fn check_setup(launcher: &Result<Launcher, String>) -> (Status, Fix) {
         &version.gentle_shell,
     ) {
         Marker::Match { at } => (
-            Status::Ok(format!(
-                "Gentle AI {} · set up {}",
-                pin.as_deref().unwrap_or("companion"),
-                at.get(..10).unwrap_or(&at)
+            Status::Ok(setup_detail(
+                "Gentle AI {version} · set up {date}",
+                "Gentle AI companion · set up {date}",
+                "{date}",
+                at.get(..10).unwrap_or(&at),
+                pin.as_deref(),
             )),
             Fix::None,
         ),
@@ -409,21 +455,52 @@ pub fn check_setup(launcher: &Result<Launcher, String>) -> (Status, Fix) {
             Fix::Auto,
         ),
         Marker::StalePin { recorded } => (
-            Status::Outdated(format!(
-                "Set up with Gentle AI {recorded}; gentle-pi now pins {}",
-                pin.unwrap_or_default()
+            Status::Outdated(Detail::template(
+                "Set up with Gentle AI {recorded}; gentle-pi now pins {pinned}",
+                [
+                    ("{recorded}", recorded),
+                    ("{pinned}", pin.unwrap_or_default()),
+                ],
             )),
             Fix::Auto,
         ),
         Marker::StaleGentlePi { recorded } => (
-            Status::Outdated(format!(
-                "Set up with gentle-pi {}; {} is installed",
-                recorded.as_deref().unwrap_or("an older version"),
-                version.gentle_shell
+            Status::Outdated(stale_launcher_setup(
+                recorded.as_deref(),
+                &version.gentle_shell,
             )),
             Fix::Auto,
         ),
     }
+}
+
+fn setup_detail(
+    known: &'static str,
+    unknown: &'static str,
+    name: &'static str,
+    value: &str,
+    version: Option<&str>,
+) -> Detail {
+    match version {
+        Some(version) => Detail::template(
+            known,
+            [
+                (name, value.to_string()),
+                ("{version}", version.to_string()),
+            ],
+        ),
+        None => Detail::template(unknown, [(name, value.to_string())]),
+    }
+}
+
+pub(super) fn stale_launcher_setup(recorded: Option<&str>, installed: &str) -> Detail {
+    setup_detail(
+        "Set up with gentle-pi {version}; {installed} is installed",
+        "Set up with gentle-pi an older version; {installed} is installed",
+        "{installed}",
+        installed,
+        recorded,
+    )
 }
 
 /// `gentle-shell setup` (non-interactive: stdin is closed); done once the
@@ -435,9 +512,10 @@ pub fn run_setup(log: &Log) -> Result<(), String> {
     refresh_paths();
     match check_setup(&launcher()) {
         (Status::Ok(_), _) => Ok(()),
-        (Status::Missing(why) | Status::Outdated(why) | Status::Failed(why), _) => Err(format!(
-            "Setup finished, but it isn't recorded as done: {why}"
-        )),
+        (Status::Missing(why) | Status::Outdated(why) | Status::Failed(why), _) => {
+            Err(t("Setup finished, but it isn't recorded as done: {reason}")
+                .replace("{reason}", &why.to_string()))
+        }
     }
 }
 
@@ -535,7 +613,7 @@ mod tests {
                 Status::Failed(format!(
                     "gentle-shell: no active Gentle Shell version; run the Gentle Shell installer again. ({})",
                     broken.path.display()
-                )),
+                ).into()),
                 Fix::Auto
             )
         );
@@ -670,7 +748,7 @@ mod tests {
         ));
         assert!(matches!(
             status("gentle-shell 4.8.0\npi 1.1.0\n"),
-            (Status::Outdated(why), _) if why.starts_with("pi 1.1.0")
+            (Status::Outdated(why), _) if why.text(gentle_core::i18n::Language::English).starts_with("pi 1.1.0")
         ));
     }
 

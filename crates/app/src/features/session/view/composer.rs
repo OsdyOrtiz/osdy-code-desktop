@@ -1,5 +1,6 @@
 //! The composer: attachments, text area and its bottom bar.
 
+use crate::shared::i18n::t;
 use std::time::{Duration, Instant};
 
 /// The focus pulse's length.
@@ -80,26 +81,26 @@ impl SessionView {
             None => "–".into(),
         };
         let label = if compacting {
-            "compacting…".to_string()
+            t("compacting…").to_string()
         } else {
             used.clone()
         };
         let ring_rows = [
             (
                 "used-tokens",
-                "Used tokens",
+                t("Used tokens"),
                 self.usage
                     .context_tokens
                     .map(|tokens| format!("{prefix}{}", format_tokens(tokens))),
             ),
             (
                 "context-window",
-                "Context window",
+                t("Context window"),
                 self.context_window().map(format_tokens),
             ),
             (
                 "usage",
-                "Usage",
+                t("Usage"),
                 self.usage
                     .context_percent
                     .map(|p| format!("{prefix}{p:.0}%")),
@@ -115,7 +116,7 @@ impl SessionView {
         };
         let weak = cx.entity().downgrade();
         let options = ChipPopoverOptions::new("context-ring", IconName::Gauge, color, label)
-            .title("Context")
+            .title(t("Context"))
             .ring(
                 percent as f32,
                 cx.entity(),
@@ -178,13 +179,13 @@ impl SessionView {
                     .into_any_element(),
             );
             let advice = if percent >= 90. {
-                "Context nearly full. Compact or start a new session."
+                t("Context nearly full. Compact or start a new session.")
             } else if percent >= 70. {
-                "Consider compacting or starting a new session."
+                t("Consider compacting or starting a new session.")
             } else {
-                "Compacting summarizes the conversation to free context."
+                t("Compacting summarizes the conversation to free context.")
             };
-            let instruction = "Add what to keep with /compact <instructions>.";
+            let instruction = t("Add what to keep with /compact <instructions>.");
             rows.push(
                 v_flex()
                     .text_size(rems(12. / 16.))
@@ -210,9 +211,9 @@ impl SessionView {
                             .cursor(CursorStyle::Arrow)
                             .icon(Icon::new(IconName::ChevronsDownUp))
                             .label(if compacting {
-                                "Compacting…"
+                                t("Compacting…")
                             } else {
-                                "Compact now"
+                                t("Compact now")
                             })
                             .loading(compacting)
                             .disabled(compacting || !ready)
@@ -231,7 +232,7 @@ impl SessionView {
                     .text_color(ui::fg())
                     .when(auto.is_none() || !ready, |d| d.opacity(0.5))
                     .child(checkbox_box(auto.unwrap_or(false)))
-                    .child("Compact automatically when nearly full")
+                    .child(t("Compact automatically when nearly full"))
                     .when_some(auto.filter(|_| ready), |d, enabled| {
                         d.on_click(move |_, _, cx| {
                             let _ = toggle
@@ -493,9 +494,9 @@ impl SessionView {
         let style = crate::features::session::input_style::style(cx);
         let stop_now = self.stoppable() && empty;
         let send_tip = if busy {
-            "Steer the running agent"
+            t("Steer the running agent")
         } else {
-            "Send"
+            t("Send")
         };
 
         let action_button = match style {
@@ -507,7 +508,7 @@ impl SessionView {
                 .danger()
                 .rounded(px(999.))
                 .child(div().size(rems(9. / 16.)).rounded_sm().bg(ui::well()))
-                .tooltip(format!("Stop ({})", ui::shortcut(".")))
+                .tooltip(t("Stop ({shortcut})").replace("{shortcut}", ui::shortcut(".").as_ref()))
                 .on_click(cx.listener(|this, _, _, cx| this.stop(cx)))
                 .into_any_element(),
             _ => Button::new("send")
@@ -539,7 +540,7 @@ impl SessionView {
             } else {
                 IconName::Paperclip
             }))
-            .tooltip("Attach files or images (or paste / drop them)")
+            .tooltip(t("Attach files or images (or paste / drop them)"))
             .disabled(!ready)
             .on_click(cx.listener(|this, _, window, cx| this.pick_attachments(window, cx)));
         // The model, effort and plan chips every style keeps together.
@@ -862,7 +863,11 @@ impl SessionView {
                 .cursor_pointer()
                 .hover(|s| s.bg(ui::surface_hover()))
                 .tooltip(move |window, cx| {
-                    Tooltip::new(format!("Stop (esc · {})", ui::shortcut("."))).build(window, cx)
+                    Tooltip::new(
+                        t("Stop (esc · {shortcut})")
+                            .replace("{shortcut}", ui::shortcut(".").as_ref()),
+                    )
+                    .build(window, cx)
                 })
                 .on_click(cx.listener(|this, _, _, cx| this.stop(cx)))
                 .child(div().size(rems(8. / 16.)).rounded_sm().bg(ui::fg()))
@@ -871,7 +876,7 @@ impl SessionView {
                         .text_size(rems(12. / 16.))
                         .font_weight(FontWeight::MEDIUM)
                         .text_color(ui::fg())
-                        .child("Stop"),
+                        .child(t("Stop")),
                 )
                 .child(
                     div()
@@ -931,7 +936,7 @@ impl SessionView {
                 if stop {
                     d.cursor_pointer()
                         .hover(|s| s.text_color(ui::danger()))
-                        .tooltip(|window, cx| Tooltip::new("Stop the agent").build(window, cx))
+                        .tooltip(|window, cx| Tooltip::new(t("Stop the agent")).build(window, cx))
                         .on_click(cx.listener(|this, _, _, cx| this.stop(cx)))
                 } else if blocked {
                     d.opacity(0.6)
@@ -967,7 +972,10 @@ impl SessionView {
                 .cursor_pointer()
                 .hover(|s| s.opacity(0.85))
                 .tooltip(move |window, cx| {
-                    Tooltip::new(format!("Stop ({})", ui::shortcut("."))).build(window, cx)
+                    Tooltip::new(
+                        t("Stop ({shortcut})").replace("{shortcut}", ui::shortcut(".").as_ref()),
+                    )
+                    .build(window, cx)
                 })
                 .on_click(cx.listener(|this, _, _, cx| this.stop(cx)))
                 .child(div().size(rems(9. / 16.)).rounded_sm().bg(ui::screen_bg()))
@@ -1028,7 +1036,7 @@ fn remove_button(
         .bg(ui::well())
         .cursor_pointer()
         .hover(|s| s.bg(ui::danger()))
-        .tooltip(|window, cx| Tooltip::new("Remove").build(window, cx))
+        .tooltip(|window, cx| Tooltip::new(t("Remove")).build(window, cx))
         .on_click(on_click)
         .child(Icon::new(IconName::X).xsmall().text_color(ui::fg()))
 }
@@ -1037,8 +1045,8 @@ fn remove_button(
 /// type, then `#N` and how many lines it has.
 fn pasted_card(n: usize, paste: &PastedText) -> Div {
     let lines = match paste.lines {
-        1 => "+1 line".to_string(),
-        lines => format!("+{lines} lines"),
+        1 => t("+1 line").to_string(),
+        lines => t("+{count} lines").replace("{count}", &lines.to_string()),
     };
     h_flex()
         .relative()

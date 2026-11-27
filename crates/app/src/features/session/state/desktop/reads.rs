@@ -162,12 +162,18 @@ impl ReadFailure {
     pub(crate) fn message(&self) -> String {
         match self {
             Self::NotOffered | Self::Unsupported => {
-                "This Gentle Shell does not offer that over Desktop.".to_string()
+                crate::shared::i18n::t("This Gentle Shell does not offer that over Desktop.")
+                    .to_string()
             }
             Self::Refused { message, .. } => message.clone(),
-            Self::Timeout => "Gentle Shell did not answer in time.".to_string(),
-            Self::Dropped => "Gentle Shell restarted before it answered.".to_string(),
-            Self::Failure(error) => format!("The request failed ({error})."),
+            Self::Timeout => {
+                crate::shared::i18n::t("Gentle Shell did not answer in time.").to_string()
+            }
+            Self::Dropped => {
+                crate::shared::i18n::t("Gentle Shell restarted before it answered.").to_string()
+            }
+            Self::Failure(error) => crate::shared::i18n::t("The request failed ({error}).")
+                .replace("{error}", &error.to_string()),
         }
     }
 

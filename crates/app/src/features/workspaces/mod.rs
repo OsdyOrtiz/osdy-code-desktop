@@ -160,6 +160,43 @@ impl BadgeIcon {
         Self::Cat,
     ];
 
+    pub fn label(self) -> &'static str {
+        match self {
+            Self::Folder => "Folder",
+            Self::Code => "Code",
+            Self::Terminal => "Terminal",
+            Self::Globe => "Globe",
+            Self::Bot => "Bot",
+            Self::Brain => "Brain",
+            Self::Rocket => "Rocket",
+            Self::Zap => "Zap",
+            Self::Flame => "Flame",
+            Self::Leaf => "Leaf",
+            Self::Database => "Database",
+            Self::Server => "Server",
+            Self::Cloud => "Cloud",
+            Self::Smartphone => "Smartphone",
+            Self::Palette => "Palette",
+            Self::Pen => "Pen",
+            Self::Book => "Book",
+            Self::Music => "Music",
+            Self::Package => "Package",
+            Self::Shield => "Shield",
+            Self::Sparkles => "Sparkles",
+            Self::Star => "Star",
+            Self::Heart => "Heart",
+            Self::Gem => "Gem",
+            Self::Crown => "Crown",
+            Self::Coffee => "Coffee",
+            Self::Gamepad => "Gamepad",
+            Self::Flask => "Flask",
+            Self::Atom => "Atom",
+            Self::Bug => "Bug",
+            Self::Puzzle => "Puzzle",
+            Self::Cat => "Cat",
+        }
+    }
+
     pub fn icon(self) -> IconName {
         match self {
             Self::Folder => IconName::Folder,

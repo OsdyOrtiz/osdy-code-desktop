@@ -233,12 +233,19 @@ fn card(t: f32, fade: f32, every: u32, level: f32) -> impl IntoElement {
                                     .text_lg()
                                     .font_weight(FontWeight::SEMIBOLD)
                                     .text_color(ui::fg())
-                                    .child("Time for some water"),
+                                    .child(crate::shared::i18n::t("Time for some water")),
                             )
-                            .child(div().text_sm().text_color(ui::muted()).child(format!(
-                                "A glass now, and another in {}.",
-                                super::label(every)
-                            ))),
+                            .child(
+                                div().text_sm().text_color(ui::muted()).child(
+                                    crate::shared::i18n::t(
+                                        "A glass now, and another in {interval}.",
+                                    )
+                                    .replace(
+                                        "{interval}",
+                                        crate::shared::i18n::t(super::label(every)),
+                                    ),
+                                ),
+                            ),
                     ),
             ),
         )

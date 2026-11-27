@@ -15,7 +15,10 @@ use super::OnboardingView;
 use super::checks::{Tone, blocks, is_ok, status_text, tone};
 use super::view::status_label;
 use crate::features::setup::{Check, Need, Status};
-use crate::shared::ui;
+use crate::shared::{
+    i18n::{language, t},
+    ui,
+};
 
 /// Between one step coming in and the next.
 const STEP_GAP: Duration = Duration::from_millis(110);
@@ -49,7 +52,7 @@ impl OnboardingView {
                     .text_sm()
                     .text_color(ui::muted())
                     .child(Spinner::new().small().color(ui::petal()))
-                    .child("Looking at what this machine already has…"),
+                    .child(t("Looking at what this machine already has…")),
             ));
         };
         let required: Vec<&Check> = checks.iter().filter(|c| c.need == Need::Required).collect();
@@ -113,7 +116,11 @@ impl OnboardingView {
                     .text_size(ui::code_rems(12.))
                     .font_family(ui::mono())
                     .text_color(if complete { ui::success() } else { ui::muted() })
-                    .child(format!("{done} of {steps} ready")),
+                    .child(
+                        t("{done} of {steps} ready")
+                            .replace("{done}", &done.to_string())
+                            .replace("{steps}", &steps.to_string()),
+                    ),
             )
             .child(
                 div()
@@ -146,8 +153,8 @@ impl OnboardingView {
                             ),
                     ),
             )
-            .when_some(self.platform.clone(), |d, platform| {
-                d.child(ui::chip(platform, ui::petal()))
+            .when_some(self.platform.as_ref(), |d, platform| {
+                d.child(ui::chip(platform.label(), ui::petal()))
             })
     }
 
@@ -197,24 +204,29 @@ impl OnboardingView {
                             .text_base()
                             .font_weight(FontWeight::SEMIBOLD)
                             .text_color(if dim { ui::muted() } else { ui::fg() })
-                            .child(check.title),
+                            .child(t(check.title)),
                     )
                     .child(if optional {
-                        ui::chip("Optional", ui::info())
+                        ui::chip(t("Optional"), ui::info())
                     } else {
                         ui::chip(status_label(&check.status, step == Step::Installing), color)
                     })
                     .child(div().flex_1())
                     .children(self.render_action(check, index, cx)),
             )
-            .child(div().text_sm().text_color(ui::muted()).child(check.summary))
+            .child(
+                div()
+                    .text_sm()
+                    .text_color(ui::muted())
+                    .child(t(check.summary)),
+            )
             .child(
                 div()
                     .text_size(ui::code_rems(12.))
                     .font_family(ui::mono())
                     .text_color(ui::faint())
                     .truncate()
-                    .child(status_text(&check.status).to_string()),
+                    .child(status_text(&check.status)),
             )
             .when(step == Step::Installing, |d| {
                 d.child(div().pt_1().child(shimmer(index)))
@@ -276,7 +288,7 @@ impl OnboardingView {
                                 .text_sm()
                                 .font_weight(FontWeight::MEDIUM)
                                 .text_color(ui::fg())
-                                .child(check.title),
+                                .child(t(check.title)),
                         )
                         // A failed check says why where its summary sits
                         // (an ENGRAM_BIN that names nothing, say): it has
@@ -288,14 +300,14 @@ impl OnboardingView {
                                 .whitespace_normal()
                                 .text_xs()
                                 .text_color(ui::danger())
-                                .child(why.clone()),
+                                .child(why.text(language())),
                             _ => div()
                                 .flex_1()
                                 .min_w_0()
                                 .truncate()
                                 .text_xs()
                                 .text_color(ui::muted())
-                                .child(check.summary),
+                                .child(t(check.summary)),
                         })
                         .children(self.render_action(check, index, cx)),
                 )
@@ -308,7 +320,11 @@ impl OnboardingView {
             12.,
             v_flex()
                 .gap_2()
-                .child(div().px_1().child(ui::section_label("Also good to have")))
+                .child(
+                    div()
+                        .px_1()
+                        .child(ui::section_label(t("Also good to have"))),
+                )
                 .child(v_flex().gap_1().children(rows)),
         )
         .into_any_element()

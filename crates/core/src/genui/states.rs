@@ -983,10 +983,20 @@ pub fn layout(m: &Machine) -> Layout {
 
 /// The header's counts.
 pub fn counts(m: &Machine) -> String {
+    counts_in(m, crate::i18n::Language::English)
+}
+
+pub fn counts_in(m: &Machine, language: crate::i18n::Language) -> String {
+    use super::edits::count_in;
     format!(
         "{} · {}",
-        plural(m.states.len(), "state"),
-        plural(m.transitions.len(), "transition")
+        count_in(language, m.states.len(), "{count} state", "{count} states"),
+        count_in(
+            language,
+            m.transitions.len(),
+            "{count} transition",
+            "{count} transitions"
+        ),
     )
 }
 

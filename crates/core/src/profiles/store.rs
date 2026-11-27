@@ -3,6 +3,8 @@
 
 use serde_json::{Map, Value, json};
 
+use crate::i18n::{Language, tr};
+
 use super::pretty;
 use super::routing::{Routing, normalize_routing};
 
@@ -17,13 +19,51 @@ pub fn is_valid_profile_name(name: &str) -> bool {
         && !matches!(name, "constructor" | "prototype")
 }
 
-fn require_valid_name(name: &str) -> Result<(), String> {
+#[derive(Debug)]
+pub struct ProfileError {
+    key: &'static str,
+    name: String,
+}
+
+impl ProfileError {
+    fn missing(name: &str) -> Self {
+        Self {
+            key: "Profile does not exist: {name}.",
+            name: name.to_string(),
+        }
+    }
+
+    fn duplicate(name: &str) -> Self {
+        Self {
+            key: "Profile already exists: {name}.",
+            name: name.to_string(),
+        }
+    }
+
+    pub fn message(&self, language: Language) -> String {
+        tr(language, self.key).replace("{name}", &self.name)
+    }
+
+    /// Retain the untranslated template and its display argument for live UI updates.
+    pub fn into_parts(self) -> (&'static str, String) {
+        (self.key, self.name)
+    }
+}
+
+impl From<ProfileError> for String {
+    fn from(error: ProfileError) -> Self {
+        error.message(Language::English)
+    }
+}
+
+fn require_valid_name(name: &str) -> Result<(), ProfileError> {
     if is_valid_profile_name(name) {
         Ok(())
     } else {
-        Err(format!(
-            "Invalid profile name: {name:?}. Use 1-64 characters (letters, numbers, '.', '_', '-') starting with a letter or number."
-        ))
+        Err(ProfileError {
+            key: "Invalid profile name: {name}. Use 1-64 characters (letters, numbers, '.', '_', '-') starting with a letter or number.",
+            name: format!("{name:?}"),
+        })
     }
 }
 
@@ -300,13 +340,7 @@ pub fn create_profile(
     name: &str,
     config: Routing,
 ) -> Result<ProfilesFile, String> {
-    require_valid_name(name)?;
-    if file.has(name) {
-        return Err(format!("Profile already exists: {name}."));
-    }
-    let mut next = file.clone();
-    next.profiles.push((name.to_string(), config));
-    Ok(next)
+    file.create(name, config).map_err(Into::into)
 }
 
 pub fn update_profile(
@@ -314,121 +348,188 @@ pub fn update_profile(
     name: &str,
     config: Routing,
 ) -> Result<ProfilesFile, String> {
-    require_valid_name(name)?;
-    let mut next = file.clone();
-    let slot = next
-        .profiles
-        .iter_mut()
-        .find(|(n, _)| n == name)
-        .ok_or_else(|| format!("Profile does not exist: {name}."))?;
-    slot.1 = config;
-    Ok(next)
+    file.update(name, config).map_err(Into::into)
 }
 
-/// `duplicateProfile`: the copy carries the source's workflow too.
 pub fn duplicate_profile(
     file: &ProfilesFile,
     from: &str,
     to: &str,
 ) -> Result<ProfilesFile, String> {
-    require_valid_name(from)?;
-    let config = file
-        .get(from)
-        .cloned()
-        .ok_or_else(|| format!("Profile does not exist: {from}."))?;
-    let mut next = create_profile(file, to, config)?;
-    next.put_workflow(to, file.workflow_of(from));
-    Ok(next)
+    file.duplicate(from, to).map_err(Into::into)
 }
 
 pub fn rename_profile(file: &ProfilesFile, from: &str, to: &str) -> Result<ProfilesFile, String> {
-    require_valid_name(from)?;
-    if !file.has(from) {
-        return Err(format!("Profile does not exist: {from}."));
-    }
-    require_valid_name(to)?;
-    if file.has(to) {
-        return Err(format!("Profile already exists: {to}."));
-    }
-    let mut next = file.clone();
-    // `renameProfile`: the workflow follows the profile to its new name.
-    let names = next.profiles.iter_mut().map(|(n, _)| n);
-    for name in names.chain(next.workflow.iter_mut().map(|(n, _)| n)) {
-        if name == from {
-            *name = to.to_string();
-        }
-    }
-    if next.active.as_deref() == Some(from) {
-        next.active = Some(to.to_string());
-    }
-    Ok(next)
+    file.rename(from, to).map_err(Into::into)
 }
 
 pub fn delete_profile(file: &ProfilesFile, name: &str) -> Result<ProfilesFile, String> {
-    require_valid_name(name)?;
-    if !file.has(name) {
-        return Err(format!("Profile does not exist: {name}."));
-    }
-    if file.active.as_deref() == Some(name) {
-        return Err(format!(
-            "Profile {name} is active. Apply another profile before deleting it."
-        ));
-    }
-    let mut next = file.clone();
-    next.profiles.retain(|(n, _)| n != name);
-    next.workflow.retain(|(n, _)| n != name);
-    Ok(next)
+    file.delete(name).map_err(Into::into)
 }
 
-/// `setProfileOrchestratorMode`: opt one existing profile into a mode; the
-/// default removes its entry.
 pub fn set_orchestrator_mode(
     file: &ProfilesFile,
     name: &str,
     mode: OrchestratorMode,
 ) -> Result<ProfilesFile, String> {
-    require_valid_name(name)?;
-    if !file.has(name) {
-        return Err(format!("Profile does not exist: {name}."));
-    }
-    let mut next = file.clone();
-    let entry = next.workflow_of(name);
-    next.put_workflow(name, Workflow { mode, ..entry });
-    Ok(next)
+    file.with_orchestrator_mode(name, mode).map_err(Into::into)
 }
 
-/// `setProfileControlledEngineering`: turn the option on or off for one
-/// existing profile, keeping its mode; off with the default mode removes its
-/// entry.
 pub fn set_controlled_engineering(
     file: &ProfilesFile,
     name: &str,
     enabled: bool,
 ) -> Result<ProfilesFile, String> {
-    require_valid_name(name)?;
-    if !file.has(name) {
-        return Err(format!("Profile does not exist: {name}."));
-    }
-    let mut next = file.clone();
-    let entry = next.workflow_of(name);
-    next.put_workflow(
-        name,
-        Workflow {
-            controlled_engineering: enabled,
-            ..entry
-        },
-    );
-    Ok(next)
+    file.with_controlled_engineering(name, enabled)
+        .map_err(Into::into)
 }
 
 pub fn set_active(file: &ProfilesFile, name: &str) -> Result<ProfilesFile, String> {
-    require_valid_name(name)?;
-    if !file.has(name) {
-        return Err(format!("Profile does not exist: {name}."));
+    file.with_active(name).map_err(Into::into)
+}
+
+impl ProfilesFile {
+    pub fn create(&self, name: &str, config: Routing) -> Result<Self, ProfileError> {
+        let file = self;
+        require_valid_name(name)?;
+        if file.has(name) {
+            return Err(ProfileError::duplicate(name));
+        }
+        let mut next = file.clone();
+        next.profiles.push((name.to_string(), config));
+        Ok(next)
     }
-    let mut next = file.clone();
-    next.active = Some(name.to_string());
-    Ok(next)
+
+    pub fn update(&self, name: &str, config: Routing) -> Result<Self, ProfileError> {
+        let file = self;
+        require_valid_name(name)?;
+        let mut next = file.clone();
+        let slot = next
+            .profiles
+            .iter_mut()
+            .find(|(n, _)| n == name)
+            .ok_or_else(|| ProfileError::missing(name))?;
+        slot.1 = config;
+        Ok(next)
+    }
+
+    /// `duplicateProfile`: the copy carries the source's workflow too.
+    pub fn duplicate(&self, from: &str, to: &str) -> Result<Self, ProfileError> {
+        let file = self;
+        require_valid_name(from)?;
+        let config = file
+            .get(from)
+            .cloned()
+            .ok_or_else(|| ProfileError::missing(from))?;
+        let mut next = file.create(to, config)?;
+        next.put_workflow(to, file.workflow_of(from));
+        Ok(next)
+    }
+
+    pub fn rename(&self, from: &str, to: &str) -> Result<Self, ProfileError> {
+        let file = self;
+        require_valid_name(from)?;
+        if !file.has(from) {
+            return Err(ProfileError::missing(from));
+        }
+        require_valid_name(to)?;
+        if file.has(to) {
+            return Err(ProfileError::duplicate(to));
+        }
+        let mut next = file.clone();
+        // `renameProfile`: the workflow follows the profile to its new name.
+        let names = next.profiles.iter_mut().map(|(n, _)| n);
+        for name in names.chain(next.workflow.iter_mut().map(|(n, _)| n)) {
+            if name == from {
+                *name = to.to_string();
+            }
+        }
+        if next.active.as_deref() == Some(from) {
+            next.active = Some(to.to_string());
+        }
+        Ok(next)
+    }
+
+    pub fn delete(&self, name: &str) -> Result<Self, ProfileError> {
+        let file = self;
+        require_valid_name(name)?;
+        if !file.has(name) {
+            return Err(ProfileError::missing(name));
+        }
+        if file.active.as_deref() == Some(name) {
+            return Err(ProfileError {
+                key: "Profile {name} is active. Apply another profile before deleting it.",
+                name: name.to_string(),
+            });
+        }
+        let mut next = file.clone();
+        next.profiles.retain(|(n, _)| n != name);
+        next.workflow.retain(|(n, _)| n != name);
+        Ok(next)
+    }
+
+    /// `setProfileOrchestratorMode`: opt one existing profile into a mode; the
+    /// default removes its entry.
+    pub fn with_orchestrator_mode(
+        &self,
+        name: &str,
+        mode: OrchestratorMode,
+    ) -> Result<Self, ProfileError> {
+        let file = self;
+        require_valid_name(name)?;
+        if !file.has(name) {
+            return Err(ProfileError::missing(name));
+        }
+        let mut next = file.clone();
+        let entry = next.workflow_of(name);
+        next.put_workflow(name, Workflow { mode, ..entry });
+        Ok(next)
+    }
+
+    /// `setProfileControlledEngineering`: turn the option on or off for one
+    /// existing profile, keeping its mode; off with the default mode removes its
+    /// entry.
+    pub fn with_controlled_engineering(
+        &self,
+        name: &str,
+        enabled: bool,
+    ) -> Result<Self, ProfileError> {
+        let file = self;
+        require_valid_name(name)?;
+        if !file.has(name) {
+            return Err(ProfileError::missing(name));
+        }
+        let mut next = file.clone();
+        let entry = next.workflow_of(name);
+        next.put_workflow(
+            name,
+            Workflow {
+                controlled_engineering: enabled,
+                ..entry
+            },
+        );
+        Ok(next)
+    }
+
+    pub fn with_active(&self, name: &str) -> Result<Self, ProfileError> {
+        require_valid_name(name)?;
+        if !self.has(name) {
+            return Err(ProfileError::missing(name));
+        }
+        let mut next = self.clone();
+        next.active = Some(name.to_string());
+        Ok(next)
+    }
+
+    pub fn export(name: &str, config: &Routing) -> Result<String, ProfileError> {
+        require_valid_name(name)?;
+        Ok(pretty(&json!({
+            "kind": PROFILE_EXPORT_KIND,
+            "version": 1,
+            "name": name,
+            "config": config.to_json(),
+        })))
+    }
 }
 
 /// `bootstrapProfilesFile`: a `current` profile from the routing in effect,
@@ -452,13 +553,7 @@ pub const PROFILE_EXPORT_FILE: &str = "profiles.export.json";
 
 /// One profile as exported (`serializeProfileExport`).
 pub fn serialize_profile_export(name: &str, config: &Routing) -> Result<String, String> {
-    require_valid_name(name)?;
-    Ok(pretty(&json!({
-        "kind": PROFILE_EXPORT_KIND,
-        "version": 1,
-        "name": name,
-        "config": config.to_json(),
-    })))
+    ProfilesFile::export(name, config).map_err(Into::into)
 }
 
 /// A profile read from an export.

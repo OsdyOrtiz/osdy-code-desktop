@@ -120,7 +120,7 @@ impl Workspace {
         let horizontal = workspace.clone();
         let vertical = workspace.clone();
         menu.item(
-            PopupMenuItem::new("Horizontal tabs")
+            PopupMenuItem::new(crate::shared::i18n::t("Horizontal tabs"))
                 .checked(layout == TabLayout::Horizontal)
                 .on_click(move |_, _, cx| {
                     let _ = horizontal.update(cx, |this, cx| {
@@ -129,7 +129,7 @@ impl Workspace {
                 }),
         )
         .item(
-            PopupMenuItem::new("Vertical tabs")
+            PopupMenuItem::new(crate::shared::i18n::t("Vertical tabs"))
                 .checked(layout == TabLayout::Vertical)
                 .on_click(move |_, _, cx| {
                     let _ = vertical
@@ -138,7 +138,7 @@ impl Workspace {
         )
         .when(layout == TabLayout::Vertical, |menu| {
             menu.separator().item(
-                PopupMenuItem::new("Compact sidebar")
+                PopupMenuItem::new(crate::shared::i18n::t("Compact sidebar"))
                     .checked(compact)
                     .on_click(move |_, _, cx| {
                         let _ = workspace.update(cx, |this, cx| this.toggle_sidebar_compact(cx));
@@ -254,18 +254,22 @@ impl Workspace {
             (weak.clone(), weak.clone(), weak.clone(), weak.clone(), weak);
         let mut menu = menu
             .item(
-                PopupMenuItem::new(if pinned { "Unpin tab" } else { "Pin tab" })
-                    .icon(Icon::new(if pinned {
-                        IconName::PinOff
-                    } else {
-                        IconName::Pin
-                    }))
-                    .on_click(move |_, _, cx| {
-                        let _ = pin.update(cx, |this, cx| this.toggle_tab_pin(space, id, cx));
-                    }),
+                PopupMenuItem::new(crate::shared::i18n::t(if pinned {
+                    "Unpin tab"
+                } else {
+                    "Pin tab"
+                }))
+                .icon(Icon::new(if pinned {
+                    IconName::PinOff
+                } else {
+                    IconName::Pin
+                }))
+                .on_click(move |_, _, cx| {
+                    let _ = pin.update(cx, |this, cx| this.toggle_tab_pin(space, id, cx));
+                }),
             )
             .item(
-                PopupMenuItem::new("Rename")
+                PopupMenuItem::new(crate::shared::i18n::t("Rename"))
                     .icon(Icon::new(IconName::Pencil))
                     // Renaming needs a live session, which an unbuilt tab
                     // doesn't have (and building it just to rename isn't worth it).
@@ -282,7 +286,7 @@ impl Workspace {
             menu = menu
                 .separator()
                 .item(
-                    PopupMenuItem::new("Move up")
+                    PopupMenuItem::new(crate::shared::i18n::t("Move up"))
                         .icon(Icon::new(IconName::ArrowUp))
                         .disabled(!can_up)
                         .on_click(move |_, _, cx| {
@@ -290,7 +294,7 @@ impl Workspace {
                         }),
                 )
                 .item(
-                    PopupMenuItem::new("Move down")
+                    PopupMenuItem::new(crate::shared::i18n::t("Move down"))
                         .icon(Icon::new(IconName::ArrowDown))
                         .disabled(!can_down)
                         .on_click(move |_, _, cx| {
@@ -299,7 +303,7 @@ impl Workspace {
                 );
         }
         menu.separator().item(
-            PopupMenuItem::new("Close tab")
+            PopupMenuItem::new(crate::shared::i18n::t("Close tab"))
                 .icon(Icon::new(IconName::X))
                 .on_click(move |_, window, cx| {
                     let _ = close.update(cx, |this, cx| {
@@ -326,7 +330,7 @@ impl Workspace {
         let new_space = weak.clone();
         let menu = menu
             .item(
-                PopupMenuItem::new("New workspace")
+                PopupMenuItem::new(crate::shared::i18n::t("New workspace"))
                     .icon(Icon::new(IconName::FolderPlus))
                     .on_click(move |_, window, cx| {
                         let _ = new_space
@@ -630,10 +634,11 @@ impl Workspace {
         let pin = weak.clone();
         let close = weak;
         let pin_label = if any_unpinned {
-            format!("Pin {count} tabs")
+            "Pin {count} tabs"
         } else {
-            format!("Unpin {count} tabs")
+            "Unpin {count} tabs"
         };
+        let pin_label = crate::shared::i18n::t(pin_label).replace("{count}", &count.to_string());
         menu.item(
             PopupMenuItem::new(pin_label.clone())
                 .icon(Icon::new(if any_unpinned {
@@ -649,13 +654,15 @@ impl Workspace {
         )
         .separator()
         .item(
-            PopupMenuItem::new(format!("Close {count} tabs"))
-                .icon(Icon::new(IconName::X))
-                .on_click(move |_, window, cx| {
-                    let _ = close.update(cx, |this, cx| {
-                        this.close_selected_tabs(space, close_ids.clone(), window, cx)
-                    });
-                }),
+            PopupMenuItem::new(
+                crate::shared::i18n::t("Close {count} tabs").replace("{count}", &count.to_string()),
+            )
+            .icon(Icon::new(IconName::X))
+            .on_click(move |_, window, cx| {
+                let _ = close.update(cx, |this, cx| {
+                    this.close_selected_tabs(space, close_ids.clone(), window, cx)
+                });
+            }),
         )
     }
 }
@@ -1056,6 +1063,7 @@ mod tests {
                         workspace_rename: None,
                         tab_selection: None,
                         tab_search: cx.new(|cx| InputState::new(window, cx)),
+                        tab_search_language: crate::shared::i18n::language(),
                         save_task: Some(Task::ready(())),
                         _title_poll: Task::ready(()),
                         _lifecycle: Vec::new(),

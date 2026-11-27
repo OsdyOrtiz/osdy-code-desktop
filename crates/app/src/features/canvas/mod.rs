@@ -103,7 +103,7 @@ pub struct CanvasView {
     geo: GeoCache,
     focus: FocusHandle,
     /// The file could not be read: never overwrite it.
-    broken: Option<String>,
+    broken: Option<crate::shared::i18n::Message>,
     save_task: Option<Task<()>>,
     _quit: Subscription,
     /// Answers the agent's requests.
@@ -179,13 +179,19 @@ impl CanvasView {
                 Ok(doc) => (doc, None),
                 Err(e) => (
                     Doc::default(),
-                    Some(format!("Couldn't read this canvas: {e}")),
+                    Some(crate::shared::i18n::Message::with_error(
+                        "Couldn't read this canvas: {error}",
+                        e,
+                    )),
                 ),
             },
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => (Doc::default(), None),
             Err(e) => (
                 Doc::default(),
-                Some(format!("Couldn't open this canvas: {e}")),
+                Some(crate::shared::i18n::Message::with_error(
+                    "Couldn't open this canvas: {error}",
+                    e,
+                )),
             ),
         };
         // A change made in the last half second is still waiting to be saved.
@@ -229,8 +235,10 @@ impl CanvasView {
         }
     }
 
+    pub(crate) const TITLE: &str = "Canvas";
+
     pub fn title(&self) -> SharedString {
-        "Canvas".into()
+        crate::shared::i18n::t(Self::TITLE).into()
     }
 
     // ── Changes and saving ─────────────────────────────────────────────────
@@ -509,7 +517,7 @@ impl CanvasView {
             files: true,
             directories: false,
             multiple: true,
-            prompt: Some("Insert".into()),
+            prompt: Some(crate::shared::i18n::t("Insert").into()),
         });
         cx.spawn_in(window, async move |this, cx| {
             let Ok(Ok(Some(paths))) = paths.await else {

@@ -7,6 +7,8 @@ use std::path::PathBuf;
 
 use serde_json::{Map, Value, json};
 
+use crate::i18n::{Language, tr};
+
 use super::routing::{PROVIDER_REVIEW_ROLES, RouteEntry, Routing, is_review_role, normalize_entry};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -208,14 +210,26 @@ pub fn with_omitted_cleared(agents: &[AgentEntry], config: &Routing) -> Routing 
 
 /// Unmatched routing keys, as the screen notes them (`unmatchedRoutingNotes`).
 pub fn unmatched_notes(config: &Routing, names: &[String]) -> Vec<String> {
-    config
-        .roles()
-        .filter(|(key, _)| !names.contains(key))
-        .map(|(key, _)| match names.iter().find(|n| n.ends_with(&format!(".{key}"))) {
-            Some(suggestion) => format!("Profile key \"{key}\" matches no agent; did you mean {suggestion}?"),
-            None => format!("Profile key \"{key}\" matches no agent configured in gentle-shell, so it is ignored at launch."),
-        })
-        .collect()
+    config.unmatched_notes_in(names, Language::English)
+}
+
+impl Routing {
+    pub fn unmatched_notes_in(&self, names: &[String], language: Language) -> Vec<String> {
+        self.roles()
+            .filter(|(key, _)| !names.contains(key))
+            .map(|(key, _)| match names.iter().find(|n| n.ends_with(&format!(".{key}"))) {
+                Some(suggestion) => tr(language, "Profile key \"{key}\" matches no agent; did you mean {suggestion}?")
+                    // Both values are data; concatenate the template pieces rather
+                    // than treating an interpolated key as a second placeholder.
+                    .split("{suggestion}")
+                    .map(|part| part.replace("{key}", key))
+                    .collect::<Vec<_>>()
+                    .join(suggestion),
+                None => tr(language, "Profile key \"{key}\" matches no agent configured in gentle-shell, so it is ignored at launch.")
+                    .replace("{key}", key),
+            })
+            .collect()
+    }
 }
 
 #[cfg(test)]

@@ -30,7 +30,60 @@ use gpui_kit::{
     Context, Hsla, IntoElement, ParentElement as _, Render, SharedString, Styled as _, Window,
 };
 
-use crate::shared::ui;
+use crate::shared::{i18n::t, ui};
+
+/// Retained interface copy: translate the template at render, never the data it contains.
+#[derive(Debug, Clone, PartialEq)]
+pub enum Text {
+    Template(&'static str, Vec<(&'static str, Text)>),
+    Raw(String),
+}
+
+impl Text {
+    pub fn with(self, marker: &'static str, value: impl Into<String>) -> Self {
+        self.with_text(marker, Self::Raw(value.into()))
+    }
+
+    pub fn with_text(mut self, marker: &'static str, value: Self) -> Self {
+        if let Self::Template(_, args) = &mut self {
+            args.push((marker, value));
+        }
+        self
+    }
+
+    pub fn render(&self) -> String {
+        match self {
+            Self::Raw(text) => text.clone(),
+            Self::Template(key, args) => {
+                let mut rest = t(key);
+                let mut text = String::new();
+                while let Some((at, marker, value)) = args
+                    .iter()
+                    .filter_map(|(marker, value)| rest.find(marker).map(|at| (at, marker, value)))
+                    .min_by_key(|(at, _, _)| *at)
+                {
+                    text.push_str(&rest[..at]);
+                    text.push_str(&value.render());
+                    rest = &rest[at + marker.len()..];
+                }
+                text.push_str(rest);
+                text
+            }
+        }
+    }
+}
+
+impl From<&'static str> for Text {
+    fn from(key: &'static str) -> Self {
+        Self::Template(key, Vec::new())
+    }
+}
+
+impl From<String> for Text {
+    fn from(text: String) -> Self {
+        Self::Raw(text)
+    }
+}
 
 /// A row dragged out of the file tree, the payload the agent tab takes
 /// (S12): dropped on one it attaches like a path dropped from Finder, so a

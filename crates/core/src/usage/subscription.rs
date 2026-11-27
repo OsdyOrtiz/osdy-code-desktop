@@ -4,6 +4,8 @@
 
 use serde_json::{Map, Value};
 
+use crate::i18n::{Language, tr};
+
 use super::finite;
 use super::time::{DAY, HOUR, MINUTE, WEEK, local_day, parse_iso_ms};
 
@@ -57,25 +59,27 @@ pub fn window_label(seconds: i64) -> String {
 }
 
 pub fn format_reset(reset_at: Option<i64>, now: i64) -> String {
+    format_reset_in(Language::English, reset_at, now)
+}
+
+pub fn format_reset_in(language: Language, reset_at: Option<i64>, now: i64) -> String {
     let Some(reset_at) = reset_at else {
         return String::new();
     };
     let seconds = (reset_at - now).div_euclid(1000);
     if seconds <= 0 {
-        "resets now".into()
+        tr(language, "resets now").into()
     } else if seconds < HOUR {
-        format!(
-            "resets in {}m",
-            ((seconds as f64 / MINUTE as f64).round() as i64).max(1)
-        )
+        let minutes = ((seconds as f64 / MINUTE as f64).round() as i64).max(1);
+        tr(language, "resets in {minutes}m").replace("{minutes}", &minutes.to_string())
     } else if seconds < DAY {
-        format!(
-            "resets in {}h {}m",
-            seconds / HOUR,
-            (seconds % HOUR) / MINUTE
-        )
+        tr(language, "resets in {hours}h {minutes}m")
+            .replace("{hours}", &(seconds / HOUR).to_string())
+            .replace("{minutes}", &((seconds % HOUR) / MINUTE).to_string())
     } else {
-        format!("resets in {}d {}h", seconds / DAY, (seconds % DAY) / HOUR)
+        tr(language, "resets in {days}d {hours}h")
+            .replace("{days}", &(seconds / DAY).to_string())
+            .replace("{hours}", &((seconds % DAY) / HOUR).to_string())
     }
 }
 
@@ -161,17 +165,21 @@ pub fn windows_by_length(limits: &[UsageLimit]) -> Vec<UsageWindow> {
 /// billing-period allowance (whose `window_seconds` counts down to the
 /// reset instead of naming a window length).
 pub fn window_display_label(window: &UsageWindow) -> String {
+    window_display_label_in(Language::English, window)
+}
+
+pub fn window_display_label_in(language: Language, window: &UsageWindow) -> String {
     if window.label.is_empty() {
-        return "period".into();
+        return tr(language, "period").into();
     }
     let week =
         window.label == "week" || window.label == "7d" || window.window_seconds >= WEEK as f64;
     let five_hours = window.label == "5h"
         || (window.window_seconds > 0.0 && window.window_seconds == 5.0 * HOUR as f64);
     if week {
-        "Weekly · all models".into()
+        tr(language, "Weekly · all models").into()
     } else if five_hours {
-        "5-hour limit".into()
+        tr(language, "5-hour limit").into()
     } else {
         window.label.clone()
     }
@@ -182,6 +190,15 @@ pub fn window_display_label(window: &UsageWindow) -> String {
 /// later day reads "resets Sun 6:00 a.m.", and a past or unknown reset says
 /// nothing.
 pub fn reset_clock_label(reset_at: Option<i64>, now: i64, offset_secs: i64) -> String {
+    reset_clock_label_in(Language::English, reset_at, now, offset_secs)
+}
+
+pub fn reset_clock_label_in(
+    language: Language,
+    reset_at: Option<i64>,
+    now: i64,
+    offset_secs: i64,
+) -> String {
     let Some(reset_at) = reset_at.filter(|at| *at > now) else {
         return String::new();
     };
@@ -199,12 +216,14 @@ pub fn reset_clock_label(reset_at: Option<i64>, now: i64, offset_secs: i64) -> S
         format!("{hour}:{minute:02} {meridiem}")
     };
     if local_day(reset_at, offset_secs) == local_day(now, offset_secs) {
-        format!("resets at {}", clock(reset_at))
+        tr(language, "resets at {time}").replace("{time}", &clock(reset_at))
     } else {
         const WEEKDAYS: [&str; 7] = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
         // 1970-01-01 (day 0) was a Thursday, four days into the table.
         let weekday = (local_day(reset_at, offset_secs) + 4).rem_euclid(7) as usize;
-        format!("resets {} {}", WEEKDAYS[weekday], clock(reset_at))
+        tr(language, "resets {weekday} {time}")
+            .replace("{weekday}", tr(language, WEEKDAYS[weekday]))
+            .replace("{time}", &clock(reset_at))
     }
 }
 
