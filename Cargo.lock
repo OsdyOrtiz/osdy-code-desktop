@@ -2391,7 +2391,7 @@ dependencies = [
 
 [[package]]
 name = "gentle-core"
-version = "0.1.28"
+version = "1.0.0"
 dependencies = [
  "markdown",
  "regex",
@@ -2401,7 +2401,7 @@ dependencies = [
 
 [[package]]
 name = "gentle-shell-gpui"
-version = "0.1.28"
+version = "1.0.0"
 dependencies = [
  "alacritty_terminal",
  "anyhow",
@@ -5668,7 +5668,7 @@ dependencies = [
 
 [[package]]
 name = "pi-rpc"
-version = "0.1.28"
+version = "1.0.0"
 dependencies = [
  "anyhow",
  "async-channel",
