@@ -635,7 +635,7 @@ App paths: `dirs::data_dir()/osdy-code-desktop/` (on macOS, `~/Library/Applicati
 | Launcher `config.json` (`mode`, `dir`): `pi_rpc::launcher_config_path()`, `GENTLE_SHELL_CONFIG` or `~/.gentle-shell/config.json` | Launcher | R | `pi-rpc/home.rs` |
 | Launcher `config.json` (`startupReleaseCheck`, `skippedStartupRelease`) | Launcher, shared | R/W | `features/updates/` (same `launcher_config_path()`) |
 | `<agent>/auth.json` | Pi | R (Pi writes it via `login-helper.mjs`; Configuration's Sign-ins and provider check use `get_auth_status` when the active tab's Shell advertises it) | `usage/credentials.rs`, `settings/snapshot.rs`, `setup/extras.rs` |
-| `<agent>/settings.json` | Pi | R/W | `themes.rs` (`theme`), `sessions/discovery.rs` (`sessionDir`), `profiles/files.rs` (orchestrator), `setup/gentle.rs` (`packages`) |
+| `<agent>/settings.json` | Pi | R/W | `sessions/discovery.rs` (`sessionDir`), `profiles/files.rs` (orchestrator), `setup/gentle.rs` (`packages`) |
 | `<agent>/models.json`, `<agent>/mcp.json` | Pi | R (`mcp.json` changes only through `gentle-shell mcp add`, so Pi writes it) | `settings/snapshot.rs`, `setup/extras.rs`, `setup/maestro.rs` |
 | `<agent>/subagents.json`, `<cwd>/.pi/subagents.json` | Gentle AI | R/W (over RPC, read as the `subagents` store; written only by Make default) | `profiles/env.rs`, `profiles/apply.rs` |
 | `<agent>/gentle-ai/managed-assets.json` | Gentle AI installer | R/W (over RPC, read as the `managed_assets` store; written only by Make default) | `profiles/apply.rs` |

@@ -1,8 +1,8 @@
 //! Osdy Code Desktop's startup banner: the braille rose from Gentle Shell
 //! and the pixel "OSDY CODE" wordmark, drawn as real pixels instead of terminal
 //! glyphs. The rose comes from `gentle_rose.txt` and `gentle_rose_color.txt`;
-//! palettes and `banner.json` semantics come from gentle-pi's
-//! `extensions/startup-banner.ts`.
+//! `banner.json`'s `showRose`/`showTextLogo` semantics come from gentle-pi's
+//! `extensions/startup-banner.ts`; the colors are Tokyo Night's.
 
 use std::path::Path;
 use std::sync::LazyLock;
@@ -238,21 +238,19 @@ pub struct BannerConfig {
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Palette {
-    Pink,
-    Cyan,
-    Yellow,
-    Green,
+    /// The app's colors: a purple rose, a blue wordmark and its dark blue shadow.
+    TokyoNight,
+    /// Everything required is installed: the welcome's banner turns
+    /// Tokyo Night's green.
+    Ready,
 }
 
 impl Palette {
     /// (rose, logo ink, logo shadow)
     fn colors(self) -> (Rgba, Rgba, Rgba) {
-        let c = |r: u32, g: u32, b: u32| rgb((r << 16) | (g << 8) | b);
         match self {
-            Self::Pink => (c(255, 118, 195), c(255, 118, 195), c(120, 45, 80)),
-            Self::Cyan => (c(95, 210, 255), c(105, 220, 255), c(25, 80, 100)),
-            Self::Yellow => (c(255, 210, 95), c(255, 215, 105), c(105, 75, 25)),
-            Self::Green => (c(110, 220, 145), c(120, 230, 150), c(30, 95, 50)),
+            Self::TokyoNight => (rgb(0xbb9af7), rgb(0x7aa2f7), rgb(0x3d59a1)),
+            Self::Ready => (rgb(0x9ece6a), rgb(0x9ece6a), rgb(0x41592c)),
         }
     }
 }
@@ -262,7 +260,7 @@ impl Default for BannerConfig {
         Self {
             show_rose: true,
             show_text_logo: true,
-            palette: Palette::Pink,
+            palette: Palette::TokyoNight,
         }
     }
 }
@@ -270,8 +268,8 @@ impl Default for BannerConfig {
 /// A solid theme's banner colors: the rose blooms in `petal` (the theme's
 /// accent — what `ui::petal()` reads), the wordmark is written in its
 /// `fg`, and the shadow dims from the ink (like the fixed palettes: dimmer
-/// and grayer than the ink). Other themes keep the palette `banner.json`
-/// chose, so this only runs for solid ones.
+/// and grayer than the ink). Other themes keep the config's [`Palette`],
+/// so this only runs for solid ones.
 fn solid_colors(petal: Hsla, fg: Hsla) -> (Hsla, Hsla, Hsla) {
     let shadow = Hsla {
         l: fg.l * 0.44,
@@ -282,7 +280,8 @@ fn solid_colors(petal: Hsla, fg: Hsla) -> (Hsla, Hsla, Hsla) {
 }
 
 /// `<config>/banner.json`, tolerant like the launcher's own read: missing or
-/// malformed fields fall back to the defaults.
+/// malformed fields fall back to the defaults. Its `color` picks the
+/// terminal banner's palette; the desktop is always Tokyo Night.
 pub fn read_config(config_home: &Path) -> BannerConfig {
     let default = BannerConfig::default();
     let Ok(raw) = std::fs::read_to_string(config_home.join("banner.json")) else {
@@ -296,12 +295,7 @@ pub fn read_config(config_home: &Path) -> BannerConfig {
         show_text_logo: value["showTextLogo"]
             .as_bool()
             .unwrap_or(default.show_text_logo),
-        palette: match value["color"].as_str() {
-            Some("cyan") => Palette::Cyan,
-            Some("yellow") => Palette::Yellow,
-            Some("green") => Palette::Green,
-            _ => Palette::Pink,
-        },
+        palette: default.palette,
     }
 }
 
@@ -375,7 +369,7 @@ fn lighten(color: Hsla, by: f32) -> Hsla {
 pub fn banner(config: BannerConfig, scale: f32, reveal: f32) -> impl IntoElement {
     let art = &*ART;
     // A solid theme tints the banner in its own colors; every other theme
-    // keeps the palette banner.json chose (which stays read-only).
+    // keeps the config's palette (Tokyo Night, or green once ready).
     let (rose_base, ink, shadow) = if themes::solid() {
         // The petal is the theme's accent (the same color; the palette only
         // carries it under `accent`).
@@ -577,6 +571,7 @@ mod tests {
         let dir = std::env::temp_dir().join(format!("gs-banner-test-{}", std::process::id()));
         std::fs::create_dir_all(&dir).unwrap();
         assert_eq!(read_config(&dir), BannerConfig::default());
+        assert_eq!(BannerConfig::default().palette, Palette::TokyoNight);
         std::fs::write(
             dir.join("banner.json"),
             r#"{"showRose":false,"color":"cyan"}"#,
@@ -587,7 +582,8 @@ mod tests {
             BannerConfig {
                 show_rose: false,
                 show_text_logo: true,
-                palette: Palette::Cyan
+                // The desktop is always Tokyo Night: the terminal's color stays the terminal's.
+                palette: Palette::TokyoNight
             }
         );
         std::fs::remove_dir_all(dir).unwrap();

@@ -24,7 +24,7 @@ impl WelcomeView {
         let mut config = self.banner;
         if ready {
             // Everything required is in place: the rose blooms green.
-            config.palette = Palette::Green;
+            config.palette = Palette::Ready;
             return ui::pop_in(
                 "welcome-banner-ready",
                 div().child(banner(config, BANNER_SCALE, 1.)),

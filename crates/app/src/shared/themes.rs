@@ -18,7 +18,7 @@ use crate::shared::backdrop::{self, Backdrop};
 use crate::shared::ui;
 
 /// The theme used when nothing else is chosen (and the fallback for unknown names).
-pub const DEFAULT_THEME: &str = "Gentleman-Cute";
+pub const DEFAULT_THEME: &str = "Tokyo Night";
 
 /// Gentle Shell's themes, embedded so the app looks right before (or
 /// without) finding the installed `gentle-pi`; the installed files win.
@@ -622,10 +622,10 @@ fn same_name(a: &str, b: &str) -> bool {
     a.trim().eq_ignore_ascii_case(b.trim())
 }
 
-/// Persisted choice, then Pi's `settings.json` `theme`, then Gentleman-Cute;
-/// a name the catalog doesn't have falls through to the next.
-pub fn pick_default(catalog: &[Theme], persisted: Option<&str>, pi: Option<&str>) -> usize {
-    [persisted, pi, Some(DEFAULT_THEME)]
+/// The app's persisted choice, then Tokyo Night; a name the catalog doesn't
+/// have falls through. Pi's own `theme` styles the terminal, not this app.
+pub fn pick_default(catalog: &[Theme], persisted: Option<&str>) -> usize {
+    [persisted, Some(DEFAULT_THEME)]
         .into_iter()
         .flatten()
         .find_map(|name| catalog.iter().position(|t| same_name(&t.name, name)))
@@ -675,11 +675,6 @@ pub fn read_glass(path: &Path) -> Glass {
 /// factor, `1.25` for 125 %), rounded and kept in range.
 pub fn read_interface_size(path: &Path) -> Option<u16> {
     interface_size::from_factor(read_key(path, "interfaceScale")?.as_f64()?)
-}
-
-/// Pi's `settings.json` `theme` in the agent dir.
-pub fn read_pi_setting(agent: &Path) -> Option<String> {
-    read_theme_key(&agent.join("settings.json"))
 }
 
 /// `key` of the app's settings file, if the file and the key exist.
@@ -952,13 +947,13 @@ impl Glass {
     };
 }
 
-/// The resolved active theme; Gentleman-Cute until [`init`] runs.
+/// The resolved active theme; Tokyo Night until [`init`] runs.
 static ACTIVE: LazyLock<RwLock<Resolved>> = LazyLock::new(|| {
-    let cute = embedded_gentle()
+    let default = builtin_themes()
         .into_iter()
         .find(|t| t.name == DEFAULT_THEME)
-        .expect("Gentleman-Cute is embedded");
-    RwLock::new(Resolved::new(&cute, Glass::DEFAULT))
+        .expect("Tokyo Night is built in");
+    RwLock::new(Resolved::new(&default, Glass::DEFAULT))
 });
 
 /// Read the active UI palette.
@@ -1099,9 +1094,8 @@ pub fn init(cx: &mut App) {
             chosen.set(slot, found);
         }
     }
-    let pi = read_pi_setting(&agent);
     let catalog = load_catalog(Vec::new(), read_user_themes(&agent));
-    let active = pick_default(&catalog, persisted.as_deref(), pi.as_deref());
+    let active = pick_default(&catalog, persisted.as_deref());
     install(&catalog[active], glass);
     cx.set_global(Themes {
         catalog,
@@ -1128,7 +1122,7 @@ pub fn init(cx: &mut App) {
         if gentle.is_empty() {
             return;
         }
-        cx.update(|cx| merge_gentle(gentle, persisted, pi, cx));
+        cx.update(|cx| merge_gentle(gentle, persisted, cx));
     })
     .detach();
     watch_user_themes(agent, cx);
@@ -1212,7 +1206,7 @@ fn replace_user_themes(user: Vec<Theme>, cx: &mut App) {
     let active = catalog
         .iter()
         .position(|t| same_name(&t.name, &before.name))
-        .unwrap_or_else(|| pick_default(&catalog, None, None));
+        .unwrap_or_else(|| pick_default(&catalog, None));
     let changed = catalog[active] != before;
     if changed {
         install(&catalog[active], glass);
@@ -1281,13 +1275,12 @@ pub fn share_text(theme: &Theme) -> Option<Result<(String, String), String>> {
 }
 
 /// Swap the installed Gentle themes in, re-applying when the active one changed.
-fn merge_gentle(gentle: Vec<Theme>, persisted: Option<String>, pi: Option<String>, cx: &mut App) {
+fn merge_gentle(gentle: Vec<Theme>, persisted: Option<String>, cx: &mut App) {
     let themes = cx.global::<Themes>();
     let before = themes.active_theme().clone();
     let (glass, interface_size) = (themes.glass, themes.interface_size);
     let chosen = themes.fonts.clone();
-    let explicit =
-        themes.active != pick_default(&themes.catalog, persisted.as_deref(), pi.as_deref());
+    let explicit = themes.active != pick_default(&themes.catalog, persisted.as_deref());
     let user: Vec<Theme> = themes
         .catalog
         .iter()
@@ -1303,7 +1296,7 @@ fn merge_gentle(gentle: Vec<Theme>, persisted: Option<String>, pi: Option<String
             .position(|t| same_name(&t.name, &before.name))
             .unwrap_or(0)
     } else {
-        pick_default(&catalog, persisted.as_deref(), pi.as_deref())
+        pick_default(&catalog, persisted.as_deref())
     };
     let changed = catalog[active] != before;
     if changed {
@@ -1617,26 +1610,24 @@ mod tests {
     fn default_selection_precedence() {
         let catalog = load_catalog(Vec::new(), Vec::new());
         let at = |name: &str| catalog.iter().position(|t| t.name == name).unwrap();
-        assert_eq!(
-            pick_default(&catalog, Some("Nord"), Some("Dracula")),
-            at("Nord")
-        );
-        assert_eq!(pick_default(&catalog, None, Some("dracula")), at("Dracula"));
-        assert_eq!(pick_default(&catalog, None, None), at("Gentleman-Cute"));
+        assert_eq!(pick_default(&catalog, Some("Nord")), at("Nord"));
+        assert_eq!(pick_default(&catalog, Some("dracula")), at("Dracula"));
+        assert_eq!(pick_default(&catalog, None), at("Tokyo Night"));
     }
 
     #[test]
     fn unknown_names_fall_back() {
         let catalog = load_catalog(Vec::new(), Vec::new());
         let at = |name: &str| catalog.iter().position(|t| t.name == name).unwrap();
-        assert_eq!(
-            pick_default(&catalog, Some("Gone"), Some("Dracula")),
-            at("Dracula")
-        );
-        assert_eq!(
-            pick_default(&catalog, Some("Gone"), Some("dark")),
-            at("Gentleman-Cute")
-        );
+        assert_eq!(pick_default(&catalog, Some("Gone")), at("Tokyo Night"));
+    }
+
+    #[test]
+    fn the_theme_before_init_is_the_default() {
+        // Tokyo Night's background, untouched by contrast (the terminal keeps it).
+        let bg = ACTIVE.read().unwrap_or_else(|e| e.into_inner()).term.bg;
+        assert_eq!(bg, 0x1a1b26);
+        assert_eq!(DEFAULT_THEME, "Tokyo Night");
     }
 
     #[test]
@@ -1916,13 +1907,11 @@ mod tests {
         )
         .unwrap();
         std::fs::write(dir.join("themes").join("bad.json"), "{").unwrap();
-        std::fs::write(dir.join("settings.json"), r#"{"theme":"Zeta"}"#).unwrap();
         let themes = read_theme_dir(&dir.join("themes"), Source::Pi);
         assert_eq!(
             themes.iter().map(|t| t.name.as_str()).collect::<Vec<_>>(),
             ["Alpha", "Zeta"]
         );
-        assert_eq!(read_pi_setting(&dir).as_deref(), Some("Zeta"));
         let _ = std::fs::remove_dir_all(dir);
     }
 

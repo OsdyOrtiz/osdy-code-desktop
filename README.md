@@ -260,7 +260,7 @@ Extension notices go to a notification center instead of piling up as toasts; on
 
 ### Start screen — The rose, written in
 
-The rose from Gentle Shell and the Osdy Code Desktop pixel wordmark, written in like the terminal intro. It follows `banner.json` (`showRose`, `showTextLogo`, `color`).
+The rose from Gentle Shell and the Osdy Code Desktop pixel wordmark, written in like the terminal intro. It follows `banner.json` (`showRose`, `showTextLogo`) and is drawn in Tokyo Night's colors (a solid theme tints it in its own).
 
 ---
 
