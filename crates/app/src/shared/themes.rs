@@ -18,7 +18,7 @@ use crate::shared::backdrop::{self, Backdrop};
 use crate::shared::ui;
 
 /// The theme used when nothing else is chosen (and the fallback for unknown names).
-pub const DEFAULT_THEME: &str = "Tokyo Night";
+pub const DEFAULT_THEME: &str = "Mapache Neon Tokyo";
 
 /// Gentle Shell's themes, embedded so the app looks right before (or
 /// without) finding the installed `gentle-pi`; the installed files win.
@@ -535,6 +535,8 @@ fn embedded_gentle() -> Vec<Theme> {
 /// Themes with backdrops the app ships as examples (its `theme-examples`):
 /// the user's or the agent's own app themes of the same name replace them.
 const EXAMPLES: &[&str] = &[
+    // The default theme ([`DEFAULT_THEME`]): pixel-art Tokyo at night.
+    include_str!("../../themes/examples/mapache-neon-tokyo.json"),
     include_str!("../../themes/examples/aurora.json"),
     include_str!("../../themes/examples/petals.json"),
     include_str!("../../themes/examples/moonlit.json"),
@@ -622,7 +624,7 @@ fn same_name(a: &str, b: &str) -> bool {
     a.trim().eq_ignore_ascii_case(b.trim())
 }
 
-/// The app's persisted choice, then Tokyo Night; a name the catalog doesn't
+/// The app's persisted choice, then [`DEFAULT_THEME`]; a name the catalog doesn't
 /// have falls through. Pi's own `theme` styles the terminal, not this app.
 pub fn pick_default(catalog: &[Theme], persisted: Option<&str>) -> usize {
     [persisted, Some(DEFAULT_THEME)]
@@ -943,12 +945,13 @@ impl Glass {
     };
 }
 
-/// The resolved active theme; Tokyo Night until [`init`] runs.
+/// The resolved active theme; [`DEFAULT_THEME`] until [`init`] runs.
 static ACTIVE: LazyLock<RwLock<Resolved>> = LazyLock::new(|| {
-    let default = builtin_themes()
+    let default = example_themes()
         .into_iter()
+        .chain(builtin_themes())
         .find(|t| t.name == DEFAULT_THEME)
-        .expect("Tokyo Night is built in");
+        .expect("the default theme is embedded");
     RwLock::new(Resolved::new(&default, Glass::DEFAULT))
 });
 
@@ -1603,22 +1606,25 @@ mod tests {
         let at = |name: &str| catalog.iter().position(|t| t.name == name).unwrap();
         assert_eq!(pick_default(&catalog, Some("Nord")), at("Nord"));
         assert_eq!(pick_default(&catalog, Some("dracula")), at("Dracula"));
-        assert_eq!(pick_default(&catalog, None), at("Tokyo Night"));
+        assert_eq!(pick_default(&catalog, None), at("Mapache Neon Tokyo"));
     }
 
     #[test]
     fn unknown_names_fall_back() {
         let catalog = load_catalog(Vec::new(), Vec::new());
         let at = |name: &str| catalog.iter().position(|t| t.name == name).unwrap();
-        assert_eq!(pick_default(&catalog, Some("Gone")), at("Tokyo Night"));
+        assert_eq!(
+            pick_default(&catalog, Some("Gone")),
+            at("Mapache Neon Tokyo")
+        );
     }
 
     #[test]
     fn the_theme_before_init_is_the_default() {
-        // Tokyo Night's background, untouched by contrast (the terminal keeps it).
+        // Mapache Neon Tokyo's background, untouched by contrast (the terminal keeps it).
         let bg = ACTIVE.read().unwrap_or_else(|e| e.into_inner()).term.bg;
-        assert_eq!(bg, 0x1a1b26);
-        assert_eq!(DEFAULT_THEME, "Tokyo Night");
+        assert_eq!(bg, 0x15112b);
+        assert_eq!(DEFAULT_THEME, "Mapache Neon Tokyo");
     }
 
     #[test]
