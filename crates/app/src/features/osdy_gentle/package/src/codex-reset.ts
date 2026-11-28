@@ -1,4 +1,4 @@
-import { resolveLocale, translator, type Locale, type Translate } from "./i18n.ts";
+import { currentLocale, translator, type Locale, type Translate } from "./i18n.ts";
 import { randomUUID } from "node:crypto";
 import { assertTokenUsable, extractCodexAccountId, type CodexUsageAuth } from "./codex-usage.ts";
 import { createCodexResetStore, type CodexResetAttempt, type CodexResetLease, type CodexResetStore } from "./codex-reset-store.ts";
@@ -189,7 +189,7 @@ export function createCodexResetActions(deps: CodexResetOptions): CodexResetActi
 
 	return {
 		async redeem() {
-			const locale = resolveLocale();
+			const locale = currentLocale();
 			const t = translator(locale);
 			return present(await redeem(locale, t), t);
 		},

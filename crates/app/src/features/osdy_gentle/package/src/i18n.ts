@@ -1,3 +1,4 @@
+import { AsyncLocalStorage } from "node:async_hooks";
 import { readFileSync } from "node:fs";
 
 export type Locale = "en" | "es";
@@ -62,7 +63,7 @@ const es = {
 	"{account} no longer changes the model profile.": "La cuenta {account} ya no cambia el perfil de modelo.",
 	"{account} now applies model profile \"{choice}\".": "Ahora la cuenta {account} aplica el perfil de modelo «{choice}».",
 	"Account quota": "Cuota de la cuenta",
-	"Banked resets are unavailable in this Pi runtime.": "Los reinicios acumulados no están disponibles en esta versión de Pi.",
+	"Banked resets are unavailable in this Pi runtime.": "Los reinicios acumulados no están disponibles en este entorno de ejecución de Pi.",
 	"Banked reset for the active Codex account": "Reinicio acumulado para la cuenta activa de Codex",
 	"Cancel": "Cancelar",
 	"Use a banked reset": "Usar un reinicio acumulado",
@@ -186,7 +187,22 @@ export type Key = keyof typeof es;
 export type Vars = Record<string, string | number>;
 export type Translate = (key: Key, vars?: Vars) => string;
 
-export function translator(locale: Locale = resolveLocale()): Translate {
+// A command keeps the language it started in: every message it shows,
+// including errors thrown deep in the account store, uses the locale read
+// at entry, even if the app's language changes while a dialog is open.
+const entryLocale = new AsyncLocalStorage<Locale>();
+
+/** The locale of the running command, or the current one outside a command. */
+export function currentLocale(): Locale {
+	return entryLocale.getStore() ?? resolveLocale();
+}
+
+/** Run a command body with its locale fixed at entry (nested calls keep the outer one). */
+export function inEntryLocale<T>(body: () => T): T {
+	return entryLocale.getStore() === undefined ? entryLocale.run(resolveLocale(), body) : body();
+}
+
+export function translator(locale: Locale = currentLocale()): Translate {
 	return (key, vars = {}) => (locale === "es" ? es[key] : key).replace(
 		/\{([\w.]+)\}/g,
 		(placeholder, name: string) => Object.hasOwn(vars, name) ? String(vars[name]) : placeholder,

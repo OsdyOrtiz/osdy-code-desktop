@@ -2,7 +2,7 @@
  * Osdy account commands, built only from dialogs Gentle Shell
  * desktop renders over RPC: select, confirm, input and notify.
  */
-import { resolveLocale, translator, type Locale, type Translate } from "./i18n.ts";
+import { currentLocale, inEntryLocale, translator, type Locale, type Translate } from "./i18n.ts";
 import {
 	AccountSwitchBusyError,
 	createProfile,
@@ -120,7 +120,7 @@ async function ensureIdle(ctx: CommandContext, t: Translate): Promise<boolean> {
  * model profile (this session). The two steps are not transactional, so a
  * profile failure after a successful switch is reported as partial.
  */
-export async function activateProfile(ctx: CommandContext, deps: Deps, account: string, { confirmFirst = true, locale = resolveLocale() } = {}): Promise<void> {
+export async function activateProfile(ctx: CommandContext, deps: Deps, account: string, { confirmFirst = true, locale = currentLocale() } = {}): Promise<void> {
 	const t = translator(locale);
 	const bound = bindingFor(await readBindings(deps.agentDir), account);
 	let service: ProfilesService | undefined;
@@ -192,7 +192,7 @@ export async function activateProfile(ctx: CommandContext, deps: Deps, account: 
 	}
 }
 
-export async function osdyProfileCommand(args: string, ctx: CommandContext, deps: Deps, locale = resolveLocale()): Promise<void> {
+async function osdyProfileCommandBody(args: string, ctx: CommandContext, deps: Deps, locale = currentLocale()): Promise<void> {
 	const t = translator(locale);
 	const requested = args.trim();
 	if (requested) {
@@ -207,7 +207,7 @@ export async function osdyProfileCommand(args: string, ctx: CommandContext, deps
 	if (account) await activateProfile(ctx, deps, account, { locale });
 }
 
-export async function osdyUsageCommand(args: string, ctx: CommandContext, deps: Deps): Promise<void> {
+async function osdyUsageCommandBody(args: string, ctx: CommandContext, deps: Deps): Promise<void> {
 	const t = translator();
 	const requested = args.trim();
 	if (!requested) {
@@ -240,8 +240,8 @@ const ACTIONS = [
 	"Import accounts from Osdy-Pi",
 ] as const;
 
-export async function osdyAccountCommand(_args: string, ctx: CommandContext, deps: Deps): Promise<void> {
-	const locale = resolveLocale();
+async function osdyAccountCommandBody(_args: string, ctx: CommandContext, deps: Deps): Promise<void> {
+	const locale = currentLocale();
 	const t = translator(locale);
 	const labels = ACTIONS.map(action => t(action));
 	const action = await ctx.ui.select(t("Osdy accounts"), labels);
@@ -354,4 +354,16 @@ export async function osdyAccountCommand(_args: string, ctx: CommandContext, dep
 		default:
 			return;
 	}
+}
+
+export function osdyProfileCommand(...args: Parameters<typeof osdyProfileCommandBody>): Promise<void> {
+	return inEntryLocale(() => osdyProfileCommandBody(...args));
+}
+
+export function osdyUsageCommand(...args: Parameters<typeof osdyUsageCommandBody>): Promise<void> {
+	return inEntryLocale(() => osdyUsageCommandBody(...args));
+}
+
+export function osdyAccountCommand(...args: Parameters<typeof osdyAccountCommandBody>): Promise<void> {
+	return inEntryLocale(() => osdyAccountCommandBody(...args));
 }
