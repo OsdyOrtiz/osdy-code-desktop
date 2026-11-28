@@ -44,9 +44,10 @@ const es = {
 	"Model profile \"{bound}\" was not applied.": "No se aplicó el perfil de modelo «{bound}».",
 	"Unknown account: {requested}": "Cuenta desconocida: {requested}",
 	"Switch Osdy profile (account + model)": "Cambiar de perfil Osdy (cuenta y modelo)",
-	"Usage: /osdy-usage <name>": "Uso: /osdy-usage <nombre>",
+	"Usage: /osdy-usage <name> | --all": "Uso: /osdy-usage <nombre> | --all",
 	"Could not list saved accounts.": "No se pudieron listar las cuentas guardadas.",
 	"Codex quota unavailable.": "Cuota de Codex no disponible.",
+	"Accounts with unavailable Codex quota: {count}.": "Cuentas con cuota de Codex no disponible: {count}.",
 	"Link model profile to an account": "Vincular un perfil de modelo a una cuenta",
 	"Check account quota": "Consultar la cuota de una cuenta",
 	"Use or check banked reset": "Usar o consultar un reinicio acumulado",
@@ -117,7 +118,7 @@ const es = {
 	"Switch Osdy profile: Codex account (all tabs) + linked Gentle model profile": "Cambia de perfil Osdy: cuenta de Codex (todas las pestañas) y perfil de modelo de Gentle vinculado",
 	"Manage Osdy Codex accounts: switch, link model profile, quota, banked resets, save, add, rename, remove, import": "Gestiona las cuentas de Codex de Osdy: cambia de cuenta, vincula perfiles de modelo, consulta cuotas, usa reinicios acumulados y guarda, añade, renombra, elimina o importa cuentas",
 	"Report Pi auth owner compatibility without reading credentials or testing the lock": "Comprueba la compatibilidad con el gestor de autenticación de Pi sin leer credenciales ni probar el bloqueo",
-	"View Codex quota without switching accounts: /osdy-usage <name>": "Consulta la cuota de Codex sin cambiar de cuenta: /osdy-usage <nombre>",
+	"View Codex quota without switching accounts: /osdy-usage <name> | --all": "Consulta la cuota de Codex sin cambiar de cuenta: /osdy-usage <nombre> | --all",
 
 	// codex-usage
 	"session": "sesión",

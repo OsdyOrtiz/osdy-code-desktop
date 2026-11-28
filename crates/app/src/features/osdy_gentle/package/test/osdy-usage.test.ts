@@ -7,7 +7,11 @@ import osdyGentle from "../src/index.ts";
 import { createProfile, readActiveAccount } from "../src/account-store.ts";
 import { readBindings, setBinding } from "../src/bindings.ts";
 
-async function setup(t: TestContext) {
+async function setup(t: TestContext, { both = false, beforeResponse, onFeed }: {
+	both?: boolean;
+	beforeResponse?: (id: string | null) => Promise<void>;
+	onFeed?: (value: ReturnType<typeof feed>) => void;
+} = {}) {
 	const directory = await mkdtemp(join(tmpdir(), "osdy-usage-"));
 	const previous = process.env.PI_CODING_AGENT_DIR;
 	process.env.PI_CODING_AGENT_DIR = directory;
@@ -22,17 +26,21 @@ async function setup(t: TestContext) {
 	await writeFile(join(store, "active-account.json"), JSON.stringify({ version: 1, profile: "Personal" }));
 	await setBinding(directory, "Work", "model-work");
 	const jwt = (value: object) => Buffer.from(JSON.stringify(value)).toString("base64url");
-	const access = `${jwt({ alg: "none" })}.${jwt({ "https://api.openai.com/auth": { chatgpt_account_id: "fixture-work" } })}.fixture`;
-	await writeFile(join(store, "profiles", "Work", "auth.json"), JSON.stringify({
-		"openai-codex": { type: "oauth", access, expires: Date.now() + 60_000 },
-	}), { mode: 0o600 });
+	for (const name of both ? ["Personal", "Work"] : ["Work"]) {
+		const access = `${jwt({ alg: "none" })}.${jwt({ "https://api.openai.com/auth": { chatgpt_account_id: `fixture-${name.toLowerCase()}` } })}.fixture`;
+		await writeFile(join(store, "profiles", name, "auth.json"), JSON.stringify({
+			"openai-codex": { type: "oauth", access, expires: Date.now() + 60_000 },
+		}), { mode: 0o600 });
+	}
 	const requests: (string | null)[] = [];
-	let fail = false;
+	let failing: string | undefined;
 	let primarySeconds = 18_000;
 	let secondarySeconds = 604_800;
 	t.mock.method(globalThis, "fetch", async (_url: string, init: RequestInit) => {
-		requests.push(new Headers(init.headers).get("chatgpt-account-id"));
-		if (fail) return new Response(null, { status: 503 });
+		const id = new Headers(init.headers).get("chatgpt-account-id");
+		requests.push(id);
+		await beforeResponse?.(id);
+		if (id === failing) return new Response(null, { status: 503 });
 		return Response.json({
 			plan_type: "provider-supplied metadata",
 			rate_limit_reset_credits: { available_count: 3 },
@@ -56,7 +64,9 @@ async function setup(t: TestContext) {
 			assert.equal(key, "osdy-gentle:codex-accounts");
 			if (lines) {
 				assert.equal(lines.length, 1);
-				publications.push(JSON.parse(lines[0]!));
+				const value = JSON.parse(lines[0]!);
+				publications.push(value);
+				onFeed?.(value);
 			}
 		},
 	} };
@@ -80,7 +90,7 @@ async function setup(t: TestContext) {
 		async runPicker(name: string, select: (title: string, options: string[]) => Promise<string | undefined>) {
 			await commands.get(name)!.handler("", { ...ctx, ui: { ...ctx.ui, select } });
 		},
-		fail: () => { fail = true; },
+		fail: () => { failing = "fixture-work"; },
 		largeWindows: () => { primarySeconds = 1e22; secondarySeconds = 1e24; },
 		async run(args: string) {
 			const command = commands.get("osdy-usage");
@@ -93,11 +103,64 @@ async function setup(t: TestContext) {
 	};
 }
 
-function feed(quota: string | null) {
+const quotaEn = "5h 75% left · weekly 40% left";
+const quotaEs = "5h 75% disp. · semanal 40% disp.";
+
+function feed(quota: string | null, personalQuota: string | null = null) {
 	return { v: 1, active: "Personal", accounts: [
-		{ name: "Personal", active: true, binding: null, quota: null },
+		{ name: "Personal", active: true, binding: null, quota: personalQuota },
 		{ name: "Work", active: false, binding: "model-work", quota },
 	] };
+}
+
+test("/osdy-usage --all fetches every account once and publishes without waiting for slower accounts", async (t) => {
+	let releaseWork!: () => void;
+	const work = new Promise<void>((resolve) => { releaseWork = resolve; });
+	let publishedPersonal!: () => void;
+	const personal = new Promise<"published">((resolve) => { publishedPersonal = () => resolve("published"); });
+	const h = await setup(t, {
+		both: true,
+		beforeResponse: async (id) => { if (id === "fixture-work") await work; },
+		onFeed: ({ accounts }) => { if (accounts[0]?.quota) publishedPersonal(); },
+	});
+	const run = h.run("  --all  ");
+	let timeout: ReturnType<typeof setTimeout> | undefined;
+	let progress: string;
+	try {
+		progress = await Promise.race([
+			personal,
+			run.then(() => "finished"),
+			new Promise<string>((resolve) => { timeout = setTimeout(() => resolve("timed out"), 2_000); }),
+		]);
+	} finally {
+		clearTimeout(timeout);
+		releaseWork();
+		await run;
+	}
+	assert.deepEqual(h.requests.toSorted(), ["fixture-personal", "fixture-work"]);
+	assert.equal(progress, "published");
+	assert.deepEqual(h.publications, [feed(null), feed(null, quotaEn), feed(quotaEn, quotaEn)]);
+	assert.deepEqual(h.notices, []);
+});
+
+for (const { locale, quota, notice } of [
+	{ locale: "en", quota: quotaEn, notice: "Accounts with unavailable Codex quota: 1." },
+	{ locale: "es", quota: quotaEs, notice: "Cuentas con cuota de Codex no disponible: 1." },
+]) {
+	test(`/osdy-usage --all preserves failed quota and reports the failure once (${locale})`, async (t) => {
+		const h = await setup(t, { both: true });
+		const previous = process.env.OSDY_DESKTOP_LOCALE_FILE;
+		const localeFile = join(process.env.PI_CODING_AGENT_DIR!, "locale");
+		await writeFile(localeFile, locale);
+		process.env.OSDY_DESKTOP_LOCALE_FILE = localeFile;
+		t.after(() => { if (previous === undefined) delete process.env.OSDY_DESKTOP_LOCALE_FILE; else process.env.OSDY_DESKTOP_LOCALE_FILE = previous; });
+		await h.run("Work");
+		h.fail();
+		await h.run("--all");
+		assert.deepEqual(h.requests.slice(1).toSorted(), ["fixture-personal", "fixture-work"]);
+		assert.deepEqual(h.notices, [[notice, "warning"]]);
+		assert.deepEqual(h.publications, [feed(null), feed(quota), feed(quota, quota)]);
+	});
 }
 
 test("/osdy-usage fetches only the named account and immediately republishes both windows", async (t) => {
@@ -114,7 +177,7 @@ test("/osdy-usage rejects unknown and missing names without fetching or publishi
 	const h = await setup(t);
 	await h.run("unknown account");
 	await h.run("  ");
-	assert.deepEqual(h.notices, [["Unknown account: unknown account", "error"], ["Usage: /osdy-usage <name>", "warning"]]);
+	assert.deepEqual(h.notices, [["Unknown account: unknown account", "error"], ["Usage: /osdy-usage <name> | --all", "warning"]]);
 	assert.deepEqual(h.requests, []);
 	await h.event("session_tree");
 	assert.deepEqual(h.publications, [feed(null)]);

@@ -128,7 +128,7 @@ export default function osdyGentle(pi: PiLike): void {
 	});
 
 	pi.registerCommand("osdy-usage", {
-		description: t("View Codex quota without switching accounts: /osdy-usage <name>"),
+		description: t("View Codex quota without switching accounts: /osdy-usage <name> | --all"),
 		handler: async (args, ctx) => {
 			const signal = session.signal;
 			const directory = await currentAgentDir();

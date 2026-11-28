@@ -211,12 +211,18 @@ async function osdyUsageCommandBody(args: string, ctx: CommandContext, deps: Dep
 	const t = translator();
 	const requested = args.trim();
 	if (!requested) {
-		ctx.ui.notify(t("Usage: /osdy-usage <name>"), "warning");
+		ctx.ui.notify(t("Usage: /osdy-usage <name> | --all"), "warning");
 		return;
 	}
 	const accounts = await listProfiles(deps.agentDir).catch(() => undefined);
 	if (!accounts) {
 		ctx.ui.notify(t("Could not list saved accounts."), "error");
+		return;
+	}
+	if (requested === "--all") {
+		const results = await mapLimit(accounts, 4, (account) => quotaFor(deps, account));
+		const count = results.filter((result) => result.status === "unavailable").length;
+		if (count) ctx.ui.notify(t("Accounts with unavailable Codex quota: {count}.", { count }), "warning");
 		return;
 	}
 	const account = accounts.find((name) => name.toLowerCase() === requested.toLowerCase());
