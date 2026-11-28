@@ -53,6 +53,7 @@ export function registerProfileWidget(
 	getAgentDir: () => string,
 	readAccount = readActiveAccount,
 	knownQuota: (agentDir: string, account: string) => CodexUsageSnapshot | undefined = () => undefined,
+	completedUsageRun: () => string | undefined = () => undefined,
 ): () => Promise<void> | undefined {
 	let session: WidgetSession | undefined;
 	let timer: ReturnType<typeof setInterval> | undefined;
@@ -85,6 +86,7 @@ export function registerProfileWidget(
 							quota: quota ? formatFeedQuota(quota, locale) : null,
 						};
 					}),
+					usageRun: completedUsageRun(),
 				}));
 				return;
 			}

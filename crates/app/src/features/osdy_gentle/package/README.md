@@ -8,7 +8,7 @@ It keeps the parts of [Osdy-Pi](https://github.com/OsdyOrtiz/Osdy-Pi) that work 
 | --- | --- |
 | `/osdy-account` Codex account snapshots | `/osdy-account` (switch, link model profile, quota, save, add, rename, remove, import) |
 | Profile selection | `/osdy-profile` = **Codex account + Gentle model profile** together |
-| Stored-account quota preview | `/osdy-usage <name>` refreshes one account; `/osdy-usage --all` refreshes every saved account. Neither switches accounts or prompts. Failed lookups keep the last known quota, and `--all` warns once with the failure count. Quotas are also shown in the `/osdy-profile` picker and in *Check account quota*. |
+| Stored-account quota preview | `/osdy-usage <name>` refreshes one account; `/osdy-usage --all` refreshes every saved account. Neither switches accounts or prompts. Failed lookups keep the last known quota, and `--all` warns once with the failure count. Desktop RPC callers can use `--all --run <id>` (1–32 ASCII letters, digits, or hyphens) to receive the last completed batch's ID as `usageRun` in the account feed, after all lookups and any failure notice. Quotas are also shown in the `/osdy-profile` picker and in *Check account quota*. |
 | Banked Codex resets | `/osdy-account` → **Use or check banked reset** for the active Codex account |
 | Sound alerts | Gentle Shell's native **Configuration › Notifications** with Osdy's sound ([below](#sound-alerts)) |
 

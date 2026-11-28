@@ -40,13 +40,18 @@ interface PiLike extends WidgetHost {
 export default function osdyGentle(pi: PiLike): void {
 	const t = translator();
 	let session = new AbortController();
+	let usageRun: string | undefined;
 	// Only snapshots from quota lookups requested by commands live here.
 	const quotas = new Map<string, Map<string, CodexUsageSnapshot>>();
-	pi.on?.("session_start", () => {
+	const stopSession = () => {
 		session.abort();
+		usageRun = undefined;
+	};
+	pi.on?.("session_start", () => {
+		stopSession();
 		session = new AbortController();
 	});
-	pi.on?.("session_shutdown", () => { session.abort(); });
+	pi.on?.("session_shutdown", stopSession);
 
 	let host: Promise<HostSdk | undefined> | undefined;
 	const getHost = () => (host ??= import("@earendil-works/pi-coding-agent").catch(() => undefined));
@@ -98,7 +103,11 @@ export default function osdyGentle(pi: PiLike): void {
 			}),
 		};
 	};
-	const refreshWidget = registerProfileWidget(pi, () => resolve(agentDir()), undefined, (directory, account) => quotas.get(directory)?.get(account));
+	const refreshWidget = registerProfileWidget(
+		pi, () => resolve(agentDir()), undefined,
+		(directory, account) => quotas.get(directory)?.get(account),
+		() => usageRun,
+	);
 
 	pi.registerCommand("osdy-profile", {
 		description: t("Switch Osdy profile: Codex account (all tabs) + linked Gentle model profile"),
@@ -128,12 +137,12 @@ export default function osdyGentle(pi: PiLike): void {
 	});
 
 	pi.registerCommand("osdy-usage", {
-		description: t("View Codex quota without switching accounts: /osdy-usage <name> | --all"),
+		description: t("View Codex quota without switching accounts: /osdy-usage <name> | --all [--run <id>]"),
 		handler: async (args, ctx) => {
 			const signal = session.signal;
 			const directory = await currentAgentDir();
 			let refresh: Promise<void> | undefined;
-			await osdyUsageCommand(args, ctx, {
+			const completedRun = await osdyUsageCommand(args, ctx, {
 				agentDir: directory,
 				events: pi.events,
 				startQuota(account) {
@@ -142,6 +151,10 @@ export default function osdyGentle(pi: PiLike): void {
 				},
 			});
 			await refresh;
+			if (completedRun !== undefined && !signal.aborted) {
+				usageRun = completedRun;
+				await refreshWidget();
+			}
 		},
 	});
 }

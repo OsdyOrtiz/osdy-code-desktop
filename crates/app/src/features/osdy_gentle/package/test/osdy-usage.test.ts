@@ -1,6 +1,5 @@
 import assert from "node:assert/strict";
 import { mkdtemp, rm, stat, writeFile } from "node:fs/promises";
-import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { test, type TestContext } from "node:test";
 import osdyGentle from "../src/index.ts";
@@ -10,9 +9,9 @@ import { readBindings, setBinding } from "../src/bindings.ts";
 async function setup(t: TestContext, { both = false, beforeResponse, onFeed }: {
 	both?: boolean;
 	beforeResponse?: (id: string | null) => Promise<void>;
-	onFeed?: (value: ReturnType<typeof feed>) => void;
+	onFeed?: (value: ReturnType<typeof feed> & { usageRun?: string }) => void;
 } = {}) {
-	const directory = await mkdtemp(join(tmpdir(), "osdy-usage-"));
+	const directory = await mkdtemp("/tmp/osdy-usage-");
 	const previous = process.env.PI_CODING_AGENT_DIR;
 	process.env.PI_CODING_AGENT_DIR = directory;
 	t.after(async () => {
@@ -56,6 +55,7 @@ async function setup(t: TestContext, { both = false, beforeResponse, onFeed }: {
 	const handlers = new Map<Parameters<Subscribe>[0], Parameters<Subscribe>[1][]>();
 	const publications: unknown[] = [];
 	const notices: unknown[] = [];
+	let clears = 0;
 	const unexpected = () => assert.fail("usage must not prompt, wait for idle or emit a profile event");
 	const ctx = { mode: "rpc", isIdle: unexpected, ui: {
 		select: unexpected, confirm: unexpected, input: unexpected,
@@ -67,6 +67,8 @@ async function setup(t: TestContext, { both = false, beforeResponse, onFeed }: {
 				const value = JSON.parse(lines[0]!);
 				publications.push(value);
 				onFeed?.(value);
+			} else {
+				clears++;
 			}
 		},
 	} };
@@ -87,6 +89,7 @@ async function setup(t: TestContext, { both = false, beforeResponse, onFeed }: {
 	const bindings = await readBindings(directory);
 	return {
 		publications, notices, requests, event,
+		get clears() { return clears; },
 		async runPicker(name: string, select: (title: string, options: string[]) => Promise<string | undefined>) {
 			await commands.get(name)!.handler("", { ...ctx, ui: { ...ctx.ui, select } });
 		},
@@ -149,11 +152,7 @@ for (const { locale, quota, notice } of [
 ]) {
 	test(`/osdy-usage --all preserves failed quota and reports the failure once (${locale})`, async (t) => {
 		const h = await setup(t, { both: true });
-		const previous = process.env.OSDY_DESKTOP_LOCALE_FILE;
-		const localeFile = join(process.env.PI_CODING_AGENT_DIR!, "locale");
-		await writeFile(localeFile, locale);
-		process.env.OSDY_DESKTOP_LOCALE_FILE = localeFile;
-		t.after(() => { if (previous === undefined) delete process.env.OSDY_DESKTOP_LOCALE_FILE; else process.env.OSDY_DESKTOP_LOCALE_FILE = previous; });
+		await setLocale(t, locale);
 		await h.run("Work");
 		h.fail();
 		await h.run("--all");
@@ -161,6 +160,91 @@ for (const { locale, quota, notice } of [
 		assert.deepEqual(h.notices, [[notice, "warning"]]);
 		assert.deepEqual(h.publications, [feed(null), feed(quota), feed(quota, quota)]);
 	});
+}
+
+test("/osdy-usage --all --run signals completion only after its own last lookup", async (t) => {
+	const work = Promise.withResolvers<void>();
+	const personal = Promise.withResolvers<"published">();
+	let workCalls = 0;
+	const h = await setup(t, {
+		both: true,
+		beforeResponse: async (id) => { if (id === "fixture-work" && ++workCalls === 1) await work.promise; },
+		onFeed: ({ accounts }) => { if (accounts[0]?.quota) personal.resolve("published"); },
+	});
+	const id = "aB-0123456789".padEnd(32, "Z");
+	const batch = h.run(`  --all   --run   ${id}  `);
+	let timeout: ReturnType<typeof setTimeout> | undefined;
+	try {
+		assert.equal(await Promise.race([
+			personal.promise,
+			batch.then(() => "finished"),
+			new Promise((resolve) => { timeout = setTimeout(() => resolve("timed out"), 2_000); }),
+		]), "published");
+		assert.deepEqual(h.publications, [feed(null), feed(null, quotaEn)]);
+		await h.run("Work");
+		assert.deepEqual(h.publications, [feed(null), feed(null, quotaEn), feed(quotaEn, quotaEn)]);
+	} finally {
+		clearTimeout(timeout);
+		work.resolve();
+		await batch;
+	}
+	const complete = { ...feed(quotaEn, quotaEn), usageRun: id };
+	assert.deepEqual(h.publications, [feed(null), feed(null, quotaEn), feed(quotaEn, quotaEn), complete]);
+	assert.deepEqual(h.requests.toSorted(), ["fixture-personal", "fixture-work", "fixture-work"]);
+
+	// Named and untagged batch refreshes can change quota, but not the last run.
+	h.largeWindows();
+	const newQuota = "session 75% left · weekly 40% left";
+	await h.run("Work");
+	assert.deepEqual(h.publications.at(-1), { ...feed(newQuota, quotaEn), usageRun: id });
+	await h.run("--all");
+	assert.deepEqual(h.publications.at(-1), { ...feed(newQuota, newQuota), usageRun: id });
+	assert.deepEqual(h.notices, []);
+	await h.event("session_shutdown");
+	assert.equal(h.clears, 1);
+	await h.event("session_start");
+	assert.deepEqual(h.publications.at(-1), feed(newQuota, newQuota));
+});
+
+for (const [locale, usage, quota, failure] of [
+	["en", "Usage: /osdy-usage <name> | --all", quotaEn, "Accounts with unavailable Codex quota: 1."],
+	["es", "Uso: /osdy-usage <nombre> | --all", quotaEs, "Cuentas con cuota de Codex no disponible: 1."],
+]) {
+	test(`/osdy-usage rejects invalid --run arguments without lookups (${locale})`, async (t) => {
+		const h = await setup(t);
+		await setLocale(t, locale);
+		const invalid = ["--run x", "Work --run x", "--all --run", "--all --run a_b", "--all --run é",
+			`--all --run ${"a".repeat(33)}`, "--all --run x y"];
+		for (const args of invalid) await h.run(args);
+		assert.deepEqual(h.notices, invalid.map(() => [usage, "warning"]));
+		assert.deepEqual(h.requests, []);
+		await h.event("session_tree");
+		assert.deepEqual(h.publications, [feed(null)]);
+	});
+
+	test(`/osdy-usage publishes the run id after the partial failure notice (${locale})`, async (t) => {
+		const atCompletion: unknown[] = [];
+		const h = await setup(t, {
+			both: true,
+			onFeed: (value) => { if (value.usageRun !== undefined) atCompletion.push([...h.notices]); },
+		});
+		await setLocale(t, locale);
+		await h.run("Work");
+		h.fail();
+		await h.run("--all --run x");
+		assert.deepEqual(h.requests.slice(1).toSorted(), ["fixture-personal", "fixture-work"]);
+		assert.deepEqual(h.notices, [[failure, "warning"]]);
+		assert.deepEqual(h.publications, [feed(null), feed(quota), feed(quota, quota), { ...feed(quota, quota), usageRun: "x" }]);
+		assert.deepEqual(atCompletion, [[[failure, "warning"]]]);
+	});
+}
+
+async function setLocale(t: TestContext, locale: string) {
+	const previous = process.env.OSDY_DESKTOP_LOCALE_FILE;
+	const localeFile = join(process.env.PI_CODING_AGENT_DIR!, "locale");
+	await writeFile(localeFile, locale);
+	process.env.OSDY_DESKTOP_LOCALE_FILE = localeFile;
+	t.after(() => { if (previous === undefined) delete process.env.OSDY_DESKTOP_LOCALE_FILE; else process.env.OSDY_DESKTOP_LOCALE_FILE = previous; });
 }
 
 test("/osdy-usage fetches only the named account and immediately republishes both windows", async (t) => {

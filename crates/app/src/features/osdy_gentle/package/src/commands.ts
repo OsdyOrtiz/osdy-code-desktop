@@ -207,23 +207,27 @@ async function osdyProfileCommandBody(args: string, ctx: CommandContext, deps: D
 	if (account) await activateProfile(ctx, deps, account, { locale });
 }
 
-async function osdyUsageCommandBody(args: string, ctx: CommandContext, deps: Deps): Promise<void> {
+async function osdyUsageCommandBody(args: string, ctx: CommandContext, deps: Deps): Promise<string | undefined> {
 	const t = translator();
 	const requested = args.trim();
-	if (!requested) {
+	const words = requested.split(/\s+/);
+	const [option, runFlag, id] = words;
+	const runId = option === "--all" && runFlag === "--run" && words.length === 3
+		&& id !== undefined && /^[A-Za-z0-9-]{1,32}$/.test(id) ? id : undefined;
+	if (!requested || (words.includes("--run") && runId === undefined)) {
 		ctx.ui.notify(t("Usage: /osdy-usage <name> | --all"), "warning");
 		return;
 	}
 	const accounts = await listProfiles(deps.agentDir).catch(() => undefined);
 	if (!accounts) {
 		ctx.ui.notify(t("Could not list saved accounts."), "error");
-		return;
+		return runId;
 	}
-	if (requested === "--all") {
+	if (requested === "--all" || runId !== undefined) {
 		const results = await mapLimit(accounts, 4, (account) => quotaFor(deps, account));
 		const count = results.filter((result) => result.status === "unavailable").length;
 		if (count) ctx.ui.notify(t("Accounts with unavailable Codex quota: {count}.", { count }), "warning");
-		return;
+		return runId;
 	}
 	const account = accounts.find((name) => name.toLowerCase() === requested.toLowerCase());
 	if (!account) {
@@ -366,7 +370,7 @@ export function osdyProfileCommand(...args: Parameters<typeof osdyProfileCommand
 	return inEntryLocale(() => osdyProfileCommandBody(...args));
 }
 
-export function osdyUsageCommand(...args: Parameters<typeof osdyUsageCommandBody>): Promise<void> {
+export function osdyUsageCommand(...args: Parameters<typeof osdyUsageCommandBody>): ReturnType<typeof osdyUsageCommandBody> {
 	return inEntryLocale(() => osdyUsageCommandBody(...args));
 }
 

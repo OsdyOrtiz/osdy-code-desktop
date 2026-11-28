@@ -118,7 +118,7 @@ const es = {
 	"Switch Osdy profile: Codex account (all tabs) + linked Gentle model profile": "Cambia de perfil Osdy: cuenta de Codex (todas las pestañas) y perfil de modelo de Gentle vinculado",
 	"Manage Osdy Codex accounts: switch, link model profile, quota, banked resets, save, add, rename, remove, import": "Gestiona las cuentas de Codex de Osdy: cambia de cuenta, vincula perfiles de modelo, consulta cuotas, usa reinicios acumulados y guarda, añade, renombra, elimina o importa cuentas",
 	"Report Pi auth owner compatibility without reading credentials or testing the lock": "Comprueba la compatibilidad con el gestor de autenticación de Pi sin leer credenciales ni probar el bloqueo",
-	"View Codex quota without switching accounts: /osdy-usage <name> | --all": "Consulta la cuota de Codex sin cambiar de cuenta: /osdy-usage <nombre> | --all",
+	"View Codex quota without switching accounts: /osdy-usage <name> | --all [--run <id>]": "Consulta la cuota de Codex sin cambiar de cuenta: /osdy-usage <nombre> | --all [--run <id>]",
 
 	// codex-usage
 	"session": "sesión",
