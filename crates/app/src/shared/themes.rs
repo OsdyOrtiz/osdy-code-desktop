@@ -913,7 +913,7 @@ impl Resolved {
 /// rarely blur behind a window (GPUI's X11 backend never does, Wayland only
 /// with a blur protocol), so the desktop would read through sharp: there the
 /// glass starts nearly solid.
-pub const DEFAULT_TRANSPARENCY: f32 = if cfg!(target_os = "linux") { 0.15 } else { 0.6 };
+pub const DEFAULT_TRANSPARENCY: f32 = if cfg!(target_os = "linux") { 0.15 } else { 0.4 };
 
 /// The Appearance sliders, each 0–1 (shown as 0–100 %).
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -942,7 +942,7 @@ impl Glass {
     pub const DEFAULT: Self = Self {
         transparency: DEFAULT_TRANSPARENCY,
         blur: 0.,
-        opacity: 0.2,
+        opacity: 0.25,
     };
 }
 
