@@ -129,7 +129,15 @@ impl Palette {
         } else {
             tinted(0.09)
         };
-        let hover_c = if t.oled { t.raised } else { tinted(0.15) };
+        // Dark cards need a bigger step to show a hover: a light background
+        // reads a 15 % tint, a dark one barely does.
+        let hover_c = if t.oled {
+            mix(t.raised, t.fg, 0.08)
+        } else if t.light {
+            tinted(0.15)
+        } else {
+            tinted(0.22)
+        };
         let raised_c = t.raised;
         let well_c = black(if t.light {
             mix(t.bg, t.fg, 0.035)
@@ -225,7 +233,11 @@ impl Palette {
             *backing = Rgb::hex(panel_c).over(f64::from(panel_a), *backing);
         }
         let surface_a = text_alpha(surface_c, fade(0.94, 0.4), &backings);
-        let hover_a = text_alpha(hover_c, fade(0.96, 0.55), &backings);
+        let hover_a = text_alpha(
+            hover_c,
+            fade(0.96, if t.light { 0.55 } else { 0.65 }),
+            &backings,
+        );
         let raised_a = text_alpha(raised_c, fade(0.96, 0.7), &backings);
         let well_a = text_alpha(well_c, fade(0.92, 0.45), &backings);
 
@@ -652,14 +664,30 @@ pub fn close_hint(id: u64, font: SharedString) -> impl IntoElement {
     } else {
         "Ctrl+C"
     };
+    press_again_hint(
+        id,
+        crate::shared::i18n::t("Press {chord} again to close").replace("{chord}", chord),
+        font,
+    )
+}
+
+/// "Press Esc again to stop" for a double Esc's window: the first Esc while
+/// the agent runs only arms the stop, so a stray press never cancels a turn.
+/// Same look and fade as [`close_hint`].
+pub fn stop_hint(id: u64, font: SharedString) -> impl IntoElement {
+    press_again_hint(
+        id,
+        crate::shared::i18n::t("Press Esc again to stop").to_string(),
+        font,
+    )
+}
+
+fn press_again_hint(id: u64, text: String, font: SharedString) -> impl IntoElement {
     div()
         .rounded_md()
         .bg(panel())
         .font_family(font)
-        .child(chip(
-            crate::shared::i18n::t("Press {chord} again to close").replace("{chord}", chord),
-            muted(),
-        ))
+        .child(chip(text, muted()))
         .with_animation(
             ElementId::NamedInteger("close-hint".into(), id),
             Animation::new(gentle_core::double_interrupt::WINDOW),

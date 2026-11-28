@@ -91,6 +91,22 @@ impl SessionView {
         codex_accounts::parse(line)
     }
 
+    pub(crate) fn mcp_status_feed(&self) -> Option<gentle_core::mcp_status::Feed> {
+        use gentle_core::mcp_status;
+        if !matches!(self.backend.status, BackendStatus::Ready(_)) {
+            return None;
+        }
+        let [line] = self
+            .extension
+            .widgets
+            .get(mcp_status::WIDGET_KEY)?
+            .as_slice()
+        else {
+            return None;
+        };
+        mcp_status::parse(line)
+    }
+
     pub(crate) fn has_codex_usage(&self) -> bool {
         self.extension.codex_usage_registered && self.process().is_some()
     }

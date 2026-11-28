@@ -71,7 +71,7 @@ All are argument-less functions in `crate::shared::ui` that return `Hsla`.
 | `success()` / `danger()` / `warning()` | same names | States; also on card borders with `.opacity(0.35)`. |
 | `panel()` | background tinted 4.5 % | Panels, sidebar. |
 | `surface()` | background tinted 9 % | Cards (`card`), keys (`kbd`), secondary buttons. |
-| `surface_hover()` | background tinted 15 % | Hover on rows and collapsible headers; active row in menus. |
+| `surface_hover()` | background tinted 15 % (22 % on dark themes, `raised` lifted 8 % toward `fg` on OLED) | Hover on rows and collapsible headers; active row in menus. |
 | `raised()` | `raised` | User messages, selected row, active option of `segmented`. |
 | `well()` | barely tinted background | Sunken: code, outputs, text fields, `segmented` frame. |
 | `border()` | background tinted 20 %, alpha 0.69 (dark) / 0.8 (light) | Card borders and thin lines in screens. |
@@ -87,7 +87,7 @@ All are argument-less functions in `crate::shared::ui` that return `Hsla`.
 
 Configuration › Appearance › Theme has three sliders, 0–100 % each, saved as `transparency`, `blur` and `opacity` (0–1) in the app's `settings.json` (`themes::Glass`, `read_glass`/`write_glass`; a missing key takes its default, so an older file keeps its transparency). Dragging applies live; the file is written on release.
 
-- **Transparency** (default `DEFAULT_TRANSPARENCY = 0.6`, or `0.15` on Linux, where the compositor usually doesn't blur behind the window and a sharp desktop would show through): how much the desktop or the theme's backdrop shows through. `Palette::new(theme, glass)` fades each glass role from a solid alpha toward a floor (`fade(solid, floor)`): `window_bg` 0.9 → 0.3, `panel` 0.93 → 0.16, `surface` 0.94 → 0.4, `well` 0.92 → 0.45. The chrome (the window's ground: title bar, the gaps between panes) follows it fully. Above 80 %, the extreme stretch trades contrast for clearer glass: it ramps the window and text-area alphas down to 20 % of what they'd otherwise be, before Opacity. `popover_bg` and `screen_bg` do not change.
+- **Transparency** (default `DEFAULT_TRANSPARENCY = 0.6`, or `0.15` on Linux, where the compositor usually doesn't blur behind the window and a sharp desktop would show through): how much the desktop or the theme's backdrop shows through. `Palette::new(theme, glass)` fades each glass role from a solid alpha toward a floor (`fade(solid, floor)`): `window_bg` 0.9 → 0.3, `panel` 0.93 → 0.16, `surface` 0.94 → 0.4, `surface_hover` 0.96 → 0.55 (0.65 on dark themes), `well` 0.92 → 0.45. The chrome (the window's ground: title bar, the gaps between panes) follows it fully. Above 80 %, the extreme stretch trades contrast for clearer glass: it ramps the window and text-area alphas down to 20 % of what they'd otherwise be, before Opacity. `popover_bg` and `screen_bg` do not change.
 - **Opacity** (default 0.2): how solid the **text areas** are — `panel` (panes, sidebars, the conversation, terminals), and on it `surface` (composer, cards), `surface_hover`, `raised` (selected rows, user messages) and `well` (code, diffs, the editor). Each starts from the transparency's fade, held at its **AA floor** (below) up to 80 % Transparency and relaxed beyond. Opacity takes the resulting `low` alpha toward opaque: `alpha = low + (1 − low) × opacity`.
 - **Blur** (default 0): softens the theme's own backdrop, not the desktop (the window keeps GPUI's `Blurred` background as it was; no private APIs). A picture is blurred for real (`backdrop::blurred_picture`): GPUI has no blur shader, so the decoded frames are shrunk and blurred once on a background thread (`gentle_core::glass::PictureBlur`: sigma up to 2 % of the picture's longer side, at least half size so a GIF's blurred copy adds at most a quarter of its frames' memory; in 5 % steps, `blur_percent`), drawn instead of the sharp picture once ready, and dropped from the atlas (`drop_image`) when the strength or the theme changes. Picture effects work on the same blurred picture. An animated scene is redrawn every frame, so it is faded toward the theme's background instead (`scene_fade`, up to 50 %): no per-frame CPU blur. Themes without a picture or scene have nothing to blur; the slider is disabled with a note.
 
@@ -296,6 +296,7 @@ Pixel effects paint flat squares with `paint_quad`, slightly smaller than their 
 
 - **Welcome finale** (`features/welcome/finale.rs`, `FINALE = 7600 ms`): the wordmark reveals again, and 14 pixelated paws and notes fly from the badge’s mouth. “Osdy Code: Corazón de Junior, Conocimiento de Senior” writes in across two lines, followed by a warm pink pixel heart that springs in. The farewell holds for about two seconds, then the screen dissolves from `DISSOLVE = 0.897` (the last ~0.78 s) with smoothstep. The theme’s animated backdrop runs behind the whole welcome screen under a deep purple `night::plum()` (`#1e1538`) veil: 30% everywhere plus a 55% band behind the text column that fades out toward the sides.
 - **Water reminder** (`features/hydration/drops.rs`, `DURATION = 6000 ms`): pixel drops (`DROP` sprite, `paint_sprite`) rain over the window, each splashing with a flat ripple where it lands, while a floating card fills a pixel glass drop by drop and says it's time for some water; everything fades from `FADE`. `hydration::show` plays it and `hydration::overlay(run)` paints it over the window root. Its water is `info()` and a lighter glint of the same hue. With reduced motion only the card shows.
+- **Active break** (`features/active_break/stretch.rs`): a compact, non-interactive card below the center of the title bar, separate from the centered water card. A pixel figure gets up and stretches inside the card. With reduced motion the standing pose stays still until the card expires. Find both reminders under Configuration → Notifications.
 - **Effort surge** (`shared/surge.rs`): each thinking level adds a beat to the one below (`surge::Level::of`). `minimal` runs the pixel comet along a quarter of the window edge; `low` closes the lap and flares the edge; `medium` gathers the core while the window trembles gently; `high` trembles harder and hatches the core (flash, shockwave, sparks); `xhigh` adds the pixel raccoon bursting out (4.4 s total); `max` holds the settled raccoon long enough to wink for about 0.62 s, then it reopens its eye and fades (4.93 s total). `off` plays nothing. `SessionEvent::Effort(level)` triggers it once the backend accepts the level and `Workspace::play_surge` plays it; `surge::overlay(run, level)` paints and `surge::shake_at(elapsed, level)` gives the offset. Its colors (`spark`, `wine`) are derived from the hue of `petal()`.
 
 ## Icons
@@ -314,6 +315,8 @@ Icon color: `muted` in screen headers and neutral cards, `faint` inside fields a
 ## Patterns
 
 ### Overlay screen
+
+Open Sessions from the last button in the right sidebar, after Branches, from the command palette, or with ⌘⇧O (Ctrl+Shift+O). Open Memory only from the editor’s brain button.
 
 Settings, Providers, Usage, Sessions, Profiles, Memory and Agents follow the same shape (`features/usage/view.rs`, `features/sessions/render.rs`). Onboarding uses `ui::screen` without `screen_header`: its hero acts as the header and the close X floats at the top right. The palette (`features/palette/view.rs`) repeats the frame by hand (`screen_bg`, `rounded_2xl`, `border_strong`, `shadow_2xl`) with a fixed height of 560 px so it does not jump while filtering.
 
@@ -350,6 +353,7 @@ backdrop.occlude().child(ui::pop_in(
 
 - `screen_bg()` background with a gradient from the top: `petal().opacity(0.10)` while installing, `success().opacity(0.10)` when everything required is ready and `petal().opacity(0.18)` during the entrance.
 - Banner at scale 2.6, revealing the wordmark over `banner::WRITE` (2600 ms, as long as `INTRO` + `AFTER_INTRO`). Readiness changes the background glow, not the badge or wordmark colors. The heading (34 px `BOLD`) and footer enter with `appear_after` at `AFTER_INTRO` (1100 ms). If the screen is shown again, `intro_done` skips the reveal; the badge and cursor idle animations continue unless reduced motion is on.
+- The shipped Mapache Neon Tokyo backdrop holds the raccoon with the rose in its paw. Continue (or Skip for now) starts the entrance and resumes the scene if backdrop motion is enabled. Other themes, including imported copies, behave as usual.
 - Content centered with `max_w(px(680.))`; 88 px footer with `px_10`; ↵ runs the primary button.
 
 ### Drop target

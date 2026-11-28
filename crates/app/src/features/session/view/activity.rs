@@ -345,14 +345,12 @@ impl SessionView {
         })
     }
 
-    /// Extension widgets (`setWidget`): one chip each, its lines on click.
-    /// Gentle Shell's YOLO banner (`gentle:yolo`) is left out: the
-    /// permission chip already shows the mode.
+    /// Visible extension widgets (`setWidget`): one chip each, its lines on click.
     fn render_widget_chips(&self, collapse: bool, cx: &mut Context<Self>) -> Vec<AnyElement> {
         self.extension
             .widgets
             .iter()
-            .filter(|(key, _)| key.as_str() != "gentle:yolo")
+            .filter(|(key, _)| super::super::state::ExtensionUi::is_widget_chip(key))
             .filter_map(|(key, lines)| {
                 if key == gentle_core::codex_accounts::WIDGET_KEY
                     && let [line] = lines.as_slice()
@@ -471,29 +469,24 @@ impl SessionView {
                 color,
                 format!("{active}/{total}"),
             )
-            .title(t("Helpers"))
             .count(t("{count} active").replace("{count}", &active.to_string()))
-            .footer_action(Box::new(move |_window, cx| {
-                h_flex()
-                    .pt_1()
-                    .child(
-                        Button::new("helpers-open-agents")
-                            .ghost()
-                            .xsmall()
-                            .icon(Icon::new(IconName::Users))
-                            .label(
-                                t("Open Agents ({shortcut})")
-                                    .replace("{shortcut}", ui::shortcut_shift("A").as_ref()),
-                            )
-                            .on_click(cx.listener({
-                                let open_agents = open_agents.clone();
-                                move |state: &mut PopoverState, _, window, cx| {
-                                    state.dismiss(window, cx);
-                                    let _ = open_agents
-                                        .update(cx, |this, cx| this.open_agents(None, cx));
-                                }
-                            })),
+            // The header opens the Agents screen instead of naming the card.
+            .title_action(Box::new(move |_window, cx| {
+                Button::new("helpers-open-agents")
+                    .ghost()
+                    .xsmall()
+                    .icon(Icon::new(IconName::Users))
+                    .label(
+                        t("Open Agents ({shortcut})")
+                            .replace("{shortcut}", ui::shortcut_shift("A").as_ref()),
                     )
+                    .on_click(cx.listener({
+                        let open_agents = open_agents.clone();
+                        move |state: &mut PopoverState, _, window, cx| {
+                            state.dismiss(window, cx);
+                            let _ = open_agents.update(cx, |this, cx| this.open_agents(None, cx));
+                        }
+                    }))
                     .into_any_element()
             })),
             move || {
@@ -695,11 +688,6 @@ fn render_memory_button(
 pub(super) type ChipHeaderAction =
     Box<dyn Fn(&mut Window, &mut Context<PopoverState>) -> AnyElement>;
 
-/// An extra control at the bottom of a chip card's scrollable body. Like
-/// [`ChipHeaderAction`], it is rebuilt with the card and can dismiss the
-/// popover from its click handler.
-pub(super) type ChipFooterAction = ChipHeaderAction;
-
 /// The slots of a chip card's header, shared by every chip popover: the
 /// trigger's id, icon and color, its label, the card's title, and either a
 /// count in `ui::mono()` or a header action where the count would sit.
@@ -711,7 +699,7 @@ pub(super) struct ChipPopoverOptions {
     title: SharedString,
     count: SharedString,
     action: Option<ChipHeaderAction>,
-    footer_action: Option<ChipFooterAction>,
+    title_action: Option<ChipHeaderAction>,
     mono: bool,
     ring: Option<(
         f32,
@@ -738,7 +726,7 @@ impl ChipPopoverOptions {
             title: "".into(),
             count: "".into(),
             action: None,
-            footer_action: None,
+            title_action: None,
             mono: false,
             ring: None,
         }
@@ -782,9 +770,9 @@ impl ChipPopoverOptions {
         self
     }
 
-    /// A bottom control inside the card body (see [`ChipFooterAction`]).
-    pub(super) fn footer_action(mut self, action: ChipFooterAction) -> Self {
-        self.footer_action = Some(action);
+    /// A control shown in place of the header's icon and title.
+    pub(super) fn title_action(mut self, action: ChipHeaderAction) -> Self {
+        self.title_action = Some(action);
         self
     }
 
@@ -810,7 +798,7 @@ pub(super) fn chip_popover(
         title,
         count,
         action,
-        footer_action,
+        title_action,
         mono,
         ring,
     } = options;
@@ -887,20 +875,24 @@ pub(super) fn chip_popover(
                         .child(
                             h_flex()
                                 .gap_2()
-                                .child(Icon::new(icon).small().text_color(
-                                    if id == "context-ring" {
-                                        ui::muted()
-                                    } else {
-                                        color
-                                    },
-                                ))
-                                .child(
-                                    div()
-                                        .text_sm()
-                                        .font_weight(FontWeight::MEDIUM)
-                                        .text_color(ui::fg())
-                                        .child(title.clone()),
-                                )
+                                .map(|d| match title_action.as_ref() {
+                                    Some(build) => d.child(build(window, cx)),
+                                    None => d
+                                        .child(Icon::new(icon).small().text_color(
+                                            if id == "context-ring" {
+                                                ui::muted()
+                                            } else {
+                                                color
+                                            },
+                                        ))
+                                        .child(
+                                            div()
+                                                .text_sm()
+                                                .font_weight(FontWeight::MEDIUM)
+                                                .text_color(ui::fg())
+                                                .child(title.clone()),
+                                        ),
+                                })
                                 .child(div().flex_1())
                                 .when(!count.is_empty(), |d| {
                                     d.child(
@@ -923,10 +915,7 @@ pub(super) fn chip_popover(
                                 .max_h(rems(380. / 16.))
                                 .overflow_y_scroll()
                                 .gap_1p5()
-                                .children(body())
-                                .when_some(footer_action.as_ref(), |d, build| {
-                                    d.child(build(window, cx))
-                                }),
+                                .children(body()),
                         ),
                 ))
                 .into_any_element()

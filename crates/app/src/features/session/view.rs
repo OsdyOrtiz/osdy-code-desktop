@@ -2303,18 +2303,23 @@ impl Render for SessionView {
 
 impl SessionView {
     /// "Press ⌃C again to close" in the conversation's corner, above the
-    /// composer, while a second Ctrl+C would close the pane.
+    /// composer, while a second Ctrl+C would close the pane; "Press Esc
+    /// again to stop" there while a second Esc would stop the turn.
     fn render_close_hint(&self, cx: &App) -> Option<AnyElement> {
-        self.live.double_interrupt.armed()?;
+        let id = self.live.close_hints;
+        let font = cx.theme().font_family.clone();
+        let hint = if self.live.escape_stop.armed().is_some() {
+            ui::stop_hint(id, font).into_any_element()
+        } else {
+            self.live.double_interrupt.armed()?;
+            ui::close_hint(id, font).into_any_element()
+        };
         Some(
             div()
                 .absolute()
                 .bottom(rems(12. / 16.))
                 .right(rems(1.))
-                .child(ui::close_hint(
-                    self.live.close_hints,
-                    cx.theme().font_family.clone(),
-                ))
+                .child(hint)
                 .into_any_element(),
         )
     }

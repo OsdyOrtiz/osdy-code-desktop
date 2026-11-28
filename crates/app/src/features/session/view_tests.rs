@@ -2729,8 +2729,37 @@ fn escape_closes_first_then_stops_the_turn(cx: &mut TestAppContext) {
 
     view.update(cx, |view, _| view.live.escape_closed = None);
     escape(cx);
+    assert_eq!(stopping(cx), None, "one Esc only arms the stop");
+    assert!(view.read_with(cx, |view, _| view.live.escape_stop.armed().is_some()));
+    escape(cx);
     let turn = view.read_with(cx, |view, _| view.turn_since());
-    assert_eq!(stopping(cx), turn, "with nothing open, Esc stops the turn");
+    assert_eq!(stopping(cx), turn, "a second Esc stops the turn");
+}
+
+/// A key between the two Esc presses starts over: the next Esc only arms.
+#[gpui::test]
+fn another_key_between_escapes_starts_over(cx: &mut TestAppContext) {
+    let (view, cx) = tab(cx);
+    let escape = |cx: &mut VisualTestContext| {
+        cx.update(|window, cx| {
+            view.update(cx, |view, cx| view.abort(&super::Abort, window, cx));
+        });
+    };
+    let stopping = |cx: &mut VisualTestContext| view.read_with(cx, |view, _| view.live.stopping);
+    view.update(cx, |view, cx| {
+        view.transcript.running = true;
+        view.sync_view(cx);
+    });
+    escape(cx);
+    cx.update(|window, cx| {
+        view.update(cx, |view, cx| {
+            view.interrupt_key(&gpui::Keystroke::parse("a").unwrap(), window, cx);
+        });
+    });
+    escape(cx);
+    assert_eq!(stopping(cx), None, "the key in between disarmed the stop");
+    escape(cx);
+    assert!(stopping(cx).is_some());
 }
 
 /// Counts the tab's requests to close its pane; they count while the
@@ -4271,4 +4300,71 @@ fn reduced_motion_keeps_the_empty_hero_quiet(cx: &mut TestAppContext) {
     assert!(view.read_with(cx, |view, _| view.hero_shown()));
     assert_eq!(frames_for(std::time::Duration::from_millis(200), cx), 0);
     backend.stop(&view, cx);
+}
+
+/// A running tab with Esc bound to Abort, as the app binds it.
+fn running_escape_tab(cx: &mut TestAppContext) -> (Entity<SessionView>, &mut VisualTestContext) {
+    let (view, cx) = tab(cx);
+    cx.update(|_, cx| {
+        cx.bind_keys([gpui::KeyBinding::new(
+            "escape",
+            super::Abort,
+            Some(super::CONTEXT),
+        )]);
+    });
+    type_in_composer(&view, cx, "draft");
+    view.update(cx, |view, cx| {
+        view.transcript.running = true;
+        view.sync_view(cx);
+    });
+    cx.run_until_parked();
+    (view, cx)
+}
+
+fn release_escape(cx: &mut VisualTestContext) {
+    cx.simulate_event(gpui_kit::KeyUpEvent {
+        keystroke: gpui_kit::Keystroke::parse("escape").unwrap(),
+    });
+}
+
+/// Through the keyboard: a held Esc is a repeat, never the second press,
+/// and drops the first; two separate presses stop the turn.
+#[gpui::test]
+fn held_escape_is_not_a_second_press(cx: &mut TestAppContext) {
+    let (view, cx) = running_escape_tab(cx);
+    let stopping = |cx: &mut VisualTestContext| view.read_with(cx, |view, _| view.live.stopping);
+    cx.simulate_keystrokes("escape");
+    assert!(view.read_with(cx, |view, _| view.live.escape_stop.armed().is_some()));
+    assert_eq!(stopping(cx), None, "one Esc only arms the stop");
+    cx.simulate_keystrokes("escape");
+    assert_eq!(stopping(cx), None, "a key repeat never stops");
+    release_escape(cx);
+
+    cx.simulate_keystrokes("escape");
+    release_escape(cx);
+    assert_eq!(stopping(cx), None);
+    cx.simulate_keystrokes("escape");
+    assert!(stopping(cx).is_some(), "the second press stops the turn");
+}
+
+/// Off macOS Ctrl+C copies selected text; that copy between two Esc
+/// presses starts over like any other key.
+#[cfg(not(target_os = "macos"))]
+#[gpui::test]
+fn ctrl_c_copy_between_escapes_starts_over(cx: &mut TestAppContext) {
+    let (view, cx) = running_escape_tab(cx);
+    cx.simulate_keystrokes("escape");
+    release_escape(cx);
+    view.update(cx, |view, cx| {
+        view.composer
+            .update(cx, |state, cx| state.set_selected_range(0..5, cx));
+    });
+    cx.simulate_keystrokes("ctrl-c");
+    release_ctrl_c(cx);
+    view.read_with(cx, |view, _| {
+        assert!(view.live.stopping.is_none());
+        assert!(view.live.escape_stop.armed().is_none());
+    });
+    cx.simulate_keystrokes("escape");
+    assert!(view.read_with(cx, |view, _| view.live.stopping.is_none()));
 }

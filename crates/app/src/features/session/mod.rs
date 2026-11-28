@@ -704,10 +704,11 @@ impl SessionView {
     /// Esc: close what's open (the Agents panel, then a dialog, then an
     /// expanded generative UI surface that doesn't have the keyboard; the
     /// `/` menu and the model picker close earlier, from the composer), and
-    /// with nothing open stop the running turn or `!command`, as in Gentle
-    /// Shell's terminal. An Esc right after one that closed something only
-    /// propagates: a quick run of presses to close things never stops the
-    /// agent by accident.
+    /// with nothing open stop the running turn or `!command` on a second Esc
+    /// within [`double_interrupt::WINDOW`]: the first only shows "Press Esc
+    /// again to stop", so a stray press never cancels the agent. An Esc right
+    /// after one that closed something only propagates: a quick run of
+    /// presses to close things never arms the stop either.
     fn abort(&mut self, _: &Abort, window: &mut Window, cx: &mut Context<Self>) {
         let now = std::time::Instant::now();
         let closed = if self.agents_panel.open {
@@ -725,17 +726,42 @@ impl SessionView {
         };
         if closed {
             self.live.escape_closed = Some(now);
+            self.live.escape_stop.reset();
             return;
         }
         let settling = self
             .live
             .escape_closed
             .is_some_and(|at| now.duration_since(at) < ESCAPE_SETTLE);
-        if self.stoppable() && !settling {
-            self.stop(cx);
-        } else {
+        if !self.stoppable() || settling {
+            self.live.escape_stop.reset();
             cx.propagate();
+            return;
         }
+        match self
+            .live
+            .escape_stop
+            .press(now, true, self.live.escape_repeat)
+        {
+            Outcome::Interrupt => {}
+            Outcome::Close => self.stop(cx),
+            Outcome::Hint => {
+                self.live.close_hints += 1;
+                cx.spawn(async move |this, cx| {
+                    cx.background_executor()
+                        .timer(double_interrupt::WINDOW)
+                        .await;
+                    let _ = this.update(cx, |this, cx| {
+                        if this.live.escape_stop.armed() == Some(now) {
+                            this.live.escape_stop.reset();
+                            cx.notify();
+                        }
+                    });
+                })
+                .detach();
+            }
+        }
+        cx.notify();
     }
 
     /// ⌘. (Ctrl+. elsewhere): stop the running turn or `!command`.
@@ -761,6 +787,13 @@ impl SessionView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> bool {
+        // Esc's own press arms the stop (a held one is a repeat, never the
+        // second press); any other key, Ctrl+C's copy included, starts over.
+        if keystroke.key == "escape" {
+            self.live.escape_repeat = std::mem::replace(&mut self.live.escape_held, true);
+        } else if self.live.escape_stop.reset() {
+            cx.notify();
+        }
         let m = &keystroke.modifiers;
         let interrupt =
             keystroke.key == "c" && m.control && !(m.platform || m.alt || m.shift || m.function);
@@ -819,6 +852,7 @@ impl SessionView {
     /// A key came up: a Ctrl+C after it is a new press, not a key repeat.
     fn on_key_up(&mut self, _: &KeyUpEvent, _: &mut Window, _: &mut Context<Self>) {
         self.live.interrupt_held = false;
+        self.live.escape_held = false;
     }
 }
 

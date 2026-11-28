@@ -173,6 +173,19 @@ pub(super) struct Dialog {
     pub(super) method: UiMethod,
 }
 
+#[cfg(test)]
+#[test]
+fn mcp_status_widget_is_never_a_composer_chip() {
+    assert!(!ExtensionUi::is_widget_chip(
+        gentle_core::mcp_status::WIDGET_KEY
+    ));
+    assert!(!ExtensionUi::is_widget_chip("gentle:yolo"));
+    assert!(ExtensionUi::is_widget_chip(
+        gentle_core::codex_accounts::WIDGET_KEY
+    ));
+    assert!(ExtensionUi::is_widget_chip("unrelated"));
+}
+
 /// What extensions put on screen through UI requests.
 #[derive(Default)]
 pub(super) struct ExtensionUi {
@@ -189,6 +202,11 @@ pub(super) struct ExtensionUi {
 }
 
 impl ExtensionUi {
+    /// Permission has its own chip; MCP status is for Configuration only.
+    pub(super) fn is_widget_chip(key: &str) -> bool {
+        !matches!(key, "gentle:yolo" | gentle_core::mcp_status::WIDGET_KEY)
+    }
+
     /// False when the same message toasted within the last ten minutes.
     pub(super) fn first_toast(&mut self, message: &str) -> bool {
         const WINDOW: Duration = Duration::from_secs(600);
