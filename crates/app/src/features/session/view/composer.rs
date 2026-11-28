@@ -29,7 +29,88 @@ use crate::shared::ui;
 use gentle_core::input_style::InputStyle;
 use gentle_core::transcript::format_tokens;
 
+// The Kit uses the global muted foreground for placeholders, so draw this
+// hint separately to keep other inputs (and the composer's caret) unchanged.
+fn composer_hint(hint: &'static str, elapsed: Option<Duration>) -> Div {
+    let mut text = hint.to_string();
+    let mut highlights = Vec::new();
+    if let Some(elapsed) = elapsed
+        && let Some(stem) = hint.strip_suffix('…')
+    {
+        use gentle_core::composer_placeholder::ellipsis_frame;
+        let visible_end = ellipsis_frame(hint, elapsed).len();
+        text = format!("{stem}...");
+        // Hidden glyphs still occupy their full width, even in a custom font.
+        if visible_end < text.len() {
+            highlights.push((
+                visible_end..text.len(),
+                HighlightStyle {
+                    color: Some(ui::faint().opacity(0.)),
+                    ..Default::default()
+                },
+            ));
+        }
+    }
+    div()
+        .absolute()
+        .inset_0()
+        .flex()
+        .items_center()
+        .px_2()
+        .text_color(ui::faint())
+        .overflow_hidden()
+        .child(
+            div()
+                .truncate()
+                .child(StyledText::new(text).with_highlights(highlights)),
+        )
+}
+
 impl SessionView {
+    fn can_animate_composer_hint(&self, cx: &App) -> bool {
+        (self.web_shown || self.canvas.is_some())
+            && self.extension.dialogs.is_empty()
+            && !cx.reduce_motion()
+            && self.composer.read(cx).value().is_empty()
+    }
+
+    pub(super) fn step_composer_hint(
+        &mut self,
+        veil: bool,
+        window: &Window,
+        cx: &mut Context<Self>,
+    ) -> Option<Duration> {
+        use gentle_core::composer_placeholder::DOT_INTERVAL;
+        if veil || !window.is_window_active() || !self.can_animate_composer_hint(cx) {
+            self.composer_placeholder_since = None;
+            self.composer_placeholder_tick = None;
+            return None;
+        }
+
+        let elapsed = self
+            .composer_placeholder_since
+            .get_or_insert_with(Instant::now)
+            .elapsed();
+        // Unrelated redraws don't postpone the tick. Only ask again if the
+        // composer actually renders, and recheck before notifying.
+        if self.composer_placeholder_tick.is_none() {
+            let wait = DOT_INTERVAL
+                - Duration::from_millis((elapsed.as_millis() % DOT_INTERVAL.as_millis()) as u64);
+            self.composer_placeholder_tick = Some(cx.spawn(async move |this, cx| {
+                cx.background_executor().timer(wait).await;
+                let _ = this.update(cx, |this, cx| {
+                    this.composer_placeholder_tick = None;
+                    if this.can_animate_composer_hint(cx) && this.window_active(cx) {
+                        cx.notify();
+                    } else {
+                        this.composer_placeholder_since = None;
+                    }
+                });
+            }));
+        }
+        Some(elapsed)
+    }
+
     /// While the agent works a light runs round the composer's action
     /// button (stop, or send while you steer), just outside it, on the live
     /// overlay. Round buttons get a round lap (the orbit's corner radius
@@ -307,9 +388,16 @@ impl SessionView {
     }
 
     /// The text field; a click anywhere in it focuses the text area.
-    fn render_text_field(&self, ready: bool, cx: &mut Context<Self>) -> Div {
+    fn render_text_field(
+        &self,
+        ready: bool,
+        hint_elapsed: Option<Duration>,
+        cx: &mut Context<Self>,
+    ) -> Div {
         let weak = cx.entity().downgrade();
+        let hint = t(self.composer_placeholder);
         div()
+            .relative()
             .min_w_0()
             .text_size(rems(14. / 16.))
             .cursor_text()
@@ -324,6 +412,7 @@ impl SessionView {
                 Textarea::new(&self.composer)
                     .appearance(false)
                     .disabled(!ready)
+                    .aria_label(hint)
                     // A pasted text's `#N` chip, or — in the theme's own
                     // accent — the `/skill:name` the prompt invokes.
                     .token(|token, _, _| {
@@ -344,6 +433,9 @@ impl SessionView {
                             .unwrap_or(false)
                     }),
             )
+            .when(self.composer.read(cx).value().is_empty(), |field| {
+                field.child(composer_hint(hint, hint_elapsed))
+            })
     }
 
     /// The text grew (you typed): emit a particle from the caret. At most
@@ -484,6 +576,7 @@ impl SessionView {
     pub(super) fn render_composer(
         &self,
         rem_size: Pixels,
+        hint_elapsed: Option<Duration>,
         cx: &mut Context<Self>,
     ) -> (AnyElement, Option<AnyElement>) {
         let empty = self.composer.read(cx).value().trim().is_empty()
@@ -616,7 +709,7 @@ impl SessionView {
             }
         };
         let attachments = self.render_attachments(cx);
-        let text = self.render_text_field(ready, cx);
+        let text = self.render_text_field(ready, hint_elapsed, cx);
         let pad = |d: Div| if narrow { d.px_3() } else { d.px_4() };
 
         let mut strip = None;

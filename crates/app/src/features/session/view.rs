@@ -2092,10 +2092,6 @@ impl Render for SessionView {
         let language = i18n::language();
         if self.composer_language != language {
             self.composer_language = language;
-            let placeholder = self.composer_placeholder;
-            self.composer.update(cx, |state, cx| {
-                state.set_placeholder(t(placeholder), window, cx)
-            });
             self.list.language_changed(self.transcript.items.len());
         }
         self.sync_view(cx);
@@ -2240,7 +2236,8 @@ impl Render for SessionView {
                 ),
             })
             .map(|main| {
-                let (composer, strip) = self.render_composer(rem_size, cx);
+                let hint_elapsed = self.step_composer_hint(veil, window, cx);
+                let (composer, strip) = self.render_composer(rem_size, hint_elapsed, cx);
                 // Bar docks the composer in a strip across the pane, on a
                 // hairline; Prompt adds its status strip along the bottom.
                 let dock = super::input_style::style(cx) == InputStyle::Bar;

@@ -281,6 +281,8 @@ A slash command's text output appears as one result card. Hover an answer, or a 
 
 ### Composer — Steer, stop and run commands
 
+An empty composer shows one of 36 playful hints, picked per tab and available in English and Spanish. The dots cycle while the hint is visible in the active window, and stay still with system Reduce Motion.
+
 Enter sends; while the agent runs, Enter steers it and Esc, ⌘. (Ctrl+. elsewhere) or the Stop button stops it, as in Gentle Shell's terminal ("stopping…" shows until the turn ends; the conversation and your draft stay). Esc closes what is open first (the `/` menu, the model picker, the Agents panel, a dialog, an expanded surface), and an Esc right after one that closed something doesn't stop. `!cmd` / `!!cmd` run shell commands; the Stop button, Esc and ⌘. stop a running one too (`abort_bash`). Type `@` in a sentence to find files under the tab's working folder. Use ↑/↓ to highlight a file and Tab or Enter to insert its relative `@path` without sending. When typing a path directly, Tab also completes directory prefixes (for example, `@sr` → `@src/`). To attach a tile instead, drag the file onto the tab.
 
 Ctrl+C also stops a running turn or `!command`, as Esc does, and never sends anything to the agent; pressed twice within 700 ms while the agent is idle it closes the pane, as ⌘W and a terminal's double Ctrl+C do: the first press shows "Press ⌃C again to close" above the composer. A press that stops something never arms the close, any other key in between starts over, holding the key doesn't count, and closing still asks first when the agent waits for your answer. Off macOS, where Ctrl+C also copies, it copies while text is selected and only counts as a press otherwise.

@@ -243,6 +243,8 @@ pub struct SessionView {
     composer_language: gentle_core::i18n::Language,
     /// This tab's composer placeholder (English key, see `composer_placeholder`).
     composer_placeholder: &'static str,
+    composer_placeholder_since: Option<std::time::Instant>,
+    composer_placeholder_tick: Option<Task<()>>,
     /// Only app-owned notices have a renderer; Shell payloads stay verbatim.
     localized_notices: HashMap<usize, NoticeRenderer>,
     /// The `notify` output of the extension command last sent.
@@ -281,7 +283,6 @@ impl SessionView {
             TextareaState::new(window, cx)
                 .auto_grow(1, 10)
                 .submit_on_enter(true)
-                .placeholder(t(composer_placeholder))
         });
         let dialog_input = cx.new(|cx| TextareaState::new(window, cx).auto_grow(1, 8));
         let model_search =
@@ -443,6 +444,8 @@ impl SessionView {
             model_search_language: crate::shared::i18n::language(),
             composer_language: crate::shared::i18n::language(),
             composer_placeholder,
+            composer_placeholder_since: None,
+            composer_placeholder_tick: None,
             localized_notices: HashMap::new(),
             capture: None,
             capture_seq: 0,
@@ -502,6 +505,10 @@ impl SessionView {
     pub fn set_web_shown(&mut self, shown: bool, cx: &mut Context<Self>) {
         if self.web_shown != shown {
             self.web_shown = shown;
+            if !shown {
+                self.composer_placeholder_tick = None;
+                self.composer_placeholder_since = None;
+            }
             self.genui.set_obscured(!shown, cx);
             cx.notify();
         }

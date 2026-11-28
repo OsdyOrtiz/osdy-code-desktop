@@ -515,6 +515,44 @@ pub(super) fn lookup(en: &str) -> Option<&'static str> {
         "Calling on the patron saint of semicolons…" => "Invocando al santo del punto y coma…",
         "This smells like an environment variable…" => "Esto huele a variable de entorno…",
         "Heads up, something fishy is going on here…" => "Pilas, que aquí hay gato encerrado…",
+        "The raccoon found a TODO from 2019…" => "El mapache encontró un TODO del 2019…",
+        "The raccoon snuck into the repo…" => "El mapache se metió al repo…",
+        "The raccoon asked for another cup of coffee…" => "El mapache pidió otra taza de café…",
+        "Seasoning the code with a pinch of Git…" => "Sazonando el código con una pizca de Git…",
+        "Adding a little refried bean spread to the refactor…" => {
+            "Poniéndole frijolitos al refactor…"
+        }
+        "This started as a simple baleada…" => "Esto empezó como una baleada sencilla…",
+        "Giving that bug a good whack…" => "Dándole maceta al bug…",
+        "Figuring out what “final fix FINAL” was supposed to mean…" => {
+            "Viendo qué quiso decir «arreglo final FINAL»…"
+        }
+        "Opening the file nobody dares to open…" => {
+            "Abriendo el archivo que nadie se atreve a abrir…"
+        }
+        "Asking Git who did it. It was me…" => "Preguntándole a Git quién fue. Fui yo…",
+        "Reading the README before someone tells me to…" => {
+            "Leyendo el README antes de que me lo reclamen…"
+        }
+        "Translating “it works on my machine”…" => "Traduciendo «en mi máquina sí funciona»…",
+        "Setting up a meeting between the code and the docs…" => {
+            "Organizando una reunión entre el código y la documentación…"
+        }
+        "The three-line function just lawyered up…" => {
+            "La función de tres líneas acaba de pedir abogado…"
+        }
+        "Looking for the zero that passed itself off as an O…" => {
+            "Buscando el cero que se hizo pasar por una O…"
+        }
+        "Taking the “just in case” bits out of the code…" => {
+            "Quitándole los «por si acaso» al código…"
+        }
+        "The legacy code just called me “kid”…" => {
+            "El código heredado me acaba de decir «joven»…"
+        }
+        "Well then, there’s more history here than the ticket let on…" => {
+            "Vaya pues, aquí hay más historia de la que decía el ticket…"
+        }
         "Working tree clean" => "No hay cambios en el árbol de trabajo",
         "Working…" => "Trabajando…",
         "Write" => "Escribir",
