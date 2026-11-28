@@ -234,6 +234,7 @@ impl SessionView {
                 message,
                 notify_type,
             } => {
+                self.finish_codex_all_usage(true, cx);
                 let level = notice_level(notify_type.as_deref());
                 match notify_target(&message, self.desktop.design_events_ready()) {
                     Some(NotifyTarget::Canvas(canvas)) => {
@@ -305,10 +306,16 @@ impl SessionView {
                         self.activity.agents.take(),
                         next,
                     ));
-                } else if let Some(lines) = lines {
-                    self.extension.widgets.insert(key, lines);
                 } else {
-                    self.extension.widgets.remove(&key);
+                    let codex = key == gentle_core::codex_accounts::WIDGET_KEY;
+                    if let Some(lines) = lines {
+                        self.extension.widgets.insert(key, lines);
+                    } else {
+                        self.extension.widgets.remove(&key);
+                    }
+                    if codex {
+                        self.finish_codex_all_usage(false, cx);
+                    }
                 }
             }
             UiMethod::SetTitle { title } => {

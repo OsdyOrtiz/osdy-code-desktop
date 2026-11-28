@@ -5,6 +5,8 @@ pub(super) fn lookup(en: &str) -> Option<&'static str> {
         // Codex account picker.
         "Codex" => "Codex",
         "View usage" => "Ver uso",
+        "Accounts" => "Cuentas",
+        "Usage unavailable" => "Uso no disponible",
         "Loading usage…" => "Cargando uso…",
         "Codex accounts" => "Cuentas de Codex",
         "Active" => "Activa",

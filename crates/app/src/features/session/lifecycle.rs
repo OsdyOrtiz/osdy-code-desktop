@@ -320,6 +320,7 @@ impl SessionView {
         self.extension.statuses.clear();
         self.extension.widgets.clear();
         self.extension.codex_usage_registered = false;
+        self.extension.codex_all_usage = Default::default();
         self.activity.agents = None;
         self.activity.jobs.clear();
         self.activity.job_commands.clear();

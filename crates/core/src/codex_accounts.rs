@@ -1,10 +1,12 @@
 //! The display-only account list published by the osdy-gentle extension.
 
 use serde_json::Value;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 
 pub const USAGE_COMMAND: &str = "osdy-usage";
 pub const USAGE_TIMEOUT: Duration = Duration::from_secs(20);
+pub const ALL_USAGE_TIMEOUT: Duration = Duration::from_secs(30);
+const ALL_USAGE_FRESHNESS: Duration = Duration::from_secs(60);
 
 /// A missing command (or a prompt with the same name) must never receive the
 /// picker's command text as a conversation prompt.
@@ -74,6 +76,60 @@ impl UsageRequest {
                 .iter()
                 .find(|account| self.matches(account))
                 .is_none_or(|account| account.quota != self.quota)
+    }
+}
+
+/// Per-tab state. Completion tracks the first visible quota update or notice,
+/// not the extension's internal batch lifetime.
+#[derive(Default)]
+pub struct AllUsage {
+    pending: Option<(Instant, Vec<QuotaSnapshot>)>,
+    last_finished: Option<Instant>,
+}
+
+type QuotaSnapshot = (String, Option<String>);
+
+fn quotas(feed: &Feed) -> Vec<QuotaSnapshot> {
+    let mut quotas: Vec<_> = feed
+        .accounts
+        .iter()
+        .map(|account| (account.name.clone(), account.quota.clone()))
+        .collect();
+    quotas.sort_unstable();
+    quotas
+}
+
+impl AllUsage {
+    pub fn pending(&self) -> bool {
+        self.pending.is_some()
+    }
+
+    pub fn start(&mut self, feed: &Feed, force: bool, now: Instant) -> bool {
+        if self.pending()
+            || (!force
+                && self
+                    .last_finished
+                    .is_some_and(|at| now - at < ALL_USAGE_FRESHNESS))
+        {
+            return false;
+        }
+        self.pending = Some((now, quotas(feed)));
+        true
+    }
+
+    pub fn finish(&mut self, feed: Option<&Feed>, notice: bool, now: Instant) -> bool {
+        let Some((started, before)) = &self.pending else {
+            return false;
+        };
+        if !notice
+            && now - *started < ALL_USAGE_TIMEOUT
+            && !feed.is_some_and(|feed| quotas(feed) != *before)
+        {
+            return false;
+        }
+        self.pending = None;
+        self.last_finished = Some(now);
+        true
     }
 }
 
@@ -257,6 +313,56 @@ mod tests {
         assert_eq!(first.command_name(), None);
         assert!(UsageRequest::new(first).is_none());
         assert_eq!(feed.accounts[49].command_name(), Some("49"));
+    }
+
+    #[test]
+    fn all_usage_auto_refresh_uses_completion_time_and_manual_refresh_bypasses_it() {
+        let feed = parse(r#"{"v":1,"active":null,"accounts":[]}"#).unwrap();
+        let now = std::time::Instant::now();
+        let mut usage = super::AllUsage::default();
+        assert!(usage.start(&feed, false, now));
+        assert!(!usage.start(&feed, false, now));
+        assert!(!usage.start(&feed, true, now));
+        let finished = now + Duration::from_secs(30);
+        assert!(usage.finish(Some(&feed), false, finished));
+        assert!(!usage.start(&feed, false, finished + Duration::from_millis(59_999)));
+        assert!(usage.start(&feed, false, finished + Duration::from_secs(60)));
+        assert!(usage.finish(Some(&feed), true, finished + Duration::from_secs(60)));
+        assert!(usage.start(&feed, true, finished + Duration::from_secs(60)));
+    }
+
+    #[test]
+    fn all_usage_loading_ends_only_on_quota_change_notice_or_timeout() {
+        let feed = |quota, active| {
+            parse(
+                &json!({"v":1,"active":null,"accounts":[
+                    {"name":"Work","active":active,"binding":null,"quota":quota}
+                ]})
+                .to_string(),
+            )
+            .unwrap()
+        };
+        let before = feed(None, false);
+        let now = std::time::Instant::now();
+        let mut usage = super::AllUsage::default();
+        assert!(usage.start(&before, false, now));
+        let almost = now + Duration::from_millis(29_999);
+        assert!(!usage.finish(Some(&before), false, almost));
+        assert!(!usage.finish(Some(&feed(None, true)), false, almost));
+        assert!(!usage.finish(None, false, almost));
+        assert!(usage.pending());
+        assert!(usage.finish(
+            Some(&feed(Some("5h 75% left · weekly 40% left"), true)),
+            false,
+            almost
+        ));
+        assert!(!usage.pending());
+        assert!(!usage.finish(Some(&before), true, almost));
+        assert!(usage.start(&before, true, almost));
+        assert!(usage.finish(Some(&before), true, almost));
+        assert!(usage.start(&before, true, now + Duration::from_secs(30)));
+        assert!(usage.finish(Some(&before), false, now + Duration::from_secs(60)));
+        assert!(!usage.pending());
     }
 
     #[test]

@@ -1310,7 +1310,8 @@ impl SessionView {
         });
     }
 
-    pub(crate) fn codex_account_error(&self, message: String, cx: &mut Context<Self>) {
+    pub(crate) fn codex_account_error(&mut self, message: String, cx: &mut Context<Self>) {
+        self.finish_codex_all_usage(true, cx);
         self.toast(Notification::error(message.clone()), cx);
         cx.emit(SessionEvent::Notice {
             level: NoticeLevel::Error,

@@ -31,6 +31,7 @@ use gentle_core::transcript::{Block, Item, NoticeLevel, ToolStatus, assistant_vi
 
 mod activity;
 mod cards;
+mod codex_usage;
 mod composer;
 mod dialogs;
 mod effort;

@@ -13,11 +13,12 @@ use gpui_kit::*;
 
 use gentle_core::usage::subscription::{
     LimitTone, limit_tone, provider_alias, reset_clock_label_in, window_display_label_in,
-    windows_by_length, windows_most_used,
+    windows_by_length,
 };
 use pi_rpc::desktop_rpc::{ProviderUsage as RpcProviderUsage, UsageStatus};
 
 use super::activity::{ChipHeaderAction, ChipPopoverOptions, chip_popover};
+use super::codex_usage::accounts_section;
 use super::live::RateLimit;
 use crate::features::session::SessionView;
 use crate::features::usage::{local_offset_secs, now_ms, rpc_provider_to_core, updated_ago};
@@ -46,8 +47,8 @@ pub(super) struct PlanRow {
 /// testable without a session.
 #[derive(Debug, Clone, PartialEq)]
 pub(super) struct PlanChip {
-    /// The most-used window's percent: the trigger's label and tone.
-    pub(super) percent: i64,
+    /// The five-hour used percent, or the legacy notice value when applicable.
+    pub(super) percent: Option<i64>,
     /// The provider's plan, when it reports one ("Plan usage limits · plus").
     pub(super) plan: Option<String>,
     /// One row per window, shortest first. Empty when only the legacy
@@ -61,7 +62,7 @@ pub(super) struct PlanChip {
 
 /// What the composer's plan-limits chip shows for this session: the
 /// subscription provider matching the current model's provider (by alias),
-/// the trigger percent from the most-used window and the card rows ordered
+/// the trigger percent from the five-hour window and the card rows ordered
 /// shortest first — or, when there are none, the legacy notices' highest
 /// percent over an honest fallback line. `None` hides the chip: nothing
 /// reports plan usage at all, or the legacy limit chips (visible on the
@@ -81,16 +82,13 @@ pub(super) fn plan_chip(
             .iter()
             .find(|provider| provider_alias(&provider.provider) == Some(alias))
     });
-    let windows = matched.map(|provider| {
-        let core = rpc_provider_to_core(provider, now);
-        let most_used = windows_most_used(&core.limits);
-        (provider, core, most_used)
-    });
-    if let Some((provider, core, most_used)) = windows.filter(|(_, _, windows)| !windows.is_empty())
+    let windows = matched.map(|provider| (provider, rpc_provider_to_core(provider, now)));
+    if let Some((provider, core)) =
+        windows.filter(|(_, core)| core.limits.iter().any(|limit| !limit.windows.is_empty()))
     {
         let percent = |value: f64| value.round().clamp(0.0, 100.0) as i64;
         return Some(PlanChip {
-            percent: percent(most_used[0].used_percent),
+            percent: gentle_core::usage::five_hour_used_percent(&core.limits),
             plan: core.plan.clone(),
             status_line: Some(match provider.status {
                 UsageStatus::Ok => updated_ago(core.fetched_at, now),
@@ -123,7 +121,7 @@ pub(super) fn plan_chip(
     }
     let percent = rate_limits.values().map(|notice| notice.percent).max()?;
     Some(PlanChip {
-        percent: i64::from(percent),
+        percent: Some(i64::from(percent)),
         plan: None,
         rows: Vec::new(),
         status_line: None,
@@ -158,26 +156,56 @@ impl SessionView {
     ) -> Option<Popover> {
         let snapshot = self.subscription_snapshot();
         let current = self.models.current.as_ref().map(|m| m.provider.clone());
-        let chip = plan_chip(
-            &snapshot.providers,
-            snapshot.legacy,
-            legacy_chips_shown,
-            &self.extension.rate_limits,
-            current.as_deref(),
-            *self.local_offset.get_or_init(local_offset_secs),
-            now_ms(),
-        );
-        let Some(chip) = chip else {
-            // Hidden without data, so its card can't open to ask for it: once
-            // the session has a model, ask here (seeding is idempotent and a
-            // no-op on Shells without the method), throttled.
-            if current.is_some() {
-                self.ask_plan_usage(cx);
-            }
-            return None;
+        let feed = self.codex_account_feed();
+        let accounts = feed.as_ref().filter(|_| self.has_codex_usage()).cloned();
+        let loading = self.extension.codex_all_usage.pending();
+        let offset = *self.local_offset.get_or_init(local_offset_secs);
+        let now = now_ms();
+        let provider_chip = |provider, legacy_shown| {
+            plan_chip(
+                &snapshot.providers,
+                snapshot.legacy,
+                legacy_shown,
+                &self.extension.rate_limits,
+                provider,
+                offset,
+                now,
+            )
+        };
+        // Prefer the active Codex subscription when the Codex feed is present.
+        // Keep other providers' existing card rows if Codex has no windows yet.
+        let codex = feed
+            .as_ref()
+            .and_then(|_| provider_chip(Some("codex"), true).filter(|chip| !chip.rows.is_empty()));
+        let codex_percent = codex.as_ref().and_then(|chip| chip.percent);
+        let chip = codex.or_else(|| provider_chip(current.as_deref(), legacy_chips_shown));
+        if chip.as_ref().is_none_or(|chip| chip.rows.is_empty())
+            && (current.is_some() || feed.is_some())
+        {
+            self.ask_plan_usage(cx);
+        }
+        let chip = match chip {
+            Some(chip) => chip,
+            None if feed.is_some() => PlanChip {
+                percent: None,
+                plan: None,
+                rows: Vec::new(),
+                status_line: None,
+                fallback_line: Some(if snapshot.legacy {
+                    LEGACY_LINE
+                } else {
+                    NO_DATA_LINE
+                }),
+            },
+            None => return None,
         };
         let weak = cx.entity().downgrade();
-        let color = row_color(chip.percent);
+        let percent = if feed.is_some() {
+            codex_percent
+        } else {
+            chip.percent
+        };
+        let color = percent.map_or_else(ui::muted, row_color);
         let title: SharedString = match &chip.plan {
             Some(plan) => t("Plan usage limits · {plan}")
                 .replace("{plan}", plan)
@@ -187,6 +215,7 @@ impl SessionView {
         let rows = chip.rows;
         let fallback = chip.fallback_line.map(t);
         let status_line = chip.status_line;
+        let weak_accounts = weak.clone();
         let body = move || {
             let mut items: Vec<AnyElement> = rows
                 .iter()
@@ -263,6 +292,9 @@ impl SessionView {
                         .into_any_element(),
                 );
             }
+            if let Some(feed) = &accounts {
+                items.push(accounts_section(feed, loading, weak_accounts.clone()));
+            }
             items
         };
         let weak_open = weak.clone();
@@ -293,7 +325,9 @@ impl SessionView {
                     "plan-limits",
                     IconName::Gauge,
                     color,
-                    format!("{}%", chip.percent),
+                    percent
+                        .map(|percent| format!("{percent}%"))
+                        .unwrap_or_default(),
                 )
                 .title(title)
                 .action(see_all),
@@ -301,7 +335,10 @@ impl SessionView {
             )
             .on_open_change(move |open, _, cx| {
                 if *open {
-                    let _ = weak_open.update(cx, |this, cx| this.subscription_seed(cx));
+                    let _ = weak_open.update(cx, |this, cx| {
+                        this.subscription_seed(cx);
+                        this.refresh_codex_usage(false, cx);
+                    });
                 }
             }),
         )
@@ -425,9 +462,13 @@ mod tests {
             NOW,
         )
         .expect("chip shown");
-        assert_eq!(chip.percent, 42, "the trigger shows the most-used window");
+        assert_eq!(
+            chip.percent,
+            Some(42),
+            "the trigger shows the five-hour window"
+        );
         assert_eq!(chip.plan.as_deref(), Some("pro"));
-        assert_eq!(chip.rows.len(), 2, "most used first");
+        assert_eq!(chip.rows.len(), 2, "shortest first");
         assert_eq!(chip.rows[0].label, "5-hour limit");
         assert_eq!(chip.rows[0].reset, "");
         assert_eq!(chip.rows[1].label, "Weekly · all models");
@@ -469,21 +510,21 @@ mod tests {
             None,
             vec![limit(
                 "prompts",
-                vec![window("week", 5.0, UsageResetAt::Null)],
+                vec![window_with("week", 5.0, 604_800.0, UsageResetAt::Null)],
             )],
         )];
-        assert!(
-            plan_chip(
-                &claude,
-                false,
-                false,
-                &BTreeMap::new(),
-                Some("anthropic"),
-                0,
-                NOW
-            )
-            .is_some()
-        );
+        let chip = plan_chip(
+            &claude,
+            false,
+            false,
+            &BTreeMap::new(),
+            Some("anthropic"),
+            0,
+            NOW,
+        )
+        .expect("the weekly-only subscription keeps the chip visible");
+        assert_eq!(chip.percent, None, "no 5-hour window: gauge only");
+        assert_eq!(chip.rows[0].percent, 5, "the weekly row is preserved");
         // A provider the model doesn't belong to never drives the chip.
         assert!(
             plan_chip(
@@ -576,7 +617,7 @@ mod tests {
     }
 
     #[test]
-    fn rows_read_shortest_first_while_the_trigger_keeps_the_most_used() {
+    fn rows_read_shortest_first_and_the_trigger_uses_the_five_hour_window() {
         // The weekly window is the one about to bite, the 5-hour one, not.
         let providers = vec![provider(
             "claude",
@@ -602,8 +643,9 @@ mod tests {
         )
         .expect("chip shown");
         assert_eq!(
-            chip.percent, 90,
-            "the trigger still shows the most-used window"
+            chip.percent,
+            Some(42),
+            "the trigger shows the five-hour window, not the most-used one"
         );
         assert_eq!(
             chip.rows[0].label, "5-hour limit",
@@ -619,7 +661,11 @@ mod tests {
         let notices = notices(&[("seven_day", 57), ("five_hour", 33)]);
         // An older Shell: the popover says what it needs instead of rows.
         let chip = plan_chip(&[], true, false, &notices, Some("claude"), 0, NOW).unwrap();
-        assert_eq!(chip.percent, 57, "the highest notice drives the label");
+        assert_eq!(
+            chip.percent,
+            Some(57),
+            "the highest notice drives the label"
+        );
         assert!(chip.rows.is_empty(), "notices never become popover rows");
         assert_eq!(chip.status_line, None);
         assert_eq!(
@@ -656,7 +702,7 @@ mod tests {
         )];
         let chip = plan_chip(&providers, false, true, &notices, Some("claude"), 0, NOW)
             .expect("structured windows keep the chip");
-        assert_eq!(chip.percent, 42);
+        assert_eq!(chip.percent, Some(42));
         assert_eq!(chip.fallback_line, None);
     }
 }

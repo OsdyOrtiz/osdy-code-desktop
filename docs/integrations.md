@@ -609,6 +609,8 @@ The key button shows only the active account name, or **Codex** when no account 
 
 When the originating tab registers the extension command `/osdy-usage <name>`, each row with a full, usable name has a **View usage** icon button (or press **U** on a focused row). It runs in the originating tab without selecting an account, closing the picker or asking for confirmation. The extension fetches usage on demand and publishes the new quota summary in the same feed; it does not switch accounts or change bindings or auth. That row shows loading until its quota changes, the tab reports a warning or error, or about 20 seconds pass (including when the summary is unchanged). The desktop does not send the command as chat if it is unavailable.
 
+The composer’s plan-limits gauge next to Effort shows the active subscription’s five-hour used percentage, when known. Its popover keeps the subscription windows and **See all →**. When the tab has a valid Codex account feed and registers `osdy-usage`, the popover also lists **Accounts** with an active marker, each account’s quota summary (or a placeholder), and **Refresh**. Opening the popover runs `/osdy-usage --all` in that tab unless a lookup finished less than 60 seconds ago; **Refresh** bypasses that wait. Loading ends on a quota change, a tab notice, or after 30 seconds. The command never falls back to chat.
+
 ## `/` commands and native screens
 
 Gentle Shell screens are TUI components (`ctx.ui.custom()` returns nothing over RPC). `builtins::classify(text)` decides, in this order:

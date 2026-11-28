@@ -861,7 +861,7 @@ pub(super) fn chip_popover(
             .text_color(color)
             .when(mono, |b| b.font_family(ui::mono()))
             .icon(Icon::new(icon))
-            .label(label)
+            .when(!label.is_empty(), |b| b.label(label))
     };
     Popover::new(SharedString::from(format!("{id}-popover")))
         .anchor(Anchor::BottomRight)
