@@ -18,8 +18,13 @@
 //! sticks. Only for the local backend (a WSL distro or a VM can't load a
 //! folder on this machine) and never from an isolated copy
 //! (`GENTLE_SHELL_GPUI_DATA_DIR`), whose data folder is disposable. A failure is logged and retried on the next start.
+//!
+//! Onboarding asks again whenever a look at the machine finds Gentle Shell
+//! usable, so a first run that starts before Gentle Shell exists still gets
+//! the package without a restart. One install runs at a time ([`Gate`]).
 
 use std::path::{Path, PathBuf};
+use std::sync::{Mutex, MutexGuard};
 
 use serde_json::{Value, json};
 
@@ -83,17 +88,77 @@ const FILES: &[(&str, &[u8])] = &[
     ),
 ];
 
+/// One install at a time. A request while one runs makes that worker run
+/// once more when it ends, so a request after setup is never lost to a
+/// startup attempt still failing because Gentle Shell wasn't ready.
+#[derive(Default)]
+struct Gate {
+    running: bool,
+    again: bool,
+}
+
+impl Gate {
+    /// Whether the caller should start a worker.
+    fn request(&mut self) -> bool {
+        if self.running {
+            self.again = true;
+            false
+        } else {
+            self.running = true;
+            true
+        }
+    }
+
+    /// Called by the worker when a run ends: whether it should run again.
+    fn finish(&mut self) -> bool {
+        if std::mem::take(&mut self.again) {
+            true
+        } else {
+            self.running = false;
+            false
+        }
+    }
+}
+
+static GATE: Mutex<Gate> = Mutex::new(Gate {
+    running: false,
+    again: false,
+});
+
+fn lock(gate: &Mutex<Gate>) -> MutexGuard<'_, Gate> {
+    gate.lock().unwrap_or_else(|poisoned| poisoned.into_inner())
+}
+
+/// Run `attempt` until the gate says no request is left. A panicking attempt
+/// counts as finished: it must not hold the gate for the rest of the session
+/// nor drop a request queued while it ran.
+fn run_worker(gate: &Mutex<Gate>, mut attempt: impl FnMut()) {
+    loop {
+        let _ = std::panic::catch_unwind(std::panic::AssertUnwindSafe(&mut attempt));
+        if !lock(gate).finish() {
+            break;
+        }
+    }
+}
+
 /// In the background: write the package to the app's data folder and, the
-/// first time, install it into Gentle Shell.
+/// first time, install it into Gentle Shell. Safe to call often: after the
+/// install it only rewrites changed files.
 pub fn install_by_default() {
+    if !lock(&GATE).request() {
+        return;
+    }
     let spawned = std::thread::Builder::new()
         .name("osdy-gentle".into())
         .spawn(|| {
-            if let Err(err) = ensure_installed() {
-                eprintln!("gentle-shell-gpui: {NAME} was not installed: {err}");
-            }
+            run_worker(&GATE, || {
+                if let Err(err) = ensure_installed() {
+                    eprintln!("gentle-shell-gpui: {NAME} was not installed: {err}");
+                }
+            })
         });
     if let Err(err) = spawned {
+        *lock(&GATE) = Gate::default();
         eprintln!("gentle-shell-gpui: could not start the {NAME} install: {err}");
     }
 }
@@ -273,5 +338,37 @@ mod tests {
         assert!(!installed_before(&store));
         crate::shared::themes::write_key(&store, KEY, json!({ "installed": true })).unwrap();
         assert!(installed_before(&store));
+    }
+
+    #[test]
+    fn one_install_runs_at_a_time_and_a_request_during_it_runs_once_more() {
+        let mut gate = Gate::default();
+        assert!(gate.request(), "the first request starts a worker");
+        assert!(!gate.request(), "no second worker while one runs");
+        assert!(!gate.request(), "requests during a run fold into one");
+        assert!(gate.finish(), "the worker runs once more for them");
+        assert!(!gate.finish(), "then it stops");
+        assert!(gate.request(), "a later request starts a new worker");
+        assert!(!gate.finish());
+    }
+
+    #[test]
+    fn a_panicking_attempt_preserves_a_queued_request_and_releases_the_gate() {
+        let gate = Mutex::new(Gate::default());
+        assert!(gate.lock().unwrap().request());
+
+        let mut attempts = 0;
+        let mut queued_request_started_worker = None;
+        run_worker(&gate, || {
+            attempts += 1;
+            if attempts == 1 {
+                queued_request_started_worker = Some(gate.lock().unwrap().request());
+                panic!("injected install panic");
+            }
+        });
+
+        assert_eq!(queued_request_started_worker, Some(false));
+        assert_eq!(attempts, 2);
+        assert!(gate.lock().unwrap().request());
     }
 }

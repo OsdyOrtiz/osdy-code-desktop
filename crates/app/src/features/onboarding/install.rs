@@ -26,6 +26,11 @@ impl OnboardingView {
             with_registry(&mut checks, answer);
         }
         self.checks = Some(checks);
+        // The startup attempt skips it while Gentle Shell isn't there yet
+        // (a first run); install it as soon as a look finds it usable.
+        if self.usable() {
+            crate::features::osdy_gentle::install_by_default();
+        }
         if std::mem::take(&mut self.announce) {
             cx.emit(OnboardingEvent::Installed);
         }
