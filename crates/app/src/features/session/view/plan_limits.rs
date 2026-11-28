@@ -11,6 +11,7 @@ use gpui_kit::component::popover::{Popover, PopoverState};
 use gpui_kit::component::{Sizable as _, h_flex, v_flex};
 use gpui_kit::*;
 
+use gentle_core::codex_accounts::Feed;
 use gentle_core::usage::subscription::{
     LimitTone, limit_tone, provider_alias, reset_clock_label_in, window_display_label_in,
     windows_by_length,
@@ -133,6 +134,29 @@ pub(super) fn plan_chip(
     })
 }
 
+fn select_plan(
+    chip: Option<PlanChip>,
+    legacy_snapshot: bool,
+    feed: Option<Feed>,
+    registered: bool,
+) -> (Option<PlanChip>, Option<Feed>) {
+    let accounts = feed.filter(|_| registered);
+    let chip = chip.or_else(|| {
+        accounts.as_ref().map(|_| PlanChip {
+            percent: None,
+            plan: None,
+            rows: Vec::new(),
+            status_line: None,
+            fallback_line: Some(if legacy_snapshot {
+                LEGACY_LINE
+            } else {
+                NO_DATA_LINE
+            }),
+        })
+    });
+    (chip, accounts)
+}
+
 /// A row's meter fill and percent color, from the shared 80/95 thresholds.
 fn row_color(percent: i64) -> Hsla {
     match limit_tone(percent as f64) {
@@ -157,54 +181,26 @@ impl SessionView {
         let snapshot = self.subscription_snapshot();
         let current = self.models.current.as_ref().map(|m| m.provider.clone());
         let feed = self.codex_account_feed();
-        let accounts = feed.as_ref().filter(|_| self.has_codex_usage()).cloned();
-        let loading = self.extension.codex_all_usage.pending();
-        let offset = *self.local_offset.get_or_init(local_offset_secs);
-        let now = now_ms();
-        let provider_chip = |provider, legacy_shown| {
-            plan_chip(
-                &snapshot.providers,
-                snapshot.legacy,
-                legacy_shown,
-                &self.extension.rate_limits,
-                provider,
-                offset,
-                now,
-            )
-        };
-        // Prefer the active Codex subscription when the Codex feed is present.
-        // Keep other providers' existing card rows if Codex has no windows yet.
-        let codex = feed
-            .as_ref()
-            .and_then(|_| provider_chip(Some("codex"), true).filter(|chip| !chip.rows.is_empty()));
-        let codex_percent = codex.as_ref().and_then(|chip| chip.percent);
-        let chip = codex.or_else(|| provider_chip(current.as_deref(), legacy_chips_shown));
+        let chip = plan_chip(
+            &snapshot.providers,
+            snapshot.legacy,
+            legacy_chips_shown,
+            &self.extension.rate_limits,
+            current.as_deref(),
+            *self.local_offset.get_or_init(local_offset_secs),
+            now_ms(),
+        );
+        let (chip, accounts) = select_plan(chip, snapshot.legacy, feed, self.has_codex_usage());
         if chip.as_ref().is_none_or(|chip| chip.rows.is_empty())
-            && (current.is_some() || feed.is_some())
+            && (current.is_some() || accounts.is_some())
         {
             self.ask_plan_usage(cx);
         }
-        let chip = match chip {
-            Some(chip) => chip,
-            None if feed.is_some() => PlanChip {
-                percent: None,
-                plan: None,
-                rows: Vec::new(),
-                status_line: None,
-                fallback_line: Some(if snapshot.legacy {
-                    LEGACY_LINE
-                } else {
-                    NO_DATA_LINE
-                }),
-            },
-            None => return None,
-        };
+        let chip = chip?;
+        let loading = self.extension.codex_all_usage.pending();
+        let live = self.extension.codex_all_usage.live();
         let weak = cx.entity().downgrade();
-        let percent = if feed.is_some() {
-            codex_percent
-        } else {
-            chip.percent
-        };
+        let percent = chip.percent;
         let color = percent.map_or_else(ui::muted, row_color);
         let title: SharedString = match &chip.plan {
             Some(plan) => t("Plan usage limits · {plan}")
@@ -293,7 +289,7 @@ impl SessionView {
                 );
             }
             if let Some(feed) = &accounts {
-                items.push(accounts_section(feed, loading, weak_accounts.clone()));
+                items.push(accounts_section(feed, loading, live, weak_accounts.clone()));
             }
             items
         };
@@ -434,6 +430,71 @@ mod tests {
                 )
             })
             .collect()
+    }
+
+    #[test]
+    fn codex_feed_never_overrides_the_current_model_provider() {
+        let make = |id, percent| {
+            provider(
+                id,
+                UsageStatus::Ok,
+                Some(id),
+                None,
+                vec![limit(id, vec![window("5h", percent, UsageResetAt::Null)])],
+            )
+        };
+        let both = [make("claude", 42.), make("codex", 64.)];
+        let empty =
+            gentle_core::codex_accounts::parse(r#"{"v":1,"active":null,"accounts":[]}"#).unwrap();
+        let saved = gentle_core::codex_accounts::parse(r#"{"v":1,"active":"Work","accounts":[{"name":"Work","active":true,"binding":null,"quota":null}]}"#).unwrap();
+        let select = |providers: &[RpcProviderUsage], current, feed, registered| {
+            let chip = plan_chip(
+                providers,
+                false,
+                false,
+                &BTreeMap::new(),
+                Some(current),
+                0,
+                NOW,
+            );
+            super::select_plan(chip, false, feed, registered)
+        };
+        let check = |(chip, accounts): (Option<super::PlanChip>, Option<super::Feed>),
+                     expected_plan,
+                     expected_percent,
+                     expected_accounts| {
+            let chip = chip.unwrap();
+            assert_eq!(chip.plan.as_deref(), Some(expected_plan));
+            assert_eq!(chip.rows[0].percent, expected_percent);
+            assert_eq!(chip.percent, Some(expected_percent));
+            assert_eq!(accounts.is_some(), expected_accounts);
+        };
+        check(
+            select(&both, "claude", Some(saved.clone()), true),
+            "claude",
+            42,
+            true,
+        );
+        check(
+            select(&both[..1], "claude", Some(empty.clone()), false),
+            "claude",
+            42,
+            false,
+        );
+        check(
+            select(&both, "openai-codex", Some(saved), true),
+            "codex",
+            64,
+            true,
+        );
+        assert!(
+            select(&[], "claude", Some(empty.clone()), false)
+                .0
+                .is_none()
+        );
+        let (chip, accounts) = select(&[], "claude", Some(empty), true);
+        assert_eq!(chip.unwrap().percent, None);
+        assert!(accounts.is_some());
     }
 
     #[test]

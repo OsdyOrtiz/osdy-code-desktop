@@ -4,6 +4,7 @@ use serde_json::Value;
 use std::time::{Duration, Instant};
 
 pub const USAGE_COMMAND: &str = "osdy-usage";
+pub const ALL_USAGE_COMMAND: &str = "/osdy-usage --all";
 pub const USAGE_TIMEOUT: Duration = Duration::from_secs(20);
 pub const ALL_USAGE_TIMEOUT: Duration = Duration::from_secs(30);
 const ALL_USAGE_FRESHNESS: Duration = Duration::from_secs(60);
@@ -79,11 +80,11 @@ impl UsageRequest {
     }
 }
 
-/// Per-tab state. Completion tracks the first visible quota update or notice,
-/// not the extension's internal batch lifetime.
+/// Per-tab batch lifetime and the shorter visible loading state.
 #[derive(Default)]
 pub struct AllUsage {
-    pending: Option<(Instant, Vec<QuotaSnapshot>)>,
+    live: Option<(Instant, Vec<QuotaSnapshot>)>,
+    loading: bool,
     last_finished: Option<Instant>,
 }
 
@@ -101,11 +102,23 @@ fn quotas(feed: &Feed) -> Vec<QuotaSnapshot> {
 
 impl AllUsage {
     pub fn pending(&self) -> bool {
-        self.pending.is_some()
+        self.loading
+    }
+
+    pub fn live(&self) -> bool {
+        self.started_at().is_some()
+    }
+
+    pub fn started_at(&self) -> Option<Instant> {
+        self.live.as_ref().map(|(started, _)| *started)
+    }
+
+    pub fn hide_loading(&mut self) -> bool {
+        std::mem::take(&mut self.loading)
     }
 
     pub fn start(&mut self, feed: &Feed, force: bool, now: Instant) -> bool {
-        if self.pending()
+        if self.live()
             || (!force
                 && self
                     .last_finished
@@ -113,24 +126,58 @@ impl AllUsage {
         {
             return false;
         }
-        self.pending = Some((now, quotas(feed)));
+        self.live = Some((now, quotas(feed)));
+        self.loading = true;
         true
     }
 
-    pub fn finish(&mut self, feed: Option<&Feed>, notice: bool, now: Instant) -> bool {
-        let Some((started, before)) = &self.pending else {
+    /// A successful prompt disposition acknowledges dispatch, not completion.
+    /// With no completion marker, use all changed quotas, a batch failure,
+    /// or the deadline to end the run.
+    pub fn finish(&mut self, feed: Option<&Feed>, failed: bool, now: Instant) -> bool {
+        let Some((started, before)) = &self.live else {
             return false;
         };
-        if !notice
-            && now - *started < ALL_USAGE_TIMEOUT
-            && !feed.is_some_and(|feed| quotas(feed) != *before)
-        {
-            return false;
+        let after = feed.map(quotas);
+        let changed = after.as_ref().is_some_and(|after| after != before);
+        let all_changed = after.as_ref().is_some_and(|after| {
+            !before.is_empty()
+                && before.len() == after.len()
+                && before
+                    .iter()
+                    .zip(after)
+                    .all(|((name, quota), (new_name, new_quota))| {
+                        name == new_name && quota != new_quota
+                    })
+        });
+        if failed || now - *started >= ALL_USAGE_TIMEOUT || all_changed {
+            self.live = None;
+            self.last_finished = Some(now);
+            self.loading = false;
+            true
+        } else {
+            changed && self.hide_loading()
         }
-        self.pending = None;
-        self.last_finished = Some(now);
-        true
     }
+}
+
+/// The notify RPC has no command id. Only the extension's known batch
+/// failure messages settle a live lookup; other notices just hide loading.
+pub fn is_all_usage_failure_notice(message: &str) -> bool {
+    matches!(
+        message,
+        "Could not list saved accounts." | "No se pudieron listar las cuentas guardadas."
+    ) || [
+        "Accounts with unavailable Codex quota: ",
+        "Cuentas con cuota de Codex no disponible: ",
+    ]
+    .iter()
+    .any(|prefix| {
+        message
+            .strip_prefix(prefix)
+            .and_then(|count| count.strip_suffix('.'))
+            .is_some_and(|count| count.parse::<usize>().is_ok_and(|count| count > 0))
+    })
 }
 
 fn capped(text: &str) -> (String, bool) {
@@ -363,6 +410,55 @@ mod tests {
         assert!(usage.start(&before, true, now + Duration::from_secs(30)));
         assert!(usage.finish(Some(&before), false, now + Duration::from_secs(60)));
         assert!(!usage.pending());
+    }
+
+    #[test]
+    fn progressive_rows_do_not_finish_a_live_run_or_start_its_cooldown() {
+        let feed = |one, two| {
+            parse(
+                &json!({"v":1,"active":null,"accounts":[
+                    {"name":"One","active":false,"binding":null,"quota":one},
+                    {"name":"Two","active":false,"binding":null,"quota":two}
+                ]})
+                .to_string(),
+            )
+            .unwrap()
+        };
+        let before = feed(None, None);
+        let first = feed(Some("5h 70% left"), None);
+        let all = feed(Some("5h 70% left"), Some("5h 60% left"));
+        let now = std::time::Instant::now();
+        let at = |s| now + Duration::from_secs(s);
+        let mut usage = super::AllUsage::default();
+        assert!(usage.start(&before, false, at(0)));
+        assert!(usage.finish(Some(&first), false, at(1)));
+        assert!(!usage.pending(), "first row stops the spinner");
+        assert!(
+            !usage.start(&first, true, at(2)),
+            "refresh must not overlap the batch"
+        );
+        assert!(!usage.start(&first, false, at(2)));
+        assert!(!usage.hide_loading());
+        assert!(usage.live());
+        assert!(usage.finish(Some(&all), false, at(25)));
+        assert!(!usage.start(&all, false, at(61)));
+        assert!(!usage.start(&all, false, at(84)));
+        assert!(usage.start(&all, false, at(85)));
+    }
+
+    #[test]
+    fn only_known_batch_failure_notices_end_a_live_lookup() {
+        for (text, expected) in [
+            ("Accounts with unavailable Codex quota: 2.", true),
+            ("Cuentas con cuota de Codex no disponible: 1.", true),
+            ("Could not list saved accounts.", true),
+            ("No se pudieron listar las cuentas guardadas.", true),
+            ("Codex quota unavailable.", false),
+            ("Accounts with unavailable Codex quota: 0.", false),
+            ("Accounts with unavailable Codex quota: many.", false),
+        ] {
+            assert_eq!(super::is_all_usage_failure_notice(text), expected, "{text}");
+        }
     }
 
     #[test]

@@ -1311,7 +1311,7 @@ impl SessionView {
     }
 
     pub(crate) fn codex_account_error(&mut self, message: String, cx: &mut Context<Self>) {
-        self.finish_codex_all_usage(true, cx);
+        self.hide_codex_usage_loading(cx);
         self.toast(Notification::error(message.clone()), cx);
         cx.emit(SessionEvent::Notice {
             level: NoticeLevel::Error,
@@ -1320,7 +1320,16 @@ impl SessionView {
     }
 
     pub(crate) fn run_codex_account_command(&mut self, text: String, cx: &mut Context<Self>) {
-        let error = |this: &mut Self, cx: &mut Context<Self>| {
+        let batch = (text == codex_accounts::ALL_USAGE_COMMAND)
+            .then(|| self.extension.codex_all_usage.started_at())
+            .flatten();
+        let error = move |this: &mut Self, cx: &mut Context<Self>| {
+            if let Some(started) = batch {
+                if this.extension.codex_all_usage.started_at() != Some(started) {
+                    return;
+                }
+                this.finish_codex_all_usage(true, cx);
+            }
             this.codex_account_error(
                 t("Could not run the Codex account command in this tab.").into(),
                 cx,
@@ -1344,6 +1353,9 @@ impl SessionView {
             json!({"type": "get_commands"}),
             cx,
             move |this, result, cx| {
+                if batch.is_some() && this.extension.codex_all_usage.started_at() != batch {
+                    return;
+                }
                 if !result.is_ok_and(|data| lists_extension_command(&data, &name)) {
                     error(this, cx);
                     return;

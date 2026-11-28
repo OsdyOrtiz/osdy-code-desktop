@@ -2,7 +2,7 @@
 
 use std::time::Instant;
 
-use gentle_core::codex_accounts::{ALL_USAGE_TIMEOUT, Feed, USAGE_COMMAND};
+use gentle_core::codex_accounts::{ALL_USAGE_COMMAND, ALL_USAGE_TIMEOUT, Feed};
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::{Disableable as _, Sizable as _, h_flex, v_flex};
 use gpui_kit::prelude::FluentBuilder as _;
@@ -14,6 +14,7 @@ use crate::shared::{i18n::t, ui};
 pub(super) fn accounts_section(
     feed: &Feed,
     loading: bool,
+    live: bool,
     owner: WeakEntity<SessionView>,
 ) -> AnyElement {
     v_flex()
@@ -37,7 +38,7 @@ pub(super) fn accounts_section(
                         .ghost()
                         .xsmall()
                         .label(t("Refresh"))
-                        .disabled(loading)
+                        .disabled(live)
                         .on_click(move |_, _, cx| {
                             let _ = owner.update(cx, |this, cx| this.refresh_codex_usage(true, cx));
                         }),
@@ -89,35 +90,45 @@ impl SessionView {
         let Some(feed) = self.codex_account_feed() else {
             return;
         };
-        if !self
-            .extension
-            .codex_all_usage
-            .start(&feed, force, Instant::now())
-        {
+        let started = Instant::now();
+        if !self.extension.codex_all_usage.start(&feed, force, started) {
             return;
         }
         cx.spawn(async move |this, cx| {
             cx.background_executor().timer(ALL_USAGE_TIMEOUT).await;
-            let _ = this.update(cx, |this, cx| this.finish_codex_all_usage(false, cx));
+            let _ = this.update(cx, |this, cx| {
+                if this.extension.codex_all_usage.started_at() == Some(started) {
+                    this.finish_codex_all_usage(false, cx);
+                }
+            });
         })
         .detach();
-        self.run_codex_account_command(format!("/{USAGE_COMMAND} --all"), cx);
+        self.run_codex_account_command(ALL_USAGE_COMMAND.into(), cx);
         cx.notify();
+    }
+
+    pub(in crate::features::session) fn hide_codex_usage_loading(
+        &mut self,
+        cx: &mut Context<Self>,
+    ) {
+        if self.extension.codex_all_usage.hide_loading() {
+            cx.notify();
+        }
     }
 
     pub(in crate::features::session) fn finish_codex_all_usage(
         &mut self,
-        notice: bool,
+        failed: bool,
         cx: &mut Context<Self>,
     ) {
-        if !self.extension.codex_all_usage.pending() {
+        if !self.extension.codex_all_usage.live() {
             return;
         }
-        let feed = (!notice).then(|| self.codex_account_feed()).flatten();
+        let feed = (!failed).then(|| self.codex_account_feed()).flatten();
         if self
             .extension
             .codex_all_usage
-            .finish(feed.as_ref(), notice, Instant::now())
+            .finish(feed.as_ref(), failed, Instant::now())
         {
             cx.notify();
         }

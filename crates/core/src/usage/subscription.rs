@@ -172,17 +172,23 @@ pub fn window_display_label_in(language: Language, window: &UsageWindow) -> Stri
     if window.label.is_empty() {
         return tr(language, "period").into();
     }
-    let week =
-        window.label == "week" || window.label == "7d" || window.window_seconds >= WEEK as f64;
-    let five_hours = window.label == "5h"
-        || (window.window_seconds > 0.0 && window.window_seconds == 5.0 * HOUR as f64);
-    if week {
+    if is_weekly_window(window) {
         tr(language, "Weekly · all models").into()
-    } else if five_hours {
+    } else if is_five_hour_window(window) {
         tr(language, "5-hour limit").into()
     } else {
         window.label.clone()
     }
+}
+
+fn is_weekly_window(window: &UsageWindow) -> bool {
+    window.label == "week" || window.label == "7d" || window.window_seconds >= WEEK as f64
+}
+
+pub(super) fn is_five_hour_window(window: &UsageWindow) -> bool {
+    !window.label.is_empty()
+        && !is_weekly_window(window)
+        && (window.label == "5h" || window.window_seconds == (5 * HOUR) as f64)
 }
 
 /// When this window resets, in the reader's local clock (`offset_secs` from
