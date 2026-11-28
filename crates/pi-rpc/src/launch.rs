@@ -1662,7 +1662,7 @@ mod managed_tests {
                     "-Command".into(),
                     // -Command consumes the remaining arguments, including
                     // the --version appended by launcher_command.
-                    "[Console]::Error.WriteLine('broken before timeout'); Start-Sleep -Seconds 30; #"
+                    "[Console]::Error.WriteLine('broken before timeout'); Start-Sleep -Seconds 60; #"
                         .into(),
                 ],
             )
@@ -1683,11 +1683,13 @@ mod managed_tests {
             env: Vec::new(),
             bundled: None,
         };
-        // Allow for shell startup and scheduling under load. The child
-        // sleeps much longer than this test-only deadline, so we still
+        // Allow for shell startup and scheduling under load: a cold
+        // PowerShell on a CI runner can take more than 5 s to print. The
+        // child sleeps much longer than this test-only deadline, so we still
         // exercise the timeout path.
+        let deadline = Duration::from_secs(if cfg!(windows) { 20 } else { 5 });
         assert_eq!(
-            version_stderr_within(&spec, Duration::from_secs(5))
+            version_stderr_within(&spec, deadline)
                 .as_deref()
                 .map(str::trim),
             Some("broken before timeout")
