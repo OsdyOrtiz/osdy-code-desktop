@@ -13,7 +13,7 @@ use gpui_kit::*;
 use super::{TINY, clock};
 use crate::features::session::SessionView;
 use crate::features::session::agents::{JobRow, JobTail, job_row};
-use crate::shared::ui;
+use crate::shared::{kisses, ui};
 use gentle_core::tools;
 use gentle_core::transcript::{Item, ToolStatus, format_tokens};
 
@@ -84,72 +84,69 @@ impl SessionView {
                 }
             });
 
-        let left =
-            h_flex()
-                .flex_1()
-                .min_w_0()
-                .gap_2()
-                .overflow_hidden()
-                .whitespace_nowrap()
-                .when_some(question, |this, question| {
-                    this.child(
-                        h_flex()
-                            .min_w_0()
-                            .gap_1()
-                            .text_color(ui::warning())
-                            .child(Icon::new(IconName::MessageSquare).xsmall())
-                            .child(
-                                div()
-                                    .min_w_0()
-                                    .overflow_hidden()
-                                    .text_ellipsis()
-                                    .child(question),
-                            ),
-                    )
-                })
-                .when(busy, |this| {
-                    // The turn's clock; the composer's orbit shows it's live.
-                    this.when_some(since, |this, since| {
-                        this.child(
-                            div()
-                                .font_family(ui::mono())
-                                .text_size(ui::code_rems(11.))
-                                .text_color(ui::muted())
-                                .child(clock(since.elapsed())),
-                        )
-                        .child(ui::each_second())
-                    })
-                    .child(div().h(rems(10. / 16.)).w(px(1.)).bg(ui::border_strong()))
-                    .map(|this| match (waiting, feed_phase, self.activity.phase) {
-                        _ if stopping => {
-                            this.child(div().text_color(ui::muted()).child(t("✿ stopping…")))
-                        }
-                        (Some(_), _, _) => this.child(div().text_color(ui::petal()).child(
-                            t("✿ waiting for {provider}…").replace("{provider}", &provider),
-                        )),
-                        (None, Some(label), _) => {
-                            this.child(div().text_color(ui::petal()).child(format!("✿ {label}")))
-                        }
-                        (None, None, Some(phase)) => this.child(
-                            div()
-                                .text_color(ui::petal())
-                                .child(format!("✿ {}…", t(phase))),
-                        ),
-                        (None, None, None) => {
-                            this.child(div().text_color(ui::petal()).child(t("✿ working…")))
-                        }
-                    })
-                    .when_some(current_tool, |this, tool| {
-                        this.child(
+        let left = h_flex()
+            .flex_1()
+            .min_w_0()
+            .gap_2()
+            .overflow_hidden()
+            .whitespace_nowrap()
+            .when_some(question, |this, question| {
+                this.child(
+                    h_flex()
+                        .min_w_0()
+                        .gap_1()
+                        .text_color(ui::warning())
+                        .child(Icon::new(IconName::MessageSquare).xsmall())
+                        .child(
                             div()
                                 .min_w_0()
                                 .overflow_hidden()
                                 .text_ellipsis()
-                                .text_color(ui::muted())
-                                .child(tool),
-                        )
-                    })
-                });
+                                .child(question),
+                        ),
+                )
+            })
+            .when(busy, |this| {
+                // The turn's clock; the composer's orbit shows it's live.
+                this.when_some(since, |this, since| {
+                    this.child(
+                        div()
+                            .font_family(ui::mono())
+                            .text_size(ui::code_rems(11.))
+                            .text_color(ui::muted())
+                            .child(clock(since.elapsed())),
+                    )
+                    .child(ui::each_second())
+                })
+                .child(div().h(rems(10. / 16.)).w(px(1.)).bg(ui::border_strong()))
+                .child({
+                    let color = if stopping { ui::muted() } else { ui::petal() };
+                    let label = match (waiting, feed_phase, self.activity.phase) {
+                        _ if stopping => t("stopping…").to_owned(),
+                        (Some(_), _, _) => {
+                            t("waiting for {provider}…").replace("{provider}", &provider)
+                        }
+                        (None, Some(label), _) => label,
+                        (None, None, Some(phase)) => format!("{}…", t(phase)),
+                        (None, None, None) => t("working…").to_owned(),
+                    };
+                    h_flex()
+                        .gap_1()
+                        .text_color(color)
+                        .child(kisses::paw(rems(11. / 16.), color))
+                        .child(label)
+                })
+                .when_some(current_tool, |this, tool| {
+                    this.child(
+                        div()
+                            .min_w_0()
+                            .overflow_hidden()
+                            .text_ellipsis()
+                            .text_color(ui::muted())
+                            .child(tool),
+                    )
+                })
+            });
 
         let width = self.pane_width.get();
         // Only what needs you shows by itself; the rest waits one hover away.

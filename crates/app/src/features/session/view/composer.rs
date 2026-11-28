@@ -24,7 +24,7 @@ use super::{FileStrip, NARROW, TINY, file_tile, image_tile, number_badge};
 use crate::features::session::SessionView;
 use crate::features::session::attachments::{self, PastedText};
 use crate::features::session::submit::SKILL_TOKEN_ID;
-use crate::shared::kisses::{noise, paint_particle};
+use crate::shared::kisses::{noise, paint_particle, paw};
 use crate::shared::ui;
 use gentle_core::input_style::InputStyle;
 use gentle_core::transcript::format_tokens;
@@ -710,8 +710,7 @@ impl SessionView {
                             segment(div())
                                 .rounded_bl_xl()
                                 .bg(ui::accent().opacity(0.16))
-                                .text_color(ui::accent())
-                                .child("❀"),
+                                .child(paw(ui::code_rems(12.), ui::accent())),
                         )
                         .child(segment(div()).min_w_0().flex_shrink(1.).child(controls))
                         .child(segment(div()).px_1().child(attach))

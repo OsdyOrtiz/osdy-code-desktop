@@ -4,6 +4,7 @@ use super::badge::{Mark, workspace_avatar};
 use super::menu::WorkspaceMenuSource;
 use super::tab_panel::TabMenu;
 use super::*;
+use crate::shared::kisses;
 use gpui_kit::component::Selectable as _;
 
 impl Workspace {
@@ -271,12 +272,7 @@ impl Workspace {
                             .child(if let Some(light) = light {
                                 ui::light_dot(light, 7.).into_any_element()
                             } else if kind == PaneKind::Agent {
-                                div()
-                                    .text_size(rems(13. / 16.))
-                                    .line_height(relative(1.))
-                                    .text_color(icon_color)
-                                    .child("❀")
-                                    .into_any_element()
+                                kisses::paw(rems(13. / 16.), icon_color).into_any_element()
                             } else {
                                 Icon::new(kind.icon())
                                     .small()

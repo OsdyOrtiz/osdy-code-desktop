@@ -581,9 +581,9 @@ pub(super) fn lookup(en: &str) -> Option<&'static str> {
         "… {count} more lines not shown" => "… se ocultaron {count} líneas más",
         "… {count} more lines" => "… {count} líneas más",
         "↵ insert · tab folders" => "↵ insertar · tab carpetas",
-        "✿ stopping…" => "✿ deteniendo…",
-        "✿ waiting for {provider}…" => "✿ esperando a {provider}…",
-        "✿ working…" => "✿ trabajando…",
+        "stopping…" => "deteniendo…",
+        "waiting for {provider}…" => "esperando a {provider}…",
+        "working…" => "trabajando…",
         _ => return None,
     })
 }
@@ -591,6 +591,18 @@ pub(super) fn lookup(en: &str) -> Option<&'static str> {
 #[cfg(test)]
 mod tests {
     use crate::i18n::{Language, tr};
+
+    #[test]
+    fn translates_activity_labels_without_requiring_an_icon_prefix() {
+        for (english, spanish) in [
+            ("stopping…", "deteniendo…"),
+            ("waiting for {provider}…", "esperando a {provider}…"),
+            ("working…", "trabajando…"),
+        ] {
+            assert_eq!(tr(Language::Spanish, english), spanish);
+            assert_eq!(tr(Language::English, english), english);
+        }
+    }
 
     #[test]
     fn translates_session_and_document_labels_without_changing_english() {

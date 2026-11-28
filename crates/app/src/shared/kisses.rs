@@ -90,6 +90,20 @@ pub fn paint_particle(window: &mut Window, i: usize, center: Point<Pixels>, dot:
     );
 }
 
+/// The same paw as the flight particles, in one theme color at icon size.
+pub fn paw(side: Rems, color: Hsla) -> Div {
+    div().size(side).flex_none().child(
+        canvas(
+            |_, _, _| (),
+            move |bounds, _, window, _| {
+                let dot = f32::from(bounds.size.width) / PAW[0].len() as f32;
+                paint_sprite(window, &PAW, bounds.center(), dot, color, color);
+            },
+        )
+        .size_full(),
+    )
+}
+
 /// A stable pseudo-random value in 0..1 for particle `i`'s `salt`.
 pub fn noise(i: usize, salt: u32) -> f32 {
     let mut x = (i as u32).wrapping_mul(0x9E37_79B9) ^ salt.wrapping_mul(0x85EB_CA6B);

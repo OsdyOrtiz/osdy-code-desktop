@@ -21,6 +21,7 @@ use super::state::BackendStatus;
 use super::{CONTEXT, SessionView};
 use crate::shared::banner;
 use crate::shared::i18n;
+use crate::shared::kisses;
 use crate::shared::overlay::LiveSlots;
 use crate::shared::ui;
 use gentle_core::input_style::InputStyle;
@@ -3275,9 +3276,8 @@ fn code_block_header(block: &gpui_kit::base::text::CodeBlock, cx: &App) -> Div {
         )
 }
 
-/// The petal-and-shimmer "agent is on it" row, its clock counting up once
-/// a second. With the composer's orbit, the turn's only moving indicators:
-/// the petal and the label move on the live overlay, under `key`.
+/// The paw-and-shimmer "agent is on it" row, its clock counting up once
+/// a second. The paw and the label move on the live overlay, under `key`.
 fn working_indicator(
     slots: &LiveSlots,
     key: impl Into<ElementId>,
@@ -3291,12 +3291,7 @@ fn working_indicator(
             h_flex()
                 .gap_2()
                 .items_center()
-                .child(ui::pulse(
-                    div()
-                        .text_size(rems(15. / 16.))
-                        .text_color(ui::petal())
-                        .child("✿"),
-                ))
+                .child(ui::pulse(kisses::paw(rems(15. / 16.), ui::petal())))
                 .child(
                     ui::shimmer(label, ui::muted(), ui::fg())
                         .text_size(rems(13. / 16.))
