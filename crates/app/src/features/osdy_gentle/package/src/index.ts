@@ -41,6 +41,7 @@ export default function osdyGentle(pi: PiLike): void {
 	const t = translator();
 	let session = new AbortController();
 	let usageRun: string | undefined;
+	let completions: Promise<void> = Promise.resolve();
 	// Only snapshots from quota lookups requested by commands live here.
 	const quotas = new Map<string, Map<string, CodexUsageSnapshot>>();
 	const stopSession = () => {
@@ -151,9 +152,16 @@ export default function osdyGentle(pi: PiLike): void {
 				},
 			});
 			await refresh;
-			if (completedRun !== undefined && !signal.aborted) {
-				usageRun = completedRun;
-				await refreshWidget();
+			if (completedRun !== undefined) {
+				// Batches settling together each get their marker published: the
+				// next one waits until the previous marker reached the feed.
+				const published = completions.then(async () => {
+					if (signal.aborted) return;
+					usageRun = completedRun;
+					await refreshWidget();
+				});
+				completions = published.catch(() => {});
+				await published;
 			}
 		},
 	});
