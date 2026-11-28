@@ -47,6 +47,7 @@ const ESCAPE_SETTLE: std::time::Duration = std::time::Duration::from_millis(600)
 /// Requests a tab makes of its window.
 pub enum SessionEvent {
     OpenProviders,
+    OpenCodexAccounts(gentle_core::codex_accounts::Feed),
     /// An extension's `notify`, for the window's notification center.
     /// Warnings and errors are also toasted by the tab itself.
     Notice {

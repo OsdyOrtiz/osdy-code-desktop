@@ -555,6 +555,7 @@ impl Render for Workspace {
                     Overlay::Docs(view) => (view.clone().into_any_element(), false),
                     Overlay::Settings(view) => (view.clone().into_any_element(), false),
                     Overlay::Profiles(view) => (view.clone().into_any_element(), false),
+                    Overlay::CodexAccounts(view) => (view.clone().into_any_element(), false),
                     Overlay::Review(view) => (view.clone().into_any_element(), false),
                     // First-run screens still cover the whole window.
                     Overlay::Onboarding(view) => (view.clone().into_any_element(), true),

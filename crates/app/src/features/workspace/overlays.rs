@@ -385,6 +385,46 @@ impl Workspace {
         cx.notify();
     }
 
+    pub(super) fn open_codex_accounts(
+        &mut self,
+        pane: PaneId,
+        session: &Entity<SessionView>,
+        feed: gentle_core::codex_accounts::Feed,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let owner = session.downgrade();
+        let view = cx.new(|cx| AccountsView::new(feed, session, window, cx));
+        let subscription = cx.subscribe_in(
+            &view,
+            window,
+            move |this, _, event: &PickerEvent, window, cx| {
+                if !matches!(event, PickerEvent::ViewUsage(_)) {
+                    this.close_overlay(window, cx);
+                }
+                // Never redirect the selection to whichever tab is active now.
+                if !this.panes.contains_key(&pane) {
+                    return;
+                }
+                let _ = owner.update(cx, |session, cx| match event {
+                    PickerEvent::Close => {}
+                    PickerEvent::Command(command) | PickerEvent::ViewUsage(command) => {
+                        session.run_codex_account_command(command.clone(), cx)
+                    }
+                    PickerEvent::InvalidName => session.codex_account_error(
+                        crate::shared::i18n::t(
+                            "This Codex account name cannot be selected here. Use Manage accounts…",
+                        )
+                        .into(),
+                        cx,
+                    ),
+                });
+            },
+        );
+        self.overlay = Some((Overlay::CodexAccounts(view), subscription));
+        cx.notify();
+    }
+
     pub(super) fn open_profiles(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.start_active_session(window, cx);
         let cwd = self.active_cwd(cx);

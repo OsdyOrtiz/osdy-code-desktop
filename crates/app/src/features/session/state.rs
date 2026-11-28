@@ -180,6 +180,7 @@ pub(super) struct ExtensionUi {
     pub(super) dialogs: VecDeque<Dialog>,
     pub(super) statuses: BTreeMap<String, String>,
     pub(super) widgets: BTreeMap<String, Vec<String>>,
+    pub(super) codex_usage_registered: bool,
     /// Rate-limit usage extensions reported, by window (`seven_day`).
     pub(super) rate_limits: BTreeMap<String, view::RateLimit>,
     /// When each warning toast was last shown, to drop repeats.

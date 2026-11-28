@@ -5,6 +5,7 @@ pub mod app_update;
 pub mod backend;
 pub mod browser;
 pub mod canvas;
+mod codex_accounts;
 pub mod devices;
 pub mod diagnostics;
 pub mod docs;

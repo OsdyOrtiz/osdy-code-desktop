@@ -208,6 +208,9 @@ impl Workspace {
                 }
             }
             SessionEvent::OpenProviders => self.open_providers(window, cx),
+            SessionEvent::OpenCodexAccounts(feed) => {
+                self.open_codex_accounts(id, session, feed.clone(), window, cx);
+            }
             // A double Ctrl+C on the idle agent closes its pane as ⌘W does.
             SessionEvent::CloseRequested => self.close_pane(id, window, cx),
             SessionEvent::OpenScreen(screen) => {

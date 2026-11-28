@@ -11,8 +11,9 @@ use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
 
 use super::{TINY, clock};
-use crate::features::session::SessionView;
+use crate::features::codex_accounts;
 use crate::features::session::agents::{JobRow, JobTail, job_row};
+use crate::features::session::{SessionEvent, SessionView};
 use crate::shared::{kisses, ui};
 use gentle_core::tools;
 use gentle_core::transcript::{Item, ToolStatus, format_tokens};
@@ -233,7 +234,7 @@ impl SessionView {
             // Tern-style: jobs and widgets live in chips here instead of a
             // side panel. The task list floats at the top of the
             // conversation instead (see `render_todo_island`).
-            .when(!collapse, |this| this.children(self.render_widget_chips()))
+            .children(self.render_widget_chips(collapse, cx))
             .when(self.helpers_visible(), |this| {
                 this.child(self.render_helpers_chip(cx))
             })
@@ -347,37 +348,54 @@ impl SessionView {
     /// Extension widgets (`setWidget`): one chip each, its lines on click.
     /// Gentle Shell's YOLO banner (`gentle:yolo`) is left out: the
     /// permission chip already shows the mode.
-    fn render_widget_chips(&self) -> Vec<AnyElement> {
+    fn render_widget_chips(&self, collapse: bool, cx: &mut Context<Self>) -> Vec<AnyElement> {
         self.extension
             .widgets
             .iter()
             .filter(|(key, _)| key.as_str() != "gentle:yolo")
-            .map(|(key, lines)| {
+            .filter_map(|(key, lines)| {
+                if key == gentle_core::codex_accounts::WIDGET_KEY
+                    && let [line] = lines.as_slice()
+                    && let Some(feed) = gentle_core::codex_accounts::parse(line)
+                {
+                    return Some(
+                        codex_accounts::button(&feed)
+                            .on_click(cx.listener(move |_, _, _, cx| {
+                                cx.emit(SessionEvent::OpenCodexAccounts(feed.clone()));
+                            }))
+                            .into_any_element(),
+                    );
+                }
+                if collapse {
+                    return None;
+                }
                 let lines = lines.clone();
-                chip_popover(
-                    ChipPopoverOptions::new(
-                        SharedString::from(format!("widget-{key}")),
-                        IconName::LayoutDashboard,
-                        ui::muted(),
-                        gentle_core::text::first_line(key, 18),
+                Some(
+                    chip_popover(
+                        ChipPopoverOptions::new(
+                            SharedString::from(format!("widget-{key}")),
+                            IconName::LayoutDashboard,
+                            ui::muted(),
+                            gentle_core::text::first_line(key, 18),
+                        )
+                        .title(key),
+                        move || {
+                            lines
+                                .iter()
+                                .map(|line| {
+                                    div()
+                                        .min_w_0()
+                                        .text_size(ui::code_rems(12.))
+                                        .font_family(ui::mono())
+                                        .text_color(ui::muted())
+                                        .child(line.clone())
+                                        .into_any_element()
+                                })
+                                .collect()
+                        },
                     )
-                    .title(key),
-                    move || {
-                        lines
-                            .iter()
-                            .map(|line| {
-                                div()
-                                    .min_w_0()
-                                    .text_size(ui::code_rems(12.))
-                                    .font_family(ui::mono())
-                                    .text_color(ui::muted())
-                                    .child(line.clone())
-                                    .into_any_element()
-                            })
-                            .collect()
-                    },
+                    .into_any_element(),
                 )
-                .into_any_element()
             })
             .collect()
     }

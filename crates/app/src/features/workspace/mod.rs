@@ -19,6 +19,7 @@ use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
 
 use crate::features::canvas::{CanvasEvent, CanvasView};
+use crate::features::codex_accounts::{AccountsView, PickerEvent};
 use crate::features::docs::{DocsEvent, DocsView};
 use crate::features::explorer::{ExplorerEvent, ExplorerView};
 use crate::features::memory::{MemoryEvent, MemoryView};
@@ -123,6 +124,7 @@ enum Overlay {
     Docs(Entity<DocsView>),
     Settings(Entity<SettingsView>),
     Profiles(Entity<ProfilesView>),
+    CodexAccounts(Entity<AccountsView>),
     Review(Entity<ReviewView>),
     Onboarding(Entity<OnboardingView>),
     Welcome(Entity<WelcomeView>),

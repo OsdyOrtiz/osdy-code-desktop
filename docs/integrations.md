@@ -589,10 +589,25 @@ Known keys:
 | `gentle:yolo` | status and widget | Hidden: the permissions chip already shows the mode. |
 | `gentle-jobs` | status | Hidden: jobs have their own chip, built from the reconciled job rows. |
 | `gentle-agents` | widget | Helper activity model, not a generic chip. |
+| `osdy-gentle:codex-accounts` | widget | Reserved for the native Codex account button; an unrecognized or malformed feed stays a generic widget chip. |
 | `engram` | status | gentle-engram's `🧠 <project> · <state>`: a brain button next to the review's `±` (with `#id` when the state names a memory) that opens the Memory screen on that project and memory (`gentle_core::engram::status_target`; `unknown` is no project, a deleted memory or a saved prompt no memory). Folds with the others in minimal panels, and when the text isn't that shape (`🧠 memory disabled`). |
 | Any other | status / widget | Generic text next to the composer (`view/activity.rs`); in narrow panels only an icon with a tooltip, in minimal panels it collapses into "+N". |
 
 The filters are in `session/view/activity.rs` (`statuses` and `render_widget_chips`). `lifecycle.rs` `start` clears statuses, widgets and dialogs on every start.
+
+### Codex account widget
+
+In RPC mode, osdy-gentle publishes exactly one JSON line under `osdy-gentle:codex-accounts`, for example:
+
+```json
+{"v":1,"active":"Work account","accounts":[{"name":"Work account","active":true,"binding":"Daily","quota":null}]}
+```
+
+The version is `1`; `active` is the active account name or `null`. Each row has a name, a boolean active marker, a Gentle model profile name or `null` as `binding`, and a short cached quota summary or `null` as `quota`. The feed exposes only names and display state, never tokens, emails, IDs or paths, and does not fetch quota. An empty `accounts` list is valid. The desktop validates field shapes, ignores unknown fields and displays at most 50 rows and 64 characters per string.
+
+The key button shows only the active account name, or **Codex** when no account is active. It opens a centered picker with the active marker, binding and quota. Use ↑/↓ and Enter to choose a row or **Manage accounts…**; Esc closes it. Choosing the active row only closes the picker. A different row runs `/osdy-profile <name>` in the tab that published the widget (the full name, including spaces, is one argument); **Manage accounts…** runs `/osdy-account`. A truncated name cannot be selected directly. The extension owns confirmation and switching; the desktop picker never reads the account store or credentials, and surfaces an unavailable or unhandled command as an error, with no chat fallback.
+
+When the originating tab registers the extension command `/osdy-usage <name>`, each row with a full, usable name has a **View usage** icon button (or press **U** on a focused row). It runs in the originating tab without selecting an account, closing the picker or asking for confirmation. The extension fetches usage on demand and publishes the new quota summary in the same feed; it does not switch accounts or change bindings or auth. That row shows loading until its quota changes, the tab reports a warning or error, or about 20 seconds pass (including when the summary is unchanged). The desktop does not send the command as chat if it is unavailable.
 
 ## `/` commands and native screens
 

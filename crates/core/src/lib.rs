@@ -9,6 +9,7 @@ pub mod backend;
 pub mod background;
 pub mod browser;
 pub mod canvas;
+pub mod codex_accounts;
 pub mod commands;
 pub mod composer_placeholder;
 pub mod contrast;

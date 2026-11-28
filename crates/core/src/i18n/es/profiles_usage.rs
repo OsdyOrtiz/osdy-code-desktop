@@ -2,6 +2,20 @@
 
 pub(super) fn lookup(en: &str) -> Option<&'static str> {
     Some(match en {
+        // Codex account picker.
+        "Codex" => "Codex",
+        "View usage" => "Ver uso",
+        "Loading usage…" => "Cargando uso…",
+        "Codex accounts" => "Cuentas de Codex",
+        "Active" => "Activa",
+        "No saved Codex accounts." => "No hay cuentas de Codex guardadas.",
+        "Manage accounts…" => "Administrar cuentas…",
+        "This Codex account name cannot be selected here. Use Manage accounts…" => {
+            "No se puede seleccionar este nombre de cuenta de Codex aquí. Usa Administrar cuentas…"
+        }
+        "Could not run the Codex account command in this tab." => {
+            "No se pudo ejecutar el comando de cuentas de Codex en esta pestaña."
+        }
         // Profiles.
         "Loading profiles…" => "Cargando perfiles…",
         "Retry" => "Reintentar",
