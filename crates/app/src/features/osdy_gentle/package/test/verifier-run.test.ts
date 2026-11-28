@@ -43,7 +43,7 @@ async function setup(t, names = ["Work"], answer = usage) {
 		registerCommand(key,cmd) { commands.set(key,cmd); },
 	});
 	const ctx = { mode:"rpc", isIdle:no, ui:{ input:no, confirm:no, select:no,
-		setWidget(key, lines) { assert.equal(key,"osdy-gentle:codex-accounts"); events.push(lines ? JSON.parse(lines[0]) : null); },
+		setWidget(key, lines) { if (key === "osdy-gentle:mcp-status") return; assert.equal(key,"osdy-gentle:codex-accounts"); events.push(lines ? JSON.parse(lines[0]) : null); },
 		notify(...notice) { events.push(notice); },
 	} };
 	const session = async name => { for (const handle of hooks.get(name) ?? []) await handle({},ctx); };

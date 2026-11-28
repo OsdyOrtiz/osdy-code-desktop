@@ -372,8 +372,8 @@ The app-level live check `live_review_changes_and_external_config` (`session/sta
 | `prompt` | `message`, `images?`, `streamingBehavior: "steer"?` | `attachments::prompt_command`, `rpc.rs` `send_prompt_with` | Send; in the middle of a turn it is sent as steer. Images travel base64-encoded in `images` (PNG, JPEG, GIF or WebP; BMP and TIFF re-encoded to PNG; 20 MB each); files the user attached are not inlined: they are named by path in `message`, in a block after the text (`\n\nAttached files:\n- src/main.rs`), relative to the agent's cwd when inside it and absolute otherwise, both as that tab's backend reads them (in WSL `C:\Users\x\a.pdf` is `/mnt/c/Users/x/a.pdf`; a path it can't reach, and a local tab's, keep this computer's spelling), and the agent reads them with its own tools. A file gone from disk when the prompt is sent refuses the send, with a warning naming it |
 | `prompt` | `message` (`/gentle:…`) | `rpc.rs` `run_extension_command` | Extension command without a turn; success only if `disposition == "handled"` |
 | `prompt` | `message` (`/gentle-ui:event {json}`) | Generative UI | What the user did in a `gentle_ui` surface (see Generative UI); extension commands run at once, even mid-turn, and answer `disposition: "handled"` |
-| `clear_queue`, `abort` | — | `rpc.rs` `stop` | Stop the turn (Esc, ⌘. / Ctrl+. or the Stop button): clear the queue, then abort; the activity line reads "stopping…" until the turn ends. Esc first closes what is open (the `/` menu and model picker from the composer, then panels and dialogs, then an expanded generative UI surface: `GenUi::collapse_on_escape`, unless the surface has the keyboard and handles Esc itself); an Esc within 600 ms of one that closed something doesn't stop |
-| `abort_bash` | — | `rpc.rs` `stop` | Stop a running `!cmd` (same Stop button / Esc / ⌘.; shown while one runs, `Transcript::shells_running`). Its `bash` response then settles the card. Sent alongside `abort` when a turn runs too |
+| `clear_queue`, `abort` | — | `rpc.rs` `stop` | Stop the turn (a double Esc within `double_interrupt::WINDOW`, 700 ms, ⌘. / Ctrl+. or the Stop button; the first Esc only arms the stop and shows "Press Esc again to stop", another key, a Ctrl+C copy included, disarms it, and a held Esc never counts as the second press): clear the queue, then abort; the activity line reads "stopping…" until the turn ends. Esc first closes what is open (the `/` menu and model picker from the composer, then panels and dialogs, then an expanded generative UI surface: `GenUi::collapse_on_escape`, unless the surface has the keyboard and handles Esc itself); an Esc within 600 ms of one that closed something doesn't stop |
+| `abort_bash` | — | `rpc.rs` `stop` | Stop a running `!cmd` (same Stop button / double Esc / ⌘.; shown while one runs, `Transcript::shells_running`). Its `bash` response then settles the card. Sent alongside `abort` when a turn runs too |
 | `bash` | `command`, `excludeFromContext` | `submit.rs` `run_shell` | `!cmd` / `!!cmd`; output arrives via `bash_execution_update` |
 | `get_state` | — | `refresh_state`, `set_model` | `model`, `thinkingLevel`, `sessionName`, `sessionFile`, `autoCompactionEnabled` |
 | `get_available_models` | — | `refresh_state` | Both model pickers put the current model first, then the default if `list_agent_definitions` (Gentle Shell 5.0.0+) reports one that's in the catalog. As in the terminal selector, the rest are sorted by provider name, preserving catalog order within each provider. `sort_like_shell` approximates the terminal's locale-aware provider comparison. Profiles takes the list and its order when the screen opens (`open_profiles`); a default that arrives later shows there after reopening. |
@@ -590,6 +590,7 @@ Known keys:
 | `gentle-jobs` | status | Hidden: jobs have their own chip, built from the reconciled job rows. |
 | `gentle-agents` | widget | Helper activity model, not a generic chip. |
 | `osdy-gentle:codex-accounts` | widget | Reserved for the native Codex account button; an unrecognized or malformed feed stays a generic widget chip. |
+| `osdy-gentle:mcp-status` | widget | Reserved for Configuration › Integrations; never a composer chip. |
 | `engram` | status | gentle-engram's `🧠 <project> · <state>`: a brain button next to the review's `±` (with `#id` when the state names a memory) that opens the Memory screen on that project and memory (`gentle_core::engram::status_target`; `unknown` is no project, a deleted memory or a saved prompt no memory). Folds with the others in minimal panels, and when the text isn't that shape (`🧠 memory disabled`). |
 | Any other | status / widget | Generic text next to the composer (`view/activity.rs`); in narrow panels only an icon with a tooltip, in minimal panels it collapses into "+N". |
 
@@ -614,6 +615,12 @@ The composer’s plan-limits gauge next to Effort shows the current model provid
 Opening the popover runs `/osdy-usage --all --run <id>` in that tab unless a batch finished less than 60 seconds ago. **Refresh** bypasses that wait, but neither action starts another batch while one is live. The v1 feed’s optional top-level `usageRun` is the last completed bulk run ID, published after all lookups settle. Both IDs use 1–32 ASCII letters, digits or hyphens (`[A-Za-z0-9-]`); the desktop ignores malformed `usageRun` values. Named lookups leave `usageRun` unchanged.
 
 Only a matching `usageRun` or the 120-second fallback ends a batch and starts the 60-second debounce. Quota changes and tab notices can clear the spinner early; otherwise it clears at 30 seconds independently of the batch lock. The exact extension-command check still prevents a chat fallback.
+
+### MCP status widget
+
+In RPC mode, osdy-gentle uses the active agent's read-only `getMcpStatus()` and `onMcpStatusChanged()` APIs when both are present. It publishes one JSON line under `osdy-gentle:mcp-status`: `{"v":1,"available":true,"servers":[{"name":"example","state":"ready","tools":2}]}`. States are `connecting`, `ready`, `error`, and `disabled`; the optional `tools` is a count, and the optional `error` is a kind (`auth`, `timeout`, `transport`, `config`, or `unknown`), never a raw message. No URLs or other server details are sent. The subscription ends on session shutdown or replacement.
+
+If either API is absent, the widget sends `{"v":1,"available":false}`. Configuration › Integrations combines names from the active agent with names from `mcp.json`. Where the agent reports no status (including an empty or missing feed), a configured `enabled: false` appears as **Disabled** and other statuses are **Not available**. Neither the view nor the widget starts MCP connections; tool counts and configuration do not prove connectivity.
 
 ## `/` commands and native screens
 
@@ -659,7 +666,7 @@ App paths: `dirs::data_dir()/osdy-code-desktop/` (on macOS, `~/Library/Applicati
 | Launcher `config.json` (`startupReleaseCheck`, `skippedStartupRelease`) | Launcher, shared | R/W | `features/updates/` (same `launcher_config_path()`) |
 | `<agent>/auth.json` | Pi | R (Pi writes it via `login-helper.mjs`; Configuration's Sign-ins and provider check use `get_auth_status` when the active tab's Shell advertises it) | `usage/credentials.rs`, `settings/snapshot.rs`, `setup/extras.rs` |
 | `<agent>/settings.json` | Pi | R/W | `sessions/discovery.rs` (`sessionDir`), `profiles/files.rs` (orchestrator), `setup/gentle.rs` (`packages`), `osdy_gentle/` (reads `packages`; adds to it only through `gentle-shell install`) |
-| `<agent>/models.json`, `<agent>/mcp.json` | Pi | R (`mcp.json` changes only through `gentle-shell mcp add`, so Pi writes it) | `settings/snapshot.rs`, `setup/extras.rs`, `setup/maestro.rs` |
+| `<agent>/models.json`, `<agent>/mcp.json` | Pi | R (`mcp.json` changes through `gentle-shell mcp add/remove`, so Pi writes it) | `settings/snapshot.rs`, `setup/extras.rs`, `setup/maestro.rs`, `setup/codegraph.rs` |
 | `<agent>/subagents.json`, `<cwd>/.pi/subagents.json` | Gentle AI | R/W (over RPC, read as the `subagents` store; written only by Make default) | `profiles/env.rs`, `profiles/apply.rs` |
 | `<agent>/gentle-ai/managed-assets.json` | Gentle AI installer | R/W (over RPC, read as the `managed_assets` store; written only by Make default) | `profiles/apply.rs` |
 | `<agent>/claude-bridge.json` | Claude bridge | R/W | `settings/claude.rs` |
@@ -709,7 +716,7 @@ Engram (`engram.rs`): the installed version from `engram version`, the latest fr
 
 ### Installers (`features/setup/`)
 
-`run_checks()` evaluates each `CheckId` in `check_order` order (Node, Go on Windows only, GentleShell, Setup, Provider, Git, Engram) with minimums `MIN_NODE` 22.19.0, `MIN_GO` 1.25.10, `MIN_PI` 1.2.0, `MIN_ENGRAM` 3.0.0. The app doesn't offer the Claude bridge; Provider still counts an already installed `pi-claude-bridge` with Claude Code signed in. Each `Check` carries a `Status` and a `Fix` (`Auto`, `Terminal(cmd)`, `SignIn`, `None`). `install(id, log)`:
+`run_checks()` evaluates each `CheckId` in `check_order` order (Node, Go on Windows only, GentleShell, Setup, Provider, Git, Engram, Codegraph) with minimums `MIN_NODE` 22.19.0, `MIN_GO` 1.25.10, `MIN_PI` 1.2.0, `MIN_ENGRAM` 3.0.0. The app doesn't offer the Claude bridge; Provider still counts an already installed `pi-claude-bridge` with Claude Code signed in. Each `Check` carries a `Status` and a `Fix` (`Auto`, `Terminal(cmd)`, `SignIn`, `None`). `install(id, log)`:
 
 | Check | Install |
 | --- | --- |
@@ -726,6 +733,12 @@ Engram (`engram.rs`): the installed version from `engram version`, the latest fr
 **Osdy account language.** The app writes `agent-locale` at startup and when the language setting changes. Local agents get its path in `OSDY_DESKTOP_LOCALE_FILE`; WSL gets the translated path when available. Command backends do not receive the path because the app directory may not be mounted there. The extension reads the file at each command and feed refresh (no tab restart); if unavailable or invalid, it uses the first nonempty value of `LC_ALL`, `LC_MESSAGES` and `LANG` (Spanish for values starting with `es`, English otherwise). Command descriptions are translated at registration.
 
 Anything that needs `sudo` or an interactive login is delivered as `Fix::Terminal`, and `features/onboarding/` opens it in a terminal tab. After installing, `refresh_paths` (= `forget_cached` + `apply_toolchain_path`).
+
+### Codegraph (`features/setup/codegraph.rs`)
+
+[Codegraph](https://colbymchenry.github.io/codegraph/) (MIT) exposes symbols, references, and calls to the agent via MCP. It's optional in Welcome and excluded from **Install everything**. In Settings → Integrations → **Useful extras**, the Codegraph card shows the CLI path and `codegraph --version` output. **Registered for the agent** means Gentle Shell's `mcp.json` contains an enabled registration, not that the server is connected; the card doesn't start the server or test it. The live state comes from the active agent in the MCP servers list.
+
+Install uses `npm i -g @colbymchenry/codegraph` with the existing npm prefix selection. Connect registers through `gentle-shell mcp add codegraph -- codegraph serve --mcp` (through `cmd /c` on Windows), and Disconnect uses `gentle-shell mcp remove codegraph` without uninstalling the CLI. Tabs pick up changes when idle. Setup is available only for local agents and does not fall back to the host with a remote backend. Run `codegraph init` in each project to create its `.codegraph/` index; the app doesn't initialize projects automatically.
 
 ### Music (`features/music/`)
 

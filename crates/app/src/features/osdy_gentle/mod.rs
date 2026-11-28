@@ -66,6 +66,10 @@ const FILES: &[(&str, &[u8])] = &[
     ("src/i18n.ts", include_bytes!("package/src/i18n.ts")),
     ("src/index.ts", include_bytes!("package/src/index.ts")),
     (
+        "src/mcp-status.ts",
+        include_bytes!("package/src/mcp-status.ts"),
+    ),
+    (
         "src/pi-auth-backend.ts",
         include_bytes!("package/src/pi-auth-backend.ts"),
     ),

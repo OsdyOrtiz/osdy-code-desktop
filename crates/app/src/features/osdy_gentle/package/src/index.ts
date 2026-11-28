@@ -11,7 +11,8 @@ import { createCodexResetActions } from "./codex-reset.ts";
 import { osdyAccountCommand, osdyProfileCommand, osdyUsageCommand, type CommandContext, type Deps } from "./commands.ts";
 import type { EventBus } from "./gentle-profiles.ts";
 import { describePiRuntimeAuth, resolvePiRuntimeAuth } from "./pi-runtime-auth.ts";
-import { registerProfileWidget, type WidgetHost } from "./profile-widget.ts";
+import { registerMcpStatusWidget, type McpStatusHost } from "./mcp-status.ts";
+import { registerProfileWidget } from "./profile-widget.ts";
 
 /** Same rule as Pi's getAgentDir(): PI_CODING_AGENT_DIR (with ~), else ~/.pi/agent. */
 export function agentDir(env: NodeJS.ProcessEnv = process.env): string {
@@ -25,7 +26,7 @@ interface HostSdk {
 	getAgentDir(): string;
 }
 
-interface PiLike extends WidgetHost {
+interface PiLike extends McpStatusHost {
 	events: EventBus;
 	registerCommand(
 		name: string,
@@ -104,6 +105,7 @@ export default function osdyGentle(pi: PiLike): void {
 			}),
 		};
 	};
+	registerMcpStatusWidget(pi);
 	const refreshWidget = registerProfileWidget(
 		pi, () => resolve(agentDir()), undefined,
 		(directory, account) => quotas.get(directory)?.get(account),

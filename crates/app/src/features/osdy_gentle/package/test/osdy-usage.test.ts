@@ -61,6 +61,8 @@ async function setup(t: TestContext, { both = false, beforeResponse, onFeed }: {
 		select: unexpected, confirm: unexpected, input: unexpected,
 		notify: (...args: unknown[]) => notices.push(args),
 		setWidget: (key: string, lines: string[] | undefined) => {
+			// The MCP status widget is published separately; its own tests cover it.
+			if (key === "osdy-gentle:mcp-status") return;
 			assert.equal(key, "osdy-gentle:codex-accounts");
 			if (lines) {
 				assert.equal(lines.length, 1);

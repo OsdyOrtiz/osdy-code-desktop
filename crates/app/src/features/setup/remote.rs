@@ -102,6 +102,7 @@ pub(super) fn run_checks(choice: &Backend) -> Vec<Check> {
         CheckId::Provider,
         CheckId::Git,
         CheckId::Engram,
+        CheckId::Codegraph,
     ];
     ids.into_iter()
         .map(|id| {
@@ -181,6 +182,10 @@ pub(super) fn run_checks(choice: &Backend) -> Vec<Check> {
                         Fix::Auto,
                     ),
                 },
+                CheckId::Codegraph => (
+                    Status::Failed(super::codegraph::LOCAL_ONLY.into()),
+                    Fix::None,
+                ),
                 // Go builds Gentle AI on Windows itself; a backend's setup brings its own.
                 CheckId::Go => (Status::Ok("Not needed".into()), Fix::None),
             };

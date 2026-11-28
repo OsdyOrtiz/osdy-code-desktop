@@ -33,6 +33,7 @@ pub mod ides;
 pub mod input_style;
 pub mod interface_size;
 pub mod markdown;
+pub mod mcp_status;
 pub mod music;
 pub mod notifications;
 pub mod preview;

@@ -257,7 +257,7 @@ test("extension registers commands and retires each session controller on start 
 	assert.deepEqual(names, ["osdy-profile", "osdy-account", "osdy-auth-status", "osdy-usage"]);
 	const ctx = { mode: "tui", ui: { setWidget: () => assert.fail("unexpected TUI widget") } };
 	for (const event of ["session_start", "session_start", "session_shutdown"] as const) {
-		assert.equal(handlers.get(event)?.length, 2, "widget and reset listeners must coexist");
+		assert.equal(handlers.get(event)?.length, 3, "account widget, MCP status and reset listeners must coexist");
 		for (const handler of handlers.get(event)!) await handler({}, ctx);
 	}
 	assert.equal(retired.length, 3);

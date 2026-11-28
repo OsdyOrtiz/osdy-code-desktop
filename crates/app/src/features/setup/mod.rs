@@ -7,6 +7,7 @@
 //! (`node/`, `npm-global/`, `bin/`); `apply_toolchain_path` puts them first
 //! on pi-rpc's search PATH, so sessions find them on every launch.
 
+pub mod codegraph;
 pub mod devices;
 mod extras;
 mod fetch;
@@ -36,6 +37,7 @@ pub enum CheckId {
     Provider,
     Git,
     Engram,
+    Codegraph,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -255,6 +257,7 @@ fn meta(id: CheckId) -> (&'static str, &'static str, Need) {
             "Long-term memory across sessions.",
             Need::Optional,
         ),
+        CheckId::Codegraph => ("Codegraph", codegraph::SUMMARY, Need::Optional),
     }
 }
 
@@ -265,7 +268,7 @@ fn check_order(os: &str) -> Vec<CheckId> {
     if os == "windows" {
         ids.push(Go);
     }
-    ids.extend([GentleShell, Setup, Provider, Git, Engram]);
+    ids.extend([GentleShell, Setup, Provider, Git, Engram, Codegraph]);
     ids
 }
 
@@ -294,6 +297,7 @@ pub fn run_checks() -> Vec<Check> {
                 CheckId::Provider => extras::check_provider(&agent, signed_in),
                 CheckId::Git => extras::check_git(),
                 CheckId::Engram => extras::check_engram(),
+                CheckId::Codegraph => codegraph::check(),
             };
             let (status, fix) = if managed {
                 for_managed_install(id, status, fix)
@@ -400,6 +404,7 @@ pub fn install(id: CheckId, log: &(dyn Fn(String) + Send + Sync)) -> Result<(), 
         CheckId::Provider => Err(t("Sign in from the Providers screen.").into()),
         CheckId::Git => extras::install_git(log),
         CheckId::Engram => extras::install_engram(log),
+        CheckId::Codegraph => codegraph::install(log),
     };
     refresh_paths();
     crate::features::settings::forget_claude_auth();
@@ -437,8 +442,22 @@ mod tests {
     use CheckId::*;
 
     #[test]
+    fn codegraph_follows_engram_and_is_optional() {
+        for os in ["macos", "linux", "windows"] {
+            let checks = check_order(os);
+            let extras = checks.iter().skip_while(|&&id| id != Engram);
+            assert_eq!(
+                extras
+                    .map(|&id| (meta(id).0, meta(id).2))
+                    .collect::<Vec<_>>(),
+                [("Engram", Need::Optional), ("Codegraph", Need::Optional)]
+            );
+        }
+    }
+
+    #[test]
     fn checks_per_os_in_display_order() {
-        let unix = vec![Node, GentleShell, Setup, Provider, Git, Engram];
+        let unix = vec![Node, GentleShell, Setup, Provider, Git, Engram, Codegraph];
         assert_eq!(check_order("macos"), unix);
         assert_eq!(check_order("linux"), unix);
         let windows = check_order("windows");
