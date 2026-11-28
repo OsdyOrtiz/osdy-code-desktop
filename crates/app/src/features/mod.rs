@@ -1,5 +1,6 @@
 //! Product features: each owns its state, effects and views.
 
+pub mod active_break;
 pub mod alerts;
 pub mod app_update;
 pub mod backend;

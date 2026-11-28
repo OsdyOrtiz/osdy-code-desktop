@@ -69,6 +69,8 @@ pub(super) fn lookup(en: &str) -> Option<&'static str> {
         "Version" => "Versión",
         "License" => "Licencia",
         "Fork of" => "Derivado de",
+        "Author" => "Autor",
+        "Website" => "Sitio web",
         "Repository" => "Repositorio",
         "Issues" => "Incidencias",
         "Credits" => "Créditos",
@@ -117,6 +119,10 @@ pub(super) fn lookup(en: &str) -> Option<&'static str> {
             "Un cuadro redondeado con el texto arriba, controles discretos y un botón de envío relleno."
         }
         "Water reminder" => "Recordatorio para beber agua",
+        "Active break" => "Pausa activa",
+        "A pixel figure gets up and stretches. The clock starts when the app opens; changing how often keeps counting from then." => {
+            "Una figura pixelada se levanta y se estira. El reloj empieza al abrir la aplicación; si cambias el intervalo, se sigue contando desde ese momento."
+        }
         "Reminder" => "Recordatorio",
         "Off" => "Desactivado",
         "On" => "Activado",

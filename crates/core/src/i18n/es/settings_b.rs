@@ -138,6 +138,18 @@ pub(super) fn lookup(en: &str) -> Option<&'static str> {
 
         // Integrations.
         "MCP servers" => "Servidores MCP",
+        "Connected" => "Conectado",
+        "Connecting" => "Conectando",
+        "Disabled" => "Desactivado",
+        "Not available" => "No disponible",
+        "Error" => "Error",
+        "Error · {kind}" => "Error · {kind}",
+        "Authentication" => "Autenticación",
+        "Timeout" => "Tiempo de espera agotado",
+        "Transport" => "Transporte",
+        "Status comes from the active agent. This view never starts connections." => {
+            "El estado viene del agente activo. Esta pantalla no inicia conexiones."
+        }
         "Configured servers" => "Servidores configurados",
         "Detected from Gentle Shell's MCP configuration; edit the server definitions in the terminal configuration." => {
             "Estos servidores vienen de la configuración MCP de Gentle Shell. Puedes editarlos en la configuración de la terminal."
@@ -152,8 +164,23 @@ pub(super) fn lookup(en: &str) -> Option<&'static str> {
             "Listo: el agente tiene las herramientas de Maestro"
         }
         "Installed, not connected to the agent" => "Instalado, sin conexión al agente",
+        "Installed, not registered for the agent" => "Instalado, sin registrar para el agente",
+        "Registered for the agent" => "Registrado para el agente",
+        "Not registered" => "Sin registrar",
+        "Registered in Gentle Shell's MCP configuration" => {
+            "Registrado en la configuración MCP de Gentle Shell"
+        }
         "Connected, but the CLI is missing" => "Conectado, pero falta la CLI",
         "Not installed" => "Sin instalar",
+        "Useful extras" => "Extras útiles",
+        "Checking Codegraph…" => "Comprobando Codegraph…",
+        "Registered, but the CLI is unavailable" => "Registrado, pero la CLI no está disponible",
+        "CLI unavailable" => "CLI no disponible",
+        "Install Codegraph" => "Instalar Codegraph",
+        "Installing Codegraph…" => "Instalando Codegraph…",
+        "Run codegraph init in each project to build its code graph." => {
+            "Ejecuta codegraph init en cada proyecto para crear su grafo de código."
+        }
         "Maestro CLI" => "CLI de Maestro",
         "Not installed (about 350 MB)" => "Sin instalar (aprox. 350 MB)",
         "Not found: installs Temurin 21 (about 45 MB) with Maestro" => {

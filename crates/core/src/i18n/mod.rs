@@ -139,6 +139,18 @@ mod tests {
     use super::*;
 
     #[test]
+    fn codegraph_registration_copy_preserves_maestro_connection_copy() {
+        assert_eq!(
+            tr(Language::Spanish, "Installed, not connected to the agent"),
+            "Instalado, sin conexión al agente"
+        );
+        assert_eq!(
+            tr(Language::Spanish, "Installed, not registered for the agent"),
+            "Instalado, sin registrar para el agente"
+        );
+    }
+
+    #[test]
     fn t14_fill_replaces_only_original_placeholders() {
         assert_eq!(
             fill(

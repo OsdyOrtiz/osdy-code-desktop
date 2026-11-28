@@ -129,10 +129,10 @@ impl SettingsPage {
                 "devices device discovery phone android emulator ios simulator switches node ffmpeg sdk agent access browser browsers web page pages link links url open external default system safari chrome chromium canary arc dia firefox zen librewolf brave edge opera vivaldi orion inside app"
             }
             Self::Integrations => {
-                "mcp servers maestro ui testing music gentle stream player instruments soundfont external tools integrations"
+                "mcp servers maestro ui testing codegraph useful extras útiles music gentle stream player instruments soundfont external tools integrations"
             }
             Self::Notifications => {
-                "notification notifications sounds alert alerts toggle status turn ended needs you context threshold water hydration reminder frequency preview"
+                "notification notifications sounds alert alerts toggle status turn ended needs you context threshold water hydration reminder frequency preview active break stretch stand up pausa activa levantarse estirarse descanso despejarse"
             }
             Self::Updates => {
                 "update upgrade versions app gentle shell engram release install notes check github restart desktop rpc"
@@ -387,6 +387,38 @@ mod tests {
         for page in SettingsPage::ALL {
             assert!(page.matches_query(""));
             assert!(page.matches_query("  \t "));
+        }
+    }
+
+    #[test]
+    fn active_break_is_discoverable_under_notifications() {
+        for term in [
+            "active break",
+            "stretch",
+            "Pausa activa",
+            "estirarse",
+            "descanso",
+        ] {
+            for page in SettingsPage::ALL {
+                assert_eq!(
+                    page.matches_query(term),
+                    page == SettingsPage::Notifications,
+                    "{term:?} on {page:?}"
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn codegraph_and_useful_extras_find_integrations() {
+        for query in [
+            "codegraph",
+            "extras",
+            "útiles",
+            "Extras útiles",
+            "useful extras",
+        ] {
+            assert!(SettingsPage::Integrations.matches_query(query), "{query}");
         }
     }
 
