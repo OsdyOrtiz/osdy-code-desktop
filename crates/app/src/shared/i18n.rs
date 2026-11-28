@@ -19,11 +19,23 @@ pub fn agent_locale_path() -> Option<PathBuf> {
     std::path::absolute(super::data_dir::app()?.join("agent-locale")).ok()
 }
 
+/// Publish the language through a temporary file and a rename: agents read
+/// this file at any moment, and a truncate-then-write would let one read it
+/// empty and fall back to another language.
 fn write_agent_locale(path: &Path, language: Language) -> std::io::Result<()> {
-    if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent)?;
+    let dir = path.parent().unwrap_or(Path::new("."));
+    std::fs::create_dir_all(dir)?;
+    let nanos = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map(|d| d.as_nanos())
+        .unwrap_or_default();
+    let temp = dir.join(format!("agent-locale.{}-{nanos}.tmp", std::process::id()));
+    let written = std::fs::write(&temp, i18n::agent_locale_contents(language))
+        .and_then(|()| std::fs::rename(&temp, path));
+    if written.is_err() {
+        let _ = std::fs::remove_file(&temp);
     }
-    std::fs::write(path, i18n::agent_locale_contents(language))
+    written
 }
 
 /// The resolved language, as an index into [`Language::ALL`].
