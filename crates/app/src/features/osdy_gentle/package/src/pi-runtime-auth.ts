@@ -14,6 +14,7 @@ const HOST_CLASSES = {
 	"0.99.1": { runtime: "ModelRuntime", store: "AuthStorage" },
 	"1.6.0": BUNDLED_HOST_CLASSES,
 	"1.6.1": BUNDLED_HOST_CLASSES,
+	"1.7.0": BUNDLED_HOST_CLASSES,
 } as const;
 type HostClasses = (typeof HOST_CLASSES)[keyof typeof HOST_CLASSES];
 const AUTH_TIMEOUT_MS = 1_500;

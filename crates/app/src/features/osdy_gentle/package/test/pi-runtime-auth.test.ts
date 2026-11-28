@@ -177,30 +177,51 @@ test("preserves the exact Pi 1.6.0 and 0.99.1 fingerprints", () => {
 	assert.equal(resolvePiRuntimeAuth("0.99.1", ctx, path), undefined);
 });
 
-test("recognizes the exact Pi 1.6.1 bundle without relaxing store and backend checks", () => {
+for (const VERSION of ["1.6.1", "1.7.0"]) {
+	test(`recognizes the exact Pi ${VERSION} bundle without relaxing store and backend checks`, () => {
+		const { ctx, backend, store } = bundledFixture();
+		const sdk = { VERSION };
+		const snapshot = JSON.stringify({ [provider]: oauth, anthropic: { type: "oauth", access: "unrelated" } });
+		backend.current = snapshot;
+		let locks = 0;
+		backend.beforeLock = () => { locks++; };
+		const check = (diagnostic: string, owner?: FileAuthStorageBackend) => {
+			assert.equal(runtimeAuth.describePiRuntimeAuth(sdk, ctx, () => path), `osdy-auth/v1 sdk=${VERSION} ${diagnostic}`);
+			assert.equal(resolvePiRuntimeAuth(VERSION, ctx, path)?.backend, owner);
+		};
+		check("stage=verified storePath=match backendPath=match", backend);
+		store.authPath = resolve("other-agent", "auth.json");
+		check("stage=store-path storePath=mismatch backendPath=unchecked");
+		store.authPath = path;
+		backend.authPath = resolve("other-agent", "auth.json");
+		check("stage=backend-path storePath=match backendPath=mismatch");
+		backend.authPath = path;
+		Object.defineProperty(backend, "withLockAsync", { value: backend.withLockAsync });
+		check("stage=backend-shape storePath=match backendPath=match");
+		assert.equal(store.reads, 0);
+		assert.equal(locks, 0);
+		assert.equal(backend.current, snapshot);
+		assert.equal(resolvePiRuntimeAuth(VERSION, fixture().ctx, path), undefined);
+	});
+}
+
+test("rejects adjacent unknown Pi 1.7.1 and 1.8.0 bundles", () => {
 	const { ctx, backend, store } = bundledFixture();
-	const sdk = { VERSION: "1.6.1" };
-	const snapshot = JSON.stringify({ [provider]: oauth, anthropic: { type: "oauth", access: "unrelated" } });
-	backend.current = snapshot;
+	let inspections = 0;
 	let locks = 0;
 	backend.beforeLock = () => { locks++; };
-	const check = (diagnostic: string, owner?: FileAuthStorageBackend) => {
-		assert.equal(runtimeAuth.describePiRuntimeAuth(sdk, ctx, () => path), `osdy-auth/v1 sdk=1.6.1 ${diagnostic}`);
-		assert.equal(resolvePiRuntimeAuth(sdk.VERSION, ctx, path)?.backend, owner);
-	};
-	check("stage=verified storePath=match backendPath=match", backend);
-	store.authPath = resolve("other-agent", "auth.json");
-	check("stage=store-path storePath=mismatch backendPath=unchecked");
-	store.authPath = path;
-	backend.authPath = resolve("other-agent", "auth.json");
-	check("stage=backend-path storePath=match backendPath=mismatch");
-	backend.authPath = path;
-	Object.defineProperty(backend, "withLockAsync", { value: backend.withLockAsync });
-	check("stage=backend-shape storePath=match backendPath=match");
-	assert.equal(store.reads, 0);
+	const snapshot = backend.current = JSON.stringify({ [provider]: oauth });
+	const context = { get modelRegistry() { inspections++; return ctx.modelRegistry; } };
+	const unexpectedPath = () => assert.fail("unsupported SDK must not resolve the agent path");
+	for (const VERSION of ["1.7.1", "1.8.0"]) {
+		assert.equal(runtimeAuth.describePiRuntimeAuth({ VERSION }, context, unexpectedPath),
+			`osdy-auth/v1 sdk=${VERSION} stage=sdk-version storePath=unchecked backendPath=unchecked`);
+		assert.equal(resolvePiRuntimeAuth(VERSION, context, path), undefined);
+	}
+	assert.equal(inspections, 0);
 	assert.equal(locks, 0);
+	assert.equal(store.reads, 0);
 	assert.equal(backend.current, snapshot);
-	assert.equal(resolvePiRuntimeAuth(sdk.VERSION, fixture().ctx, path), undefined);
 });
 
 test("rejects Pi 1.6.2 and inherited version keys before inspecting the bundled owner", () => {

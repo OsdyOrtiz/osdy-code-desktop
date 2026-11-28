@@ -18,7 +18,7 @@ It keeps the parts of [Osdy-Pi](https://github.com/OsdyOrtiz/Osdy-Pi) that work 
 2. Add the local path of this folder, for example `/Users/osdy/Documents/GitHub/IngracionOsdy-Pi`.
 3. Open a new agent tab (or restart the current one). `/osdy-profile`, `/osdy-account`, `/osdy-usage`, and `/osdy-auth-status` appear in the command list.
 
-Requirements: Gentle Shell with gentle-pi 5.0.0 or later (for applying model profiles) and Node.js 22.19 or later. Changing or saving the active Codex sign-in and redeeming reset credits require the session-owned Pi file credential store. The adapter recognizes the Pi 0.99.1 source build and the Pi 1.6.0 and 1.6.1 CLI bundles. Support is exact: other versions and storage modes leave account changes and resets unavailable instead of writing without Pi's lock.
+Requirements: Gentle Shell with gentle-pi 5.0.0 or later (for applying model profiles) and Node.js 22.19 or later. Changing or saving the active Codex sign-in and redeeming reset credits require the session-owned Pi file credential store. The adapter recognizes the Pi 0.99.1 source build and the Pi 1.6.0, 1.6.1, and 1.7.0 CLI bundles. Support is exact: other versions and storage modes leave account changes and resets unavailable instead of writing without Pi's lock.
 
 ## First run: import your Osdy-Pi accounts
 
