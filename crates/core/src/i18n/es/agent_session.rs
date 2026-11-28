@@ -490,7 +490,31 @@ pub(super) fn lookup(en: &str) -> Option<&'static str> {
         "Verification reminder" => "Recordatorio de verificación",
         "Waiting for Gentle Shell…" => "Esperando a Gentle Shell…",
         "Waiting for an answer: {text}" => "Esperando una respuesta: {text}",
-        "What are we cooking?" => "¿Qué vamos a preparar?",
+        // The composer's placeholders (`composer_placeholder::LINES`).
+        "Alright then. Let's cook…" => "Dale, pues. A cocinar…",
+        "Cooking at terminal heat…" => "Cocinando a fuego de terminal…",
+        "Flipping the tortilla…" => "Dándole vuelta a la tortilla…",
+        "Getting it just right…" => "Lo estoy dejando al punto…",
+        "The coffee kicked in…" => "El café ya hizo efecto…",
+        "Moving imaginary cables…" => "Moviendo cables imaginarios…",
+        "Sorting out the mess…" => "Acomodando el relajo…",
+        "Looking for where the mess started…" => "Buscando dónde se armó el relajo…",
+        "Negotiating with the compiler…" => "Negociando con el compilador…",
+        "Asking the code what it meant…" => "Preguntándole al código qué quiso decir…",
+        "Following the trail of a comma…" => "Siguiendo el rastro de una coma…",
+        "Checking whether “it's a tiny change” was true…" => {
+            "Viendo si «es un cambiecito» era cierto…"
+        }
+        "Yesterday's TODO says hi…" => "El TODO de ayer mandó saludos…",
+        "Reading the comment that says “do not touch”…" => {
+            "Leyendo el comentario que dice «no tocar»…"
+        }
+        "Untangling spaghetti, one noodle at a time…" => {
+            "Desenredando espagueti, un fideo a la vez…"
+        }
+        "Calling on the patron saint of semicolons…" => "Invocando al santo del punto y coma…",
+        "This smells like an environment variable…" => "Esto huele a variable de entorno…",
+        "Heads up, something fishy is going on here…" => "Pilas, que aquí hay gato encerrado…",
         "Working tree clean" => "No hay cambios en el árbol de trabajo",
         "Working…" => "Trabajando…",
         "Write" => "Escribir",

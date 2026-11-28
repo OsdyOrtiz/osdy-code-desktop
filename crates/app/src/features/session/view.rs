@@ -2091,8 +2091,9 @@ impl Render for SessionView {
         let language = i18n::language();
         if self.composer_language != language {
             self.composer_language = language;
+            let placeholder = self.composer_placeholder;
             self.composer.update(cx, |state, cx| {
-                state.set_placeholder(t("What are we cooking?"), window, cx)
+                state.set_placeholder(t(placeholder), window, cx)
             });
             self.list.language_changed(self.transcript.items.len());
         }

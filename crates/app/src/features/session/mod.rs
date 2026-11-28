@@ -240,6 +240,8 @@ pub struct SessionView {
     model_search: Entity<InputState>,
     model_search_language: gentle_core::i18n::Language,
     composer_language: gentle_core::i18n::Language,
+    /// This tab's composer placeholder (English key, see `composer_placeholder`).
+    composer_placeholder: &'static str,
     /// Only app-owned notices have a renderer; Shell payloads stay verbatim.
     localized_notices: HashMap<usize, NoticeRenderer>,
     /// The `notify` output of the extension command last sent.
@@ -270,11 +272,15 @@ impl SessionView {
         cx: &mut Context<Self>,
         start_now: bool,
     ) -> Self {
+        // One playful line per tab, picked at random.
+        let composer_placeholder = gentle_core::composer_placeholder::pick(
+            std::hash::BuildHasher::hash_one(&std::hash::RandomState::new(), cx.entity_id()),
+        );
         let composer = cx.new(|cx| {
             TextareaState::new(window, cx)
                 .auto_grow(1, 10)
                 .submit_on_enter(true)
-                .placeholder(t("What are we cooking?"))
+                .placeholder(t(composer_placeholder))
         });
         let dialog_input = cx.new(|cx| TextareaState::new(window, cx).auto_grow(1, 8));
         let model_search =
@@ -435,6 +441,7 @@ impl SessionView {
             model_search,
             model_search_language: crate::shared::i18n::language(),
             composer_language: crate::shared::i18n::language(),
+            composer_placeholder,
             localized_notices: HashMap::new(),
             capture: None,
             capture_seq: 0,
