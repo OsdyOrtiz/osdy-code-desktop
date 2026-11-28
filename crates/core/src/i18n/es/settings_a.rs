@@ -69,6 +69,8 @@ pub(super) fn lookup(en: &str) -> Option<&'static str> {
         "Version" => "Versión",
         "License" => "Licencia",
         "Fork of" => "Derivado de",
+        "Author" => "Autor",
+        "Website" => "Sitio web",
         "Repository" => "Repositorio",
         "Issues" => "Incidencias",
         "Credits" => "Créditos",
@@ -117,6 +119,10 @@ pub(super) fn lookup(en: &str) -> Option<&'static str> {
             "Un cuadro redondeado con el texto arriba, controles discretos y un botón de envío relleno."
         }
         "Water reminder" => "Recordatorio para beber agua",
+        "Active break" => "Pausa activa",
+        "A pixel figure gets up and stretches. The clock starts when the app opens; changing how often keeps counting from then." => {
+            "Una figura pixelada se levanta y se estira. El reloj empieza al abrir la aplicación; si cambias el intervalo, se sigue contando desde ese momento."
+        }
         "Reminder" => "Recordatorio",
         "Off" => "Desactivado",
         "On" => "Activado",
@@ -203,13 +209,13 @@ pub(super) fn lookup(en: &str) -> Option<&'static str> {
         "Theme" => "Tema",
         "Window & interface" => "Ventana e interfaz",
         "Transparency" => "Transparencia",
-        "How much the desktop or the theme's background shows through the window." => {
-            "Cuánto se ve el escritorio o el fondo del tema a través de la ventana."
+        "How much the desktop or the theme's background shows through the window. Past 80%, text trades readability for glass." => {
+            "Cuánto se ve el escritorio o el fondo del tema a través de la ventana. Pasado el 80 %, el texto cede legibilidad a cambio de transparencia."
         }
         "Blur" => "Desenfoque",
         "Opacity" => "Opacidad",
-        "How solid the areas with text are. Text always stays readable (WCAG AA)." => {
-            "Qué tan opacas son las zonas con texto. El texto siempre se puede leer (WCAG AA)."
+        "How solid the areas with text are. Up to 80% transparency, text always stays readable (WCAG AA)." => {
+            "Qué tan opacas son las zonas con texto. Hasta el 80 % de transparencia, el texto siempre se puede leer (WCAG AA)."
         }
         "Fonts" => "Fuentes",
         "Scene motion" => "Movimiento de las escenas",

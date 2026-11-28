@@ -82,6 +82,13 @@ pub(in crate::features::session) struct Live {
     pub(in crate::features::session) interrupt_held: bool,
     /// Counts the close hints shown, so each one runs its own fade.
     pub(in crate::features::session) close_hints: u64,
+    /// A first Esc while the agent runs, waiting for the second that stops
+    /// it: one stray Esc never cancels a turn.
+    pub(in crate::features::session) escape_stop: gentle_core::double_interrupt::DoubleInterrupt,
+    /// Esc went down and hasn't come up.
+    pub(in crate::features::session) escape_held: bool,
+    /// The Esc being handled is a key repeat: it never counts as a press.
+    pub(in crate::features::session) escape_repeat: bool,
 }
 
 /// How often live timers are re-checked.

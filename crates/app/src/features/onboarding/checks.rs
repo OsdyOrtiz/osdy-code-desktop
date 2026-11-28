@@ -222,6 +222,22 @@ mod tests {
     }
 
     #[test]
+    fn missing_codegraph_does_not_block_or_join_bulk_install() {
+        let checks = [
+            ok(CheckId::GentleShell, Need::Required),
+            check(
+                CheckId::Codegraph,
+                Need::Optional,
+                Status::Missing("Not installed".into()),
+                Fix::Auto,
+            ),
+        ];
+        assert!(required_ok(&checks));
+        assert!(all_set(&checks));
+        assert!(install_plan(&checks).is_empty());
+    }
+
+    #[test]
     fn readiness_ignores_extras() {
         let mut checks = vec![
             ok(CheckId::Node, Need::Required),

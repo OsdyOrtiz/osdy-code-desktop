@@ -4,6 +4,7 @@ use super::badge::{Mark, workspace_avatar};
 use super::menu::WorkspaceMenuSource;
 use super::tab_panel::TabMenu;
 use super::*;
+use crate::shared::kisses;
 use gpui_kit::component::Selectable as _;
 
 impl Workspace {
@@ -271,12 +272,7 @@ impl Workspace {
                             .child(if let Some(light) = light {
                                 ui::light_dot(light, 7.).into_any_element()
                             } else if kind == PaneKind::Agent {
-                                div()
-                                    .text_size(rems(13. / 16.))
-                                    .line_height(relative(1.))
-                                    .text_color(icon_color)
-                                    .child("❀")
-                                    .into_any_element()
+                                kisses::paw(rems(13. / 16.), icon_color).into_any_element()
                             } else {
                                 Icon::new(kind.icon())
                                     .small()
@@ -479,19 +475,15 @@ impl Workspace {
             )
     }
 
-    /// One title-bar button for the screens (Configuration, Profiles, Memory,
-    /// Sessions, Providers): lit while one is open, each entry with what it
-    /// is and its shortcut when it has one.
+    /// One title-bar button for Configuration, Profiles and Providers: lit
+    /// while one is open, with a description and shortcut for each entry
+    /// where applicable.
     pub(super) fn render_screens_menu(&self, cx: &mut Context<Self>) -> impl IntoElement {
         let weak = cx.entity().downgrade();
         let open_screen = matches!(
             self.overlay,
             Some((
-                Overlay::Settings(_)
-                    | Overlay::Profiles(_)
-                    | Overlay::Memory(_)
-                    | Overlay::Sessions(_)
-                    | Overlay::Providers(_),
+                Overlay::Settings(_) | Overlay::Profiles(_) | Overlay::Providers(_),
                 _
             ))
         );
@@ -502,7 +494,7 @@ impl Workspace {
                     .selected(open_screen)
                     .tooltip(
                         crate::shared::i18n::t(
-                            "Configuration, profiles, memory, sessions, providers ({shortcut})",
+                            "Configuration, profiles and providers ({shortcut})",
                         )
                         .replace("{shortcut}", ui::platform_shortcut("⌘,", "Ctrl+,")),
                     )
@@ -533,23 +525,6 @@ impl Workspace {
                                 crate::shared::i18n::t("Model and effort per agent"),
                                 "",
                                 |this, window, cx| this.open_profiles(window, cx),
-                            ))
-                            .item(entry(
-                                IconName::Brain,
-                                crate::shared::i18n::t("Memory"),
-                                crate::shared::i18n::t("Engram observations"),
-                                "",
-                                |this, window, cx| {
-                                    let cwd = this.active_cwd(cx);
-                                    this.open_memory(cwd, Default::default(), window, cx)
-                                },
-                            ))
-                            .item(entry(
-                                IconName::RotateCcwClock,
-                                crate::shared::i18n::t("Sessions"),
-                                crate::shared::i18n::t("Resume a past session"),
-                                ui::platform_shortcut("⌘⇧O", "Ctrl+Shift+O"),
-                                |this, window, cx| this.open_sessions(window, cx),
                             ))
                             .item(entry(
                                 IconName::KeyRound,
@@ -1019,6 +994,7 @@ mod tests {
             crate::features::browser::init(cx);
             crate::features::app_update::init(cx);
             crate::features::hydration::init(cx);
+            crate::features::active_break::init(cx);
             cx.set_global(PaneFactories::default());
         });
         let (window_handle, workspace) = cx

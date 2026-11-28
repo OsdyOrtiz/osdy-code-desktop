@@ -110,6 +110,27 @@ pub(super) fn lookup(en: &str) -> Option<&'static str> {
             "Revisiones, árboles de trabajo, cambios y ramas."
         }
         "Long-term memory across sessions." => "Memoria a largo plazo entre sesiones.",
+        "Code graph for the agent: symbols, references and calls (MCP)." => {
+            "Grafo de código para el agente: símbolos, referencias y llamadas (MCP)."
+        }
+        "Codegraph setup is only available for local agents." => {
+            "Codegraph solo se puede configurar para agentes locales."
+        }
+        "Codegraph CLI did not report a version." => "La CLI de Codegraph no indicó su versión.",
+        "Codegraph CLI is unavailable. Install Codegraph first." => {
+            "La CLI de Codegraph no está disponible. Instala Codegraph primero."
+        }
+        "Install Gentle Shell first." => "Instala Gentle Shell primero.",
+        "Installing Codegraph with npm…" => "Instalando Codegraph con npm…",
+        "Codegraph was installed, but its CLI did not report a version." => {
+            "Codegraph se instaló, pero su CLI no indicó su versión."
+        }
+        "Registering Codegraph with the agent…" => "Registrando Codegraph en el agente…",
+        "Gentle Shell did not enable Codegraph in mcp.json." => {
+            "Gentle Shell no habilitó Codegraph en mcp.json."
+        }
+        "Disconnecting Codegraph from the agent…" => "Desconectando Codegraph del agente…",
+        "Codegraph is still enabled in mcp.json." => "Codegraph sigue habilitado en mcp.json.",
         "Gentle Shell runs the Node.js in gentle-ai's managed install" => {
             "Gentle Shell usa el Node.js de la instalación gestionada por gentle-ai"
         }
@@ -476,8 +497,8 @@ pub(super) fn lookup(en: &str) -> Option<&'static str> {
         "Running from a build directory; download the release from GitHub." => {
             "La app se está ejecutando desde una carpeta de compilación. Descarga la versión publicada en GitHub."
         }
-        "macOS is running Osdy Code Desktop from a temporary read-only copy. Move Osdy Code Desktop.app to Applications, open it from there, then update." => {
-            "macOS está ejecutando Osdy Code Desktop desde una copia temporal de solo lectura. Mueve Osdy Code Desktop.app a Aplicaciones, ábrela desde allí y actualízala."
+        "macOS is running Osdy Code Desktop from a temporary read-only copy. Move Osdy Code.app to Applications, open it from there, then update." => {
+            "macOS está ejecutando Osdy Code Desktop desde una copia temporal de solo lectura. Mueve Osdy Code.app a Aplicaciones, ábrela desde allí y actualízala."
         }
         "Self-update isn't available on {platform}; download the release from GitHub." => {
             "No se puede actualizar la app desde {platform}. Descarga la versión publicada en GitHub."

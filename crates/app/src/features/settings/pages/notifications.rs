@@ -1,4 +1,4 @@
-//! Sounds, attention alerts and water reminders share one discoverable page.
+//! Sounds, attention alerts, and wellness reminders share one discoverable page.
 
 use gpui_kit::component::v_flex;
 use gpui_kit::*;
@@ -10,4 +10,5 @@ pub(super) fn render(view: &SettingsView, cx: &mut Context<SettingsView>) -> Div
         .gap_3()
         .child(view.notifications_section(cx))
         .child(view.hydration_section(cx))
+        .child(view.active_break_section(cx))
 }

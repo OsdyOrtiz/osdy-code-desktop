@@ -35,7 +35,6 @@ pub enum PaletteAction {
     Profiles,
     Sessions,
     Usage,
-    Memory,
     Docs,
     History,
     Devices,

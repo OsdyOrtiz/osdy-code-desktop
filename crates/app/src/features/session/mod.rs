@@ -47,6 +47,7 @@ const ESCAPE_SETTLE: std::time::Duration = std::time::Duration::from_millis(600)
 /// Requests a tab makes of its window.
 pub enum SessionEvent {
     OpenProviders,
+    OpenCodexAccounts(gentle_core::codex_accounts::Feed),
     /// An extension's `notify`, for the window's notification center.
     /// Warnings and errors are also toasted by the tab itself.
     Notice {
@@ -240,6 +241,10 @@ pub struct SessionView {
     model_search: Entity<InputState>,
     model_search_language: gentle_core::i18n::Language,
     composer_language: gentle_core::i18n::Language,
+    /// This tab's composer placeholder (English key, see `composer_placeholder`).
+    composer_placeholder: &'static str,
+    composer_placeholder_since: Option<std::time::Instant>,
+    composer_placeholder_tick: Option<Task<()>>,
     /// Only app-owned notices have a renderer; Shell payloads stay verbatim.
     localized_notices: HashMap<usize, NoticeRenderer>,
     /// The `notify` output of the extension command last sent.
@@ -270,11 +275,14 @@ impl SessionView {
         cx: &mut Context<Self>,
         start_now: bool,
     ) -> Self {
+        // One playful line per tab, picked at random.
+        let composer_placeholder = gentle_core::composer_placeholder::pick(
+            std::hash::BuildHasher::hash_one(&std::hash::RandomState::new(), cx.entity_id()),
+        );
         let composer = cx.new(|cx| {
             TextareaState::new(window, cx)
                 .auto_grow(1, 10)
                 .submit_on_enter(true)
-                .placeholder(t("What are we cooking?"))
         });
         let dialog_input = cx.new(|cx| TextareaState::new(window, cx).auto_grow(1, 8));
         let model_search =
@@ -435,6 +443,9 @@ impl SessionView {
             model_search,
             model_search_language: crate::shared::i18n::language(),
             composer_language: crate::shared::i18n::language(),
+            composer_placeholder,
+            composer_placeholder_since: None,
+            composer_placeholder_tick: None,
             localized_notices: HashMap::new(),
             capture: None,
             capture_seq: 0,
@@ -494,6 +505,10 @@ impl SessionView {
     pub fn set_web_shown(&mut self, shown: bool, cx: &mut Context<Self>) {
         if self.web_shown != shown {
             self.web_shown = shown;
+            if !shown {
+                self.composer_placeholder_tick = None;
+                self.composer_placeholder_since = None;
+            }
             self.genui.set_obscured(!shown, cx);
             cx.notify();
         }
@@ -689,10 +704,11 @@ impl SessionView {
     /// Esc: close what's open (the Agents panel, then a dialog, then an
     /// expanded generative UI surface that doesn't have the keyboard; the
     /// `/` menu and the model picker close earlier, from the composer), and
-    /// with nothing open stop the running turn or `!command`, as in Gentle
-    /// Shell's terminal. An Esc right after one that closed something only
-    /// propagates: a quick run of presses to close things never stops the
-    /// agent by accident.
+    /// with nothing open stop the running turn or `!command` on a second Esc
+    /// within [`double_interrupt::WINDOW`]: the first only shows "Press Esc
+    /// again to stop", so a stray press never cancels the agent. An Esc right
+    /// after one that closed something only propagates: a quick run of
+    /// presses to close things never arms the stop either.
     fn abort(&mut self, _: &Abort, window: &mut Window, cx: &mut Context<Self>) {
         let now = std::time::Instant::now();
         let closed = if self.agents_panel.open {
@@ -710,17 +726,42 @@ impl SessionView {
         };
         if closed {
             self.live.escape_closed = Some(now);
+            self.live.escape_stop.reset();
             return;
         }
         let settling = self
             .live
             .escape_closed
             .is_some_and(|at| now.duration_since(at) < ESCAPE_SETTLE);
-        if self.stoppable() && !settling {
-            self.stop(cx);
-        } else {
+        if !self.stoppable() || settling {
+            self.live.escape_stop.reset();
             cx.propagate();
+            return;
         }
+        match self
+            .live
+            .escape_stop
+            .press(now, true, self.live.escape_repeat)
+        {
+            Outcome::Interrupt => {}
+            Outcome::Close => self.stop(cx),
+            Outcome::Hint => {
+                self.live.close_hints += 1;
+                cx.spawn(async move |this, cx| {
+                    cx.background_executor()
+                        .timer(double_interrupt::WINDOW)
+                        .await;
+                    let _ = this.update(cx, |this, cx| {
+                        if this.live.escape_stop.armed() == Some(now) {
+                            this.live.escape_stop.reset();
+                            cx.notify();
+                        }
+                    });
+                })
+                .detach();
+            }
+        }
+        cx.notify();
     }
 
     /// ⌘. (Ctrl+. elsewhere): stop the running turn or `!command`.
@@ -746,6 +787,13 @@ impl SessionView {
         window: &mut Window,
         cx: &mut Context<Self>,
     ) -> bool {
+        // Esc's own press arms the stop (a held one is a repeat, never the
+        // second press); any other key, Ctrl+C's copy included, starts over.
+        if keystroke.key == "escape" {
+            self.live.escape_repeat = std::mem::replace(&mut self.live.escape_held, true);
+        } else if self.live.escape_stop.reset() {
+            cx.notify();
+        }
         let m = &keystroke.modifiers;
         let interrupt =
             keystroke.key == "c" && m.control && !(m.platform || m.alt || m.shift || m.function);
@@ -804,6 +852,7 @@ impl SessionView {
     /// A key came up: a Ctrl+C after it is a new press, not a key repeat.
     fn on_key_up(&mut self, _: &KeyUpEvent, _: &mut Window, _: &mut Context<Self>) {
         self.live.interrupt_held = false;
+        self.live.escape_held = false;
     }
 }
 

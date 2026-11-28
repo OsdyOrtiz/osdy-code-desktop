@@ -12,9 +12,10 @@ use crate::shared::kisses::{HEART, noise, paint_particle, paint_sprite};
 use crate::shared::ui;
 
 /// From Continue to the app.
-pub(super) const FINALE: Duration = Duration::from_millis(5600);
-/// The dissolve starts this far in (0..1).
-pub(super) const DISSOLVE: f32 = 0.86;
+pub(super) const FINALE: Duration = Duration::from_millis(7600);
+/// The dissolve starts this far in (0..1): the last ~0.78 s, after the
+/// farewell has stayed on screen a couple of seconds.
+pub(super) const DISSOLVE: f32 = 0.897;
 
 /// The box the banner and the flying sprites share.
 const STAGE_W: f32 = 760.;
@@ -27,11 +28,12 @@ const PARTICLE_GAP: f32 = 0.16;
 const PARTICLE_LIFE: f32 = 1.7;
 const PARTICLES: usize = 14;
 const TITLE: &str = "Osdy Code:";
-const SUBTITLE: &str = "Corazón de Junior, Conocimiento de Senior";
+const SUBTITLE: &str = "Conocimiento de Senior, Corazón de Junior";
 const TITLE_AT: f32 = 2.85;
 const SUBTITLE_AT: f32 = 3.18;
 const LETTER_GAP: f32 = 0.025;
 const HEART_AT: f32 = 4.25;
+const SUBTITLE_FONT_PX: f32 = 26.;
 
 fn reveal_prefix(text: &str, count: usize) -> &str {
     let end = text
@@ -134,6 +136,7 @@ fn stamp() -> impl IntoElement {
 fn line(id: &'static str, text: &'static str, at: f32, font_px: f32) -> impl IntoElement {
     let total = FINALE.as_secs_f32();
     div()
+        .debug_selector(move || id.into())
         .relative()
         .whitespace_nowrap()
         .text_size(px(font_px))
@@ -174,9 +177,15 @@ pub(super) fn render(config: BannerConfig) -> impl IntoElement {
         .child(line("finale-title", TITLE, TITLE_AT, 50.))
         .child(
             h_flex()
+                .mt(px(SUBTITLE_FONT_PX * 1.2))
                 .items_center()
                 .gap_3()
-                .child(line("finale-subtitle", SUBTITLE, SUBTITLE_AT, 26.))
+                .child(line(
+                    "finale-subtitle",
+                    SUBTITLE,
+                    SUBTITLE_AT,
+                    SUBTITLE_FONT_PX,
+                ))
                 .child(stamp()),
         )
 }
@@ -184,13 +193,34 @@ pub(super) fn render(config: BannerConfig) -> impl IntoElement {
 #[cfg(test)]
 mod tests {
     use super::{SUBTITLE, TITLE, reveal_prefix};
+    use gpui_kit::{Context, IntoElement, Render, TestAppContext, Window, px};
+
+    #[gpui::test]
+    fn finale_leaves_a_blank_line_after_the_title(cx: &mut TestAppContext) {
+        struct Finale;
+        impl Render for Finale {
+            fn render(&mut self, _: &mut Window, _: &mut Context<Self>) -> impl IntoElement {
+                super::render(super::BannerConfig {
+                    show_rose: false,
+                    show_text_logo: false,
+                })
+            }
+        }
+
+        cx.update(gpui_kit::init);
+        let (_, cx) = cx.add_window_view(|_, _| Finale);
+        cx.run_until_parked();
+        let title = cx.debug_bounds("finale-title").unwrap();
+        let subtitle = cx.debug_bounds("finale-subtitle").unwrap();
+        assert!(subtitle.top() - title.bottom() >= px(26. * 1.2));
+    }
 
     #[test]
     fn finale_reveal_keeps_every_prefix_on_a_char_boundary() {
         let phrase = format!("{TITLE} {SUBTITLE}");
         assert_eq!(
             phrase,
-            "Osdy Code: Corazón de Junior, Conocimiento de Senior"
+            "Osdy Code: Conocimiento de Senior, Corazón de Junior"
         );
         let mut expected = String::new();
         assert_eq!(reveal_prefix(&phrase, 0), expected);

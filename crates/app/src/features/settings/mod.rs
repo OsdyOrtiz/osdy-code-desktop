@@ -10,11 +10,13 @@ use gpui_kit::*;
 use crate::shared::i18n::t;
 use crate::{features::app_update, features::workspaces::TabLayout};
 
+mod active_break;
 mod agent_ui;
 mod app;
 mod background;
 mod browser;
 mod claude;
+mod codegraph;
 mod devices;
 mod diagnostics;
 mod events;
@@ -92,6 +94,7 @@ pub struct SettingsView {
     setup: Entity<crate::features::onboarding::OnboardingView>,
     _setup: Subscription,
     /// UI testing (Maestro): what was found, the job running and its log.
+    codegraph: codegraph::Codegraph,
     maestro: maestro::Maestro,
     /// Music (gentle-stream): what was found, the job running and its log.
     music: music::Music,
@@ -192,6 +195,7 @@ impl SettingsView {
             notifications: notifications::NotificationUiState::default(),
             setup,
             _setup: setup_sub,
+            codegraph: codegraph::Codegraph::default(),
             maestro: maestro::Maestro::default(),
             music: music::Music::default(),
             tower: tower::Tower::default(),
@@ -211,6 +215,7 @@ impl SettingsView {
             runs_on: runs_on::RunsOn::new(window, cx),
         };
         this.reload(cx);
+        this.refresh_codegraph(cx);
         this.refresh_maestro(cx);
         this.refresh_music(cx);
         this.refresh_tower(cx);
@@ -299,6 +304,9 @@ impl SettingsView {
         self.shell_config_changed(cx);
         self.background_changed(cx);
         self.sign_ins_changed(cx);
+        if self.page == SettingsPage::Integrations {
+            cx.notify();
+        }
     }
 
     /// Show what the active tab's Gentle Shell reported over what the files

@@ -1,7 +1,7 @@
 [Desktop Entry]
 Type=Application
 Version=1.0
-Name=Osdy Code Desktop
+Name=Osdy Code
 GenericName=AI Coding Shell
 Comment=Desktop front-end for Gentle Shell
 Exec=gentle-shell-gpui %f

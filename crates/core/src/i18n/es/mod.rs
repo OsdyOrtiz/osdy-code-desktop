@@ -34,8 +34,8 @@ fn common(en: &str) -> Option<&'static str> {
         "Follows the operating system's language: Spanish when it is set to Spanish, English otherwise." => {
             "Sigue el idioma del sistema operativo: español si está en español, inglés en los demás casos."
         }
-        "Only the app's interface changes; the agent keeps answering in the language you write to it. Saved in the app's settings.json (language)." => {
-            "Solo cambia la interfaz de la app; el agente sigue respondiendo en el idioma en que le escribes. Se guarda en el settings.json de la app (language)."
+        "Changes the app and Osdy account menus. The agent keeps answering in the language you write to it. Saved in the app's settings.json (language)." => {
+            "Cambia el idioma de la app y de los menús de cuentas Osdy. El agente sigue respondiendo en el idioma en que le escribes. Se guarda en el settings.json de la app (language)."
         }
         // Session start screen.
         "Sign in to start cooking" => "Inicia sesión para empezar",

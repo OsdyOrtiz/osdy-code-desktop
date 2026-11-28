@@ -174,7 +174,26 @@ gpui_kit::assets::icon_assets!(
         Atom,
         Bug,
         Puzzle,
-        Cat
+        Cat,
+        Camera,
+        Film,
+        Headphones,
+        Compass,
+        Mountain,
+        Snowflake,
+        TreePine,
+        Anchor,
+        Plane,
+        Car,
+        House,
+        Briefcase,
+        Trophy,
+        Target,
+        Key,
+        Ghost,
+        Dog,
+        Fish,
+        Bird
     ]
 );
 
@@ -295,16 +314,16 @@ pub struct AppAssets;
 
 const BRAND: &[(&str, &[u8])] = &[
     (
-        "brand/badge.webp",
-        include_bytes!("../../../../assets/mascot/osdy-code-logo.webp"),
-    ),
-    (
-        "brand/badge-still.png",
-        include_bytes!("../../assets/brand/badge-still.png"),
+        "brand/badge.png",
+        include_bytes!("../../assets/brand/badge.png"),
     ),
     (
         "brand/eyes-closed.svg",
         include_bytes!("../../assets/brand/eyes-closed.svg"),
+    ),
+    (
+        "brand/eyes-wink.svg",
+        include_bytes!("../../assets/brand/eyes-wink.svg"),
     ),
     (
         "brand/wordmark-text.svg",
@@ -348,9 +367,7 @@ impl AssetSource for AppAssets {
 
 #[cfg(test)]
 mod tests {
-    use std::io::Cursor;
-
-    use image::{AnimationDecoder, ImageFormat, codecs::webp::WebPDecoder};
+    use image::ImageFormat;
     use resvg::usvg::{Options, Tree};
 
     use super::*;
@@ -363,26 +380,18 @@ mod tests {
                 .unwrap()
                 .unwrap_or_else(|| panic!("missing {path}"))
         };
-        let badge = load("brand/badge.webp");
-        let mut decoder = WebPDecoder::new(Cursor::new(badge.as_ref())).unwrap();
-        assert!(decoder.has_animation());
-        decoder.set_background_color(image::Rgba([0; 4])).unwrap();
-        let mut frames = decoder.into_frames();
-        let still = load("brand/badge-still.png");
-        let still = image::load_from_memory_with_format(&still, ImageFormat::Png)
+        let badge = image::load_from_memory_with_format(&load("brand/badge.png"), ImageFormat::Png)
             .unwrap()
             .into_rgba8();
-        let first = frames.next().unwrap().unwrap();
-        assert_eq!(first.buffer().dimensions(), still.dimensions());
-        // libwebp and image-webp can round the YUV conversion differently.
-        assert!(first.buffer().pixels().zip(still.pixels()).all(|(a, b)| {
-            a[3] == b[3] && (a[3] == 0 || (0..3).all(|c| a[c].abs_diff(b[c]) <= 5))
-        }));
-        assert_ne!(frames.next().unwrap().unwrap().buffer(), first.buffer());
+        assert_eq!(badge.dimensions(), (768, 768));
+        assert_eq!(badge.get_pixel(0, 0)[3], 0);
+        assert_eq!(badge.get_pixel(384, 384)[3], 255);
 
         let tree = |path| Tree::from_data(&load(path), &Options::default()).unwrap();
-        let eyes = tree("brand/eyes-closed.svg");
-        assert_eq!((eyes.size().width(), eyes.size().height()), (384., 384.));
+        for path in ["brand/eyes-closed.svg", "brand/eyes-wink.svg"] {
+            let eyes = tree(path);
+            assert_eq!((eyes.size().width(), eyes.size().height()), (384., 384.));
+        }
         let text = tree("brand/wordmark-text.svg");
         let cursor = tree("brand/cursor.svg");
         assert_eq!(text.size(), cursor.size());
@@ -391,5 +400,23 @@ mod tests {
         assert!(text_ink.width() > cursor_ink.width());
         assert!(text_ink.right() < cursor_ink.left());
         assert!(cursor_ink.right() <= cursor.size().width());
+    }
+
+    /// Every icon a workspace badge offers is embedded: the picker draws
+    /// nothing for one that isn't.
+    #[test]
+    fn every_badge_icon_is_embedded() {
+        let missing: Vec<_> = crate::features::workspaces::BadgeIcon::ALL
+            .into_iter()
+            .filter(|icon| {
+                AppAssets
+                    .load(icon.icon().path().as_ref())
+                    .ok()
+                    .flatten()
+                    .is_none()
+            })
+            .map(|icon| icon.label())
+            .collect();
+        assert!(missing.is_empty(), "not embedded: {missing:?}");
     }
 }

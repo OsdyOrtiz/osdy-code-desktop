@@ -1,4 +1,4 @@
-//! Design system: the active theme (`themes.rs`, Tokyo Night by default)
+//! Design system: the active theme (`themes.rs`, Mapache Neon Tokyo by default)
 //! as translucent glass, the gpui-component theme mapped onto it so every
 //! stock button, input and menu matches, and shared building blocks
 //! (cards, chips, key caps, section labels, entrance animations).
@@ -82,17 +82,23 @@ fn with_hue(hex: u32, degrees: f32) -> Hsla {
     c
 }
 
+/// Up to this transparency, every text area keeps WCAG AA over its modeled
+/// backings. Past it, the extreme stretch trades contrast for clearer glass.
+pub const SAFE_TRANSPARENCY: f32 = 0.8;
+
+/// Fraction of the unrelaxed alpha kept at maximum transparency, before Opacity.
+const EXTREME_KEEP: f32 = 0.2;
+
 impl Palette {
     /// The theme's roles under `glass` (the Appearance sliders).
     ///
     /// Transparency fades the chrome (the window's ground: title bar, the
-    /// gaps between panes) from its solid alpha toward a floor. The text
-    /// areas (panes, sidebars, cards, code and terminal wells, selected
-    /// rows) start from that same fade and are then held readable: never
-    /// clearer than the alpha at which every text color still meets WCAG AA
-    /// over a pure black *and* a pure white backdrop (whatever the desktop
-    /// or the theme's picture shows lies between them, and a blur only
-    /// averages it), and Opacity takes them from there (0) to opaque (1).
+    /// gaps between panes) and text areas from their solid alphas. Through
+    /// [`SAFE_TRANSPARENCY`], text areas keep a WCAG AA floor based on the
+    /// theme's sky colors and background if there's a sky and no picture,
+    /// or pure black and white otherwise. Past that point the chrome and
+    /// text areas fade further, below the AA floor where needed. Opacity
+    /// lifts text areas from the resulting alpha (0) to opaque (1).
     ///
     /// Text colors are nudged first (toward white or black, whichever is
     /// the smaller change, by the least amount) wherever the theme's own
@@ -103,6 +109,8 @@ impl Palette {
 
         let clear = glass.transparency.clamp(0., 1.);
         let opacity = glass.opacity.clamp(0., 1.);
+        let extreme = ((clear - SAFE_TRANSPARENCY) / (1. - SAFE_TRANSPARENCY)).clamp(0., 1.);
+        let relax = 1. - (1. - EXTREME_KEEP) * extreme;
         let fade = |solid: f32, floor: f32| solid - (solid - floor) * clear;
         let opaque = t.solid || t.oled;
         // Cards lean toward the text color with a hint of the accent.
@@ -121,7 +129,15 @@ impl Palette {
         } else {
             tinted(0.09)
         };
-        let hover_c = if t.oled { t.raised } else { tinted(0.15) };
+        // Dark cards need a bigger step to show a hover: a light background
+        // reads a 15 % tint, a dark one barely does.
+        let hover_c = if t.oled {
+            mix(t.raised, t.fg, 0.08)
+        } else if t.light {
+            tinted(0.15)
+        } else {
+            tinted(0.22)
+        };
         let raised_c = t.raised;
         let well_c = black(if t.light {
             mix(t.bg, t.fg, 0.035)
@@ -181,33 +197,49 @@ impl Palette {
         let window_a = if opaque {
             1.
         } else {
-            fade(if t.light { 0.92 } else { 0.9 }, 0.3)
+            fade(if t.light { 0.92 } else { 0.9 }, 0.3) * relax
         };
-        // A text area's alpha: the transparency's fade, held at the AA
-        // floor, then lifted toward opaque by Opacity.
+        // Hold the fade at the AA floor, then relax it in the extreme stretch
+        // before Opacity lifts it toward opaque.
         let text_alpha = |c: u32, faded: f32, below: &[Rgb]| -> f32 {
             if opaque {
                 return 1.;
             }
             let floor = min_alpha(Rgb::hex(c), below, &needs) as f32;
-            let low = faded.max(floor);
+            let low = faded.max(floor) * relax;
             low + (1. - low) * opacity
         };
-        // A pane sits on the window's ground over the desktop; a theme's
-        // backdrop (sky, picture, scene) is drawn over that ground, so there
-        // the pane sits right on whatever the backdrop shows.
-        let under_window = if t.background.is_some() {
-            worst
-        } else {
-            worst.map(|d| Rgb::hex(window_c).over(f64::from(window_a), d))
+        // A pane sits on the window's ground over the desktop, or directly
+        // on the theme backdrop. Only a sky without a picture has a known
+        // palette; include the theme bg that the backdrop can fade toward.
+        let mut backings: Vec<Rgb> = match &t.background {
+            Some(background) if background.image.is_none() && !background.sky.is_empty() => {
+                background
+                    .sky
+                    .iter()
+                    .copied()
+                    .chain([t.bg])
+                    .map(Rgb::hex)
+                    .collect()
+            }
+            Some(_) => worst.to_vec(),
+            None => worst
+                .map(|d| Rgb::hex(window_c).over(f64::from(window_a), d))
+                .to_vec(),
         };
-        let panel_a = text_alpha(panel_c, fade(0.93, 0.16), &under_window);
+        let panel_a = text_alpha(panel_c, fade(0.93, 0.16), &backings);
         // Cards, wells and rows sit on a pane.
-        let under_panel = under_window.map(|b| Rgb::hex(panel_c).over(f64::from(panel_a), b));
-        let surface_a = text_alpha(surface_c, fade(0.94, 0.4), &under_panel);
-        let hover_a = text_alpha(hover_c, fade(0.96, 0.55), &under_panel);
-        let raised_a = text_alpha(raised_c, fade(0.96, 0.7), &under_panel);
-        let well_a = text_alpha(well_c, fade(0.92, 0.45), &under_panel);
+        for backing in &mut backings {
+            *backing = Rgb::hex(panel_c).over(f64::from(panel_a), *backing);
+        }
+        let surface_a = text_alpha(surface_c, fade(0.94, 0.4), &backings);
+        let hover_a = text_alpha(
+            hover_c,
+            fade(0.96, if t.light { 0.55 } else { 0.65 }),
+            &backings,
+        );
+        let raised_a = text_alpha(raised_c, fade(0.96, 0.7), &backings);
+        let well_a = text_alpha(well_c, fade(0.92, 0.45), &backings);
 
         let solid = |hex| color(hex, 1.);
         Self {
@@ -632,14 +664,30 @@ pub fn close_hint(id: u64, font: SharedString) -> impl IntoElement {
     } else {
         "Ctrl+C"
     };
+    press_again_hint(
+        id,
+        crate::shared::i18n::t("Press {chord} again to close").replace("{chord}", chord),
+        font,
+    )
+}
+
+/// "Press Esc again to stop" for a double Esc's window: the first Esc while
+/// the agent runs only arms the stop, so a stray press never cancels a turn.
+/// Same look and fade as [`close_hint`].
+pub fn stop_hint(id: u64, font: SharedString) -> impl IntoElement {
+    press_again_hint(
+        id,
+        crate::shared::i18n::t("Press Esc again to stop").to_string(),
+        font,
+    )
+}
+
+fn press_again_hint(id: u64, text: String, font: SharedString) -> impl IntoElement {
     div()
         .rounded_md()
         .bg(panel())
         .font_family(font)
-        .child(chip(
-            crate::shared::i18n::t("Press {chord} again to close").replace("{chord}", chord),
-            muted(),
-        ))
+        .child(chip(text, muted()))
         .with_animation(
             ElementId::NamedInteger("close-hint".into(), id),
             Animation::new(gentle_core::double_interrupt::WINDOW),
@@ -1607,6 +1655,58 @@ mod tests {
     }
 
     #[test]
+    fn extreme_transparency_makes_glass_clearer_without_capping_opacity() {
+        let catalog = crate::shared::themes::load_catalog(Vec::new(), Vec::new());
+        for name in ["Gentleman-Cute", "Mapache Neon Tokyo"] {
+            let theme = catalog.iter().find(|t| t.name == name).unwrap();
+            let safe = Palette::new(theme, clear_at(SAFE_TRANSPARENCY));
+            let extreme = Palette::new(theme, clear_at(1.));
+            for (role, safe, extreme) in [
+                ("panel", safe.panel, extreme.panel),
+                ("surface", safe.surface, extreme.surface),
+                ("well", safe.well, extreme.well),
+                ("window", safe.window_bg, extreme.window_bg),
+            ] {
+                assert!(
+                    extreme.a < safe.a,
+                    "{name} {role}: {} >= {}",
+                    extreme.a,
+                    safe.a
+                );
+            }
+            assert!(
+                extreme.panel.a <= 0.3 * safe.panel.a,
+                "{name} panel: {} is more than 30% of {}",
+                extreme.panel.a,
+                safe.panel.a,
+            );
+            let opaque = Glass {
+                opacity: 1.,
+                ..clear_at(1.)
+            };
+            assert_eq!(Palette::new(theme, opaque).panel.a, 1., "{name}");
+        }
+    }
+
+    #[test]
+    fn scene_sky_allows_a_clearer_panel_at_the_aa_limit() {
+        let catalog = crate::shared::themes::load_catalog(Vec::new(), Vec::new());
+        let theme = catalog
+            .iter()
+            .find(|t| t.name == "Mapache Neon Tokyo")
+            .unwrap();
+        let mut without_sky = theme.clone();
+        without_sky.background.as_mut().unwrap().sky.clear();
+        let glass = clear_at(SAFE_TRANSPARENCY);
+        let sky_panel = Palette::new(theme, glass).panel.a;
+        let fallback_panel = Palette::new(&without_sky, glass).panel.a;
+        assert!(
+            sky_panel < fallback_panel,
+            "{sky_panel} >= {fallback_panel}"
+        );
+    }
+
+    #[test]
     fn chrome_follows_transparency_and_text_areas_hold_their_floor() {
         let catalog = crate::shared::themes::load_catalog(Vec::new(), Vec::new());
         let cute = catalog.iter().find(|t| t.name == "Gentleman-Cute").unwrap();
@@ -1616,12 +1716,12 @@ mod tests {
         let p = Palette::new(cute, clear_at(0.6));
         assert!(close(p.window_bg.a, fade(0.9, 0.3, 0.6)));
         assert!(close(p.border.a, 0.69));
-        // Text areas never go clearer than the fade, nor than their floor:
-        // fully transparent, the pane still keeps most of its glass.
+        // Up to the AA limit, text areas go no clearer than the fade or floor.
+        let safe = Palette::new(cute, clear_at(SAFE_TRANSPARENCY));
+        assert!(safe.panel.a >= fade(0.93, 0.16, SAFE_TRANSPARENCY));
+        assert!(safe.panel.a > safe.window_bg.a, "{:?}", safe.panel);
+        // Opacity still lifts them to opaque at the extreme, step by step.
         let clear = Palette::new(cute, clear_at(1.));
-        assert!(clear.panel.a >= fade(0.93, 0.16, 1.));
-        assert!(clear.panel.a > clear.window_bg.a, "{:?}", clear.panel);
-        // Opacity lifts them from that floor to opaque, step by step.
         let mut last = 0.;
         for opacity in [0., 0.25, 0.5, 0.75, 1.] {
             let p = Palette::new(
@@ -1700,19 +1800,25 @@ mod tests {
     }
 
     #[test]
-    fn every_builtin_theme_meets_aa_over_any_backdrop() {
-        // Text (fg, muted, links in the accent) at 4.5:1; faint hints,
-        // status colors and input borders at 3:1; over a black and a white
-        // backdrop (the desktop or the theme's picture lies between them),
-        // at the defaults and at the clearest the sliders allow.
+    fn every_builtin_theme_meets_aa_over_its_backings_in_the_safe_range() {
+        use gentle_core::contrast::WORST_BACKDROPS;
+
+        // Text needs 4.5:1; hints, status colors and input borders need 3:1.
+        // Test against the theme's sky and bg, or black and white otherwise.
         let catalog = crate::shared::themes::load_catalog(Vec::new(), Vec::new());
         let mut failures = Vec::new();
         for theme in &catalog {
-            for glass in [Glass::DEFAULT, clear_at(1.), clear_at(0.)] {
+            let backdrops = match &theme.background {
+                Some(background) if background.image.is_none() && !background.sky.is_empty() => {
+                    background.sky.iter().copied().chain([theme.bg]).collect()
+                }
+                _ => WORST_BACKDROPS.to_vec(),
+            };
+            for glass in [Glass::DEFAULT, clear_at(SAFE_TRANSPARENCY), clear_at(0.)] {
                 let p = Palette::new(theme, glass);
-                for backdrop in gentle_core::contrast::WORST_BACKDROPS {
-                    let pictured = theme.background.is_some();
-                    for (role, ratio, target) in contrasts(&p, backdrop, pictured) {
+                for &backdrop in &backdrops {
+                    for (role, ratio, target) in contrasts(&p, backdrop, theme.background.is_some())
+                    {
                         if ratio < target {
                             failures.push(format!(
                                 "{} {role} {ratio:.2} < {target} over #{backdrop:06x} at {glass:?}",

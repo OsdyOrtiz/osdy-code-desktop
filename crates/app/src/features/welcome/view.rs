@@ -2,13 +2,13 @@
 //! sequence, and footer. ↵ is the main button.
 
 use gpui_kit::assets::IconName;
-use gpui_kit::component::button::{Button, ButtonVariants as _};
+use gpui_kit::component::button::{Button, ButtonCustomVariant, ButtonVariants as _};
 use gpui_kit::component::{Disableable as _, Icon, Sizable as _, h_flex, v_flex};
 use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
 
 use super::{AFTER_INTRO, WelcomeView, finale};
-use crate::shared::banner::{WRITE, banner};
+use crate::shared::banner::{WRITE, banner, night};
 use crate::shared::{i18n::t, ui};
 
 /// The client-drawn title bar (Windows, Linux) keeps its window controls
@@ -17,6 +17,9 @@ use crate::shared::{i18n::t, ui};
 const TITLE_BAR: f32 = 36.;
 /// The banner is ~175 px wide per unit of scale.
 const BANNER_SCALE: f32 = 2.6;
+/// The veil over an animated theme: everywhere, then a band behind the text.
+const VEIL: f32 = 0.3;
+const VEIL_BAND: f32 = 0.55;
 
 impl WelcomeView {
     fn render_banner(&self, still: bool) -> AnyElement {
@@ -25,7 +28,7 @@ impl WelcomeView {
             return banner(config, BANNER_SCALE, 1.).into_any_element();
         }
         // Keep the same element identity when the intro ends so the idle
-        // animations don't restart. The ready state keeps its green glow.
+        // animations don't restart. The ready state keeps its quieter glow.
         let intro_done = self.intro_done;
         div()
             .with_animation("welcome-banner", Animation::new(WRITE), move |el, t| {
@@ -72,7 +75,7 @@ impl WelcomeView {
                     .text_size(rems(34. / 16.))
                     .line_height(rems(42. / 16.))
                     .font_weight(FontWeight::BOLD)
-                    .text_color(ui::fg())
+                    .text_color(night::text())
                     .child(t(title)),
             )
             .child(
@@ -81,7 +84,7 @@ impl WelcomeView {
                     .text_base()
                     .text_center()
                     .line_height(rems(24. / 16.))
-                    .text_color(ui::muted())
+                    .text_color(night::muted())
                     .child(t(line)),
             );
         let delay = if self.intro_done {
@@ -109,8 +112,16 @@ impl WelcomeView {
             // terminal command): Continue waits for them.
             ("Continue", false)
         };
+        // The brand blue in every theme, with night text on it.
+        let blue = night::blue();
         let primary = Button::new("welcome-primary")
-            .primary()
+            .custom(
+                ButtonCustomVariant::new(cx)
+                    .color(blue)
+                    .foreground(night::bg())
+                    .hover(blue.blend(white().opacity(0.12)))
+                    .active(blue.blend(black().opacity(0.12))),
+            )
             .large()
             .rounded(px(999.))
             .when(!ready && can_install, |b| {
@@ -162,9 +173,10 @@ impl WelcomeView {
 }
 
 impl Render for WelcomeView {
-    fn render(&mut self, _: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
+    fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let ready = self.setup.read(cx).ready();
         let entrance = self.finale.is_some();
+        let backdrop = crate::shared::backdrop::welcome_layer(entrance, window, cx);
         let macos = cfg!(target_os = "macos");
         let root = div()
             .id("welcome")
@@ -176,24 +188,48 @@ impl Render for WelcomeView {
             .occlude()
             .track_focus(&self.focus)
             .on_key_down(cx.listener(Self::on_key))
-            .bg(ui::screen_bg())
+            .bg(night::bg())
+            // The theme's animated backdrop shows from the first launch,
+            // under a see-through deep purple veil: light at the sides so the
+            // scene always shows, denser behind the text column so it reads.
+            .when_some(backdrop, |d, layer| {
+                let plum = night::plum();
+                let band = plum.opacity(VEIL_BAND);
+                d.child(layer)
+                    .child(div().absolute().inset_0().bg(plum.opacity(VEIL)))
+                    .child(
+                        h_flex()
+                            .absolute()
+                            .inset_0()
+                            .child(div().flex_1().h_full().bg(linear_gradient(
+                                90.,
+                                linear_color_stop(plum.opacity(0.), 0.),
+                                linear_color_stop(band, 1.),
+                            )))
+                            .child(div().flex_none().w(rems(760. / 16.)).h_full().bg(band))
+                            .child(div().flex_1().h_full().bg(linear_gradient(
+                                90.,
+                                linear_color_stop(band, 0.),
+                                linear_color_stop(plum.opacity(0.), 1.),
+                            ))),
+                    )
+            })
             .child(
-                // A soft glow from the top: petal while setting up, green once
-                // everything required is ready, a brighter petal for the
-                // entrance.
+                // A soft brand-blue glow from the top: quieter once everything
+                // required is ready, brighter for the entrance.
                 div().absolute().inset_0().bg(linear_gradient(
                     180.,
                     linear_color_stop(
-                        if entrance {
-                            ui::petal().opacity(0.18)
+                        night::blue().opacity(if entrance {
+                            0.18
                         } else if ready {
-                            ui::success().opacity(0.10)
+                            0.05
                         } else {
-                            ui::petal().opacity(0.10)
-                        },
+                            0.10
+                        }),
                         0.,
                     ),
-                    linear_color_stop(ui::petal().opacity(0.), 0.6),
+                    linear_color_stop(night::blue().opacity(0.), 0.6),
                 )),
             );
         if entrance {

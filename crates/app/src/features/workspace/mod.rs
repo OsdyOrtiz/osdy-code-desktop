@@ -19,6 +19,7 @@ use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
 
 use crate::features::canvas::{CanvasEvent, CanvasView};
+use crate::features::codex_accounts::{AccountsView, PickerEvent};
 use crate::features::docs::{DocsEvent, DocsView};
 use crate::features::explorer::{ExplorerEvent, ExplorerView};
 use crate::features::memory::{MemoryEvent, MemoryView};
@@ -123,6 +124,7 @@ enum Overlay {
     Docs(Entity<DocsView>),
     Settings(Entity<SettingsView>),
     Profiles(Entity<ProfilesView>),
+    CodexAccounts(Entity<AccountsView>),
     Review(Entity<ReviewView>),
     Onboarding(Entity<OnboardingView>),
     Welcome(Entity<WelcomeView>),
@@ -560,6 +562,7 @@ impl Workspace {
             cx.observe_global::<crate::features::app_update::AppUpdate>(|_, cx| cx.notify()),
             // The water reminder paints over the window while it shows.
             cx.observe_global::<crate::features::hydration::Hydration>(|_, cx| cx.notify()),
+            cx.observe_global::<crate::features::active_break::ActiveBreak>(|_, cx| cx.notify()),
             // Keep a multi-stage grid filling the window as it resizes. A
             // lone card keeps whatever size the user gave it.
             cx.observe_window_bounds(window, |this, window, cx| {

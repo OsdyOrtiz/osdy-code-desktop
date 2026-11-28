@@ -4,6 +4,23 @@ use super::{Category, Language, PaletteAction, PaletteInput, PaletteView, TabLay
 use crate::features::session::SessionView;
 use crate::shared::i18n::with_test_language;
 
+#[test]
+fn sessions_stays_in_the_palette_but_memory_does_not() {
+    for (language, sessions, memory) in [
+        (Language::English, "Sessions", "Memory"),
+        (Language::Spanish, "Sesiones", "Memoria"),
+    ] {
+        let rows = super::commands::screen_rows(TabLayout::Horizontal, language);
+        assert!(!rows.iter().any(|row| row.title == memory));
+        assert_eq!(
+            rows.iter()
+                .filter(|row| row.title == sessions && row.action == PaletteAction::Sessions)
+                .count(),
+            1
+        );
+    }
+}
+
 #[gpui::test]
 fn t14_palette_finds_copy_by_english_and_spanish_description(cx: &mut TestAppContext) {
     cx.update(gpui_kit::init);

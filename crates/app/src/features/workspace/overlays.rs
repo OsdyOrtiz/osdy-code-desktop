@@ -96,10 +96,6 @@ impl Workspace {
             PaletteAction::Sessions => self.open_sessions(window, cx),
             PaletteAction::Profiles => self.open_profiles(window, cx),
             PaletteAction::Usage => self.open_usage(window, cx),
-            PaletteAction::Memory => {
-                let cwd = self.active_cwd(cx);
-                self.open_memory(cwd, Default::default(), window, cx)
-            }
             PaletteAction::Docs => self.open_docs(window, cx),
             PaletteAction::History => {
                 let cwd = self.active_cwd(cx);
@@ -351,7 +347,7 @@ impl Workspace {
     /// The window's active agent tab (`active_session`) is the one the
     /// sessions screen asks to list and switch, when its Gentle Shell offers
     /// it; its backend is started (probe included) first.
-    pub(super) fn open_sessions(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    pub(crate) fn open_sessions(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.start_active_session(window, cx);
         let cwd = self.active_cwd(cx);
         let session = self.active_session();
@@ -382,6 +378,46 @@ impl Workspace {
             },
         );
         self.overlay = Some((Overlay::Sessions(view), subscription));
+        cx.notify();
+    }
+
+    pub(super) fn open_codex_accounts(
+        &mut self,
+        pane: PaneId,
+        session: &Entity<SessionView>,
+        feed: gentle_core::codex_accounts::Feed,
+        window: &mut Window,
+        cx: &mut Context<Self>,
+    ) {
+        let owner = session.downgrade();
+        let view = cx.new(|cx| AccountsView::new(feed, session, window, cx));
+        let subscription = cx.subscribe_in(
+            &view,
+            window,
+            move |this, _, event: &PickerEvent, window, cx| {
+                if !matches!(event, PickerEvent::ViewUsage(_)) {
+                    this.close_overlay(window, cx);
+                }
+                // Never redirect the selection to whichever tab is active now.
+                if !this.panes.contains_key(&pane) {
+                    return;
+                }
+                let _ = owner.update(cx, |session, cx| match event {
+                    PickerEvent::Close => {}
+                    PickerEvent::Command(command) | PickerEvent::ViewUsage(command) => {
+                        session.run_codex_account_command(command.clone(), cx)
+                    }
+                    PickerEvent::InvalidName => session.codex_account_error(
+                        crate::shared::i18n::t(
+                            "This Codex account name cannot be selected here. Use Manage accounts…",
+                        )
+                        .into(),
+                        cx,
+                    ),
+                });
+            },
+        );
+        self.overlay = Some((Overlay::CodexAccounts(view), subscription));
         cx.notify();
     }
 

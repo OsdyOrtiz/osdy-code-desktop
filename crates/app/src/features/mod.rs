@@ -1,10 +1,12 @@
 //! Product features: each owns its state, effects and views.
 
+pub mod active_break;
 pub mod alerts;
 pub mod app_update;
 pub mod backend;
 pub mod browser;
 pub mod canvas;
+mod codex_accounts;
 pub mod devices;
 pub mod diagnostics;
 pub mod docs;
@@ -18,6 +20,7 @@ pub mod memory;
 pub mod music;
 pub mod notices;
 pub mod onboarding;
+pub mod osdy_gentle;
 pub mod palette;
 pub mod profiles;
 pub mod providers;

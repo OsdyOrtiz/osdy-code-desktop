@@ -15,6 +15,7 @@ use super::OnboardingView;
 use super::checks::{Tone, blocks, is_ok, status_text, tone};
 use super::view::status_label;
 use crate::features::setup::{Check, Need, Status};
+use crate::shared::banner::night;
 use crate::shared::{
     i18n::{language, t},
     ui,
@@ -50,8 +51,8 @@ impl OnboardingView {
                     .py_8()
                     .gap_2()
                     .text_sm()
-                    .text_color(ui::muted())
-                    .child(Spinner::new().small().color(ui::petal()))
+                    .text_color(night::muted())
+                    .child(Spinner::new().small().color(night::blue()))
                     .child(t("Looking at what this machine already has…")),
             ));
         };
@@ -107,7 +108,6 @@ impl OnboardingView {
         let total = steps.max(1) as f32;
         let to = done as f32 / total;
         let from = done.saturating_sub(1) as f32 / total;
-        let complete = done == steps;
         h_flex()
             .gap_3()
             .child(
@@ -115,7 +115,7 @@ impl OnboardingView {
                     .flex_none()
                     .text_size(ui::code_rems(12.))
                     .font_family(ui::mono())
-                    .text_color(if complete { ui::success() } else { ui::muted() })
+                    .text_color(night::amber())
                     .child(
                         t("{done} of {steps} ready")
                             .replace("{done}", &done.to_string())
@@ -127,7 +127,7 @@ impl OnboardingView {
                     .flex_1()
                     .h(px(5.))
                     .rounded_full()
-                    .bg(ui::well())
+                    .bg(night::well())
                     .overflow_hidden()
                     .child(
                         div()
@@ -135,15 +135,8 @@ impl OnboardingView {
                             .rounded_full()
                             .bg(linear_gradient(
                                 90.,
-                                linear_color_stop(ui::petal(), 0.),
-                                linear_color_stop(
-                                    if complete {
-                                        ui::success()
-                                    } else {
-                                        ui::petal_active()
-                                    },
-                                    1.,
-                                ),
+                                linear_color_stop(night::blue(), 0.),
+                                linear_color_stop(night::violet(), 1.),
                             ))
                             .with_animation(
                                 SharedString::from(format!("sequence-progress-{done}")),
@@ -154,7 +147,7 @@ impl OnboardingView {
                     ),
             )
             .when_some(self.platform.as_ref(), |d, platform| {
-                d.child(ui::chip(platform.label(), ui::petal()))
+                d.child(ui::chip(platform.label(), night::muted()))
             })
     }
 
@@ -181,9 +174,9 @@ impl OnboardingView {
                         .min_h(rems(18. / 16.))
                         .rounded_full()
                         .bg(if step == Step::Done {
-                            ui::success().opacity(0.55)
+                            done_ink().opacity(0.55)
                         } else {
-                            ui::border()
+                            night::line()
                         }),
                 )
             });
@@ -203,11 +196,11 @@ impl OnboardingView {
                         div()
                             .text_base()
                             .font_weight(FontWeight::SEMIBOLD)
-                            .text_color(if dim { ui::muted() } else { ui::fg() })
+                            .text_color(if dim { night::muted() } else { night::text() })
                             .child(t(check.title)),
                     )
                     .child(if optional {
-                        ui::chip(t("Optional"), ui::info())
+                        ui::chip(t("Optional"), night::violet())
                     } else {
                         ui::chip(status_label(&check.status, step == Step::Installing), color)
                     })
@@ -217,14 +210,14 @@ impl OnboardingView {
             .child(
                 div()
                     .text_sm()
-                    .text_color(ui::muted())
+                    .text_color(night::muted())
                     .child(t(check.summary)),
             )
             .child(
                 div()
                     .text_size(ui::code_rems(12.))
                     .font_family(ui::mono())
-                    .text_color(ui::faint())
+                    .text_color(night::faint())
                     .truncate()
                     .child(status_text(&check.status)),
             )
@@ -250,11 +243,11 @@ impl OnboardingView {
             let icon = match step {
                 Step::Installing => Spinner::new()
                     .xsmall()
-                    .color(ui::petal())
+                    .color(night::blue())
                     .into_any_element(),
                 Step::Done => Icon::new(IconName::CircleCheck)
                     .xsmall()
-                    .text_color(ui::success())
+                    .text_color(done_ink())
                     .into_any_element(),
                 Step::Failed => Icon::new(IconName::CircleX)
                     .xsmall()
@@ -262,7 +255,7 @@ impl OnboardingView {
                     .into_any_element(),
                 Step::Waiting { .. } => Icon::new(IconName::Plus)
                     .xsmall()
-                    .text_color(ui::faint())
+                    .text_color(night::faint())
                     .into_any_element(),
             };
             v_flex()
@@ -270,7 +263,7 @@ impl OnboardingView {
                 .px_3()
                 .py_2()
                 .rounded_lg()
-                .bg(ui::panel())
+                .bg(night::panel())
                 .child(
                     h_flex()
                         .gap_3()
@@ -287,7 +280,7 @@ impl OnboardingView {
                                 .flex_none()
                                 .text_sm()
                                 .font_weight(FontWeight::MEDIUM)
-                                .text_color(ui::fg())
+                                .text_color(night::text())
                                 .child(t(check.title)),
                         )
                         // A failed check says why where its summary sits
@@ -306,7 +299,7 @@ impl OnboardingView {
                                 .min_w_0()
                                 .truncate()
                                 .text_xs()
-                                .text_color(ui::muted())
+                                .text_color(night::muted())
                                 .child(t(check.summary)),
                         })
                         .children(self.render_action(check, index, cx)),
@@ -334,10 +327,10 @@ impl OnboardingView {
 /// The chip's color for `check` at `step`.
 fn step_color(check: &Check, step: Step) -> Hsla {
     match step {
-        Step::Installing => ui::petal(),
-        Step::Waiting { next: false } => ui::faint(),
+        Step::Installing => night::blue(),
+        Step::Waiting { next: false } => night::faint(),
         _ => match tone(check) {
-            Tone::Good => ui::success(),
+            Tone::Good => done_ink(),
             Tone::Warn => ui::warning(),
             Tone::Bad => ui::danger(),
         },
@@ -358,11 +351,11 @@ fn node(index: usize, step: Step) -> AnyElement {
     match step {
         Step::Done => ui::pop_in(
             ("sequence-done", index),
-            circle().bg(ui::success()).child(
-                Icon::new(IconName::Check)
-                    .small()
-                    .text_color(ui::screen_bg()),
-            ),
+            circle()
+                .bg(done_ink().opacity(0.08))
+                .border_2()
+                .border_color(done_ink())
+                .child(Icon::new(IconName::Check).small().text_color(done_ink())),
         )
         .into_any_element(),
         Step::Installing => div()
@@ -373,16 +366,16 @@ fn node(index: usize, step: Step) -> AnyElement {
                     .absolute()
                     .inset(rems(-6. / 16.))
                     .rounded_full()
-                    .bg(ui::petal().opacity(0.22)),
+                    .bg(night::blue().opacity(0.22)),
             ))
             .child(
                 circle()
                     .absolute()
                     .inset_0()
-                    .bg(ui::screen_bg())
+                    .bg(night::bg())
                     .border_2()
-                    .border_color(ui::petal())
-                    .child(Spinner::new().xsmall().color(ui::petal())),
+                    .border_color(night::blue())
+                    .child(Spinner::new().xsmall().color(night::blue())),
             )
             .into_any_element(),
         Step::Failed => circle()
@@ -394,14 +387,14 @@ fn node(index: usize, step: Step) -> AnyElement {
         Step::Waiting { next } => circle()
             .border_1()
             .border_color(if next {
-                ui::petal().opacity(0.7)
+                night::blue().opacity(0.7)
             } else {
-                ui::border_strong()
+                night::faint()
             })
-            .when(next, |d| d.bg(ui::petal().opacity(0.08)))
+            .when(next, |d| d.bg(night::blue().opacity(0.08)))
             .text_sm()
             .font_weight(FontWeight::SEMIBOLD)
-            .text_color(if next { ui::petal() } else { ui::faint() })
+            .text_color(if next { night::blue() } else { night::faint() })
             .child((index + 1).to_string())
             .into_any_element(),
     }
@@ -414,7 +407,7 @@ fn shimmer(index: usize) -> impl IntoElement {
         .h(px(3.))
         .w_full()
         .rounded_full()
-        .bg(ui::petal().opacity(0.12))
+        .bg(night::blue().opacity(0.12))
         .overflow_hidden()
         .child(
             div()
@@ -425,8 +418,8 @@ fn shimmer(index: usize) -> impl IntoElement {
                 .rounded_full()
                 .bg(linear_gradient(
                     90.,
-                    linear_color_stop(ui::petal().opacity(0.), 0.),
-                    linear_color_stop(ui::petal(), 1.),
+                    linear_color_stop(night::blue().opacity(0.), 0.),
+                    linear_color_stop(night::blue(), 1.),
                 ))
                 .with_animation(
                     ("sequence-shimmer", index),
@@ -436,4 +429,9 @@ fn shimmer(index: usize) -> impl IntoElement {
                     |el, t| el.left(relative(-0.35 + t * 1.35)),
                 ),
         )
+}
+
+/// Completed steps use the brand palette's green, the same in every theme.
+fn done_ink() -> Hsla {
+    night::green()
 }

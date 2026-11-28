@@ -26,6 +26,7 @@ use super::{SessionEvent, SessionView, attachments, builtins};
 use crate::features::profiles::{
     ConfigChange, ConfigFailure, ConfigOutcome, ConfigSupport, ConfigTicket, ProfileApply,
 };
+use gentle_core::codex_accounts::{self, USAGE_COMMAND, lists_extension_command};
 use gentle_core::transcript::NoticeLevel;
 
 /// How long a Desktop request may stay unanswered before the tab drops it.
@@ -78,6 +79,38 @@ fn parse_commands(data: &Value) -> Vec<(String, String)> {
 }
 
 impl SessionView {
+    pub(crate) fn codex_account_feed(&self) -> Option<codex_accounts::Feed> {
+        let [line] = self
+            .extension
+            .widgets
+            .get(codex_accounts::WIDGET_KEY)?
+            .as_slice()
+        else {
+            return None;
+        };
+        codex_accounts::parse(line)
+    }
+
+    pub(crate) fn mcp_status_feed(&self) -> Option<gentle_core::mcp_status::Feed> {
+        use gentle_core::mcp_status;
+        if !matches!(self.backend.status, BackendStatus::Ready(_)) {
+            return None;
+        }
+        let [line] = self
+            .extension
+            .widgets
+            .get(mcp_status::WIDGET_KEY)?
+            .as_slice()
+        else {
+            return None;
+        };
+        mcp_status::parse(line)
+    }
+
+    pub(crate) fn has_codex_usage(&self) -> bool {
+        self.extension.codex_usage_registered && self.process().is_some()
+    }
+
     pub(super) fn process(&self) -> Option<Arc<PiProcess>> {
         match &self.backend.status {
             BackendStatus::Ready(process) => Some(process.clone()),
@@ -733,6 +766,10 @@ impl SessionView {
             // Read before the result is consumed: a failed listing leaves the
             // channel closed, and `report` puts that error in the conversation.
             let registered = discovers_desktop(&result);
+            this.extension.codex_usage_registered = result
+                .as_ref()
+                .is_ok_and(|data| lists_extension_command(data, USAGE_COMMAND));
+            cx.notify();
             if let Some(data) = this.report(result) {
                 this.commands = parse_commands(&data);
                 // Where each skill lives: `SKILL.md`, or its folder.
@@ -1287,6 +1324,81 @@ impl SessionView {
             };
             done(outcome, cx);
         });
+    }
+
+    pub(crate) fn codex_account_error(&mut self, message: String, cx: &mut Context<Self>) {
+        self.hide_codex_usage_loading(cx);
+        self.toast(Notification::error(message.clone()), cx);
+        cx.emit(SessionEvent::Notice {
+            level: NoticeLevel::Error,
+            message,
+        });
+    }
+
+    pub(crate) fn run_codex_account_command(&mut self, text: String, cx: &mut Context<Self>) {
+        self.run_gated_codex_command(text, None, cx);
+    }
+
+    pub(super) fn run_codex_all_usage_command(&mut self, run: String, cx: &mut Context<Self>) {
+        let text = format!("/{USAGE_COMMAND} --all --run {run}");
+        self.run_gated_codex_command(text, Some(run), cx);
+    }
+
+    fn run_gated_codex_command(
+        &mut self,
+        text: String,
+        run: Option<String>,
+        cx: &mut Context<Self>,
+    ) {
+        let is_current = move |this: &Self| {
+            run.as_deref()
+                .is_none_or(|id| this.extension.codex_all_usage.run_id() == Some(id))
+        };
+        let error_is_current = is_current.clone();
+        let error = move |this: &mut Self, cx: &mut Context<Self>| {
+            if !error_is_current(this) {
+                return;
+            }
+            this.codex_account_error(
+                t("Could not run the Codex account command in this tab.").into(),
+                cx,
+            );
+        };
+        let Some(name) = text
+            .strip_prefix('/')
+            .and_then(|text| text.split_whitespace().next())
+        else {
+            error(self, cx);
+            return;
+        };
+        if self.process().is_none() {
+            error(self, cx);
+            return;
+        }
+        let name = name.to_owned();
+        // An absent command could turn a prompt into a chat message. Check
+        // the live registry in the same backend before using the prompt RPC.
+        self.request(
+            json!({"type": "get_commands"}),
+            cx,
+            move |this, result, cx| {
+                if !is_current(this) {
+                    return;
+                }
+                if !result.is_ok_and(|data| lists_extension_command(&data, &name)) {
+                    error(this, cx);
+                    return;
+                }
+                let owner = cx.entity().downgrade();
+                this.run_extension_command(text, cx, move |result, cx| {
+                    if result.is_err() {
+                        cx.defer(move |cx| {
+                            let _ = owner.update(cx, error);
+                        });
+                    }
+                });
+            },
+        );
     }
 
     /// Give the backend the app's Agent UI mode when it differs from the

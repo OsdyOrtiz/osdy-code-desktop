@@ -18,7 +18,7 @@ use crate::shared::backdrop::{self, Backdrop};
 use crate::shared::ui;
 
 /// The theme used when nothing else is chosen (and the fallback for unknown names).
-pub const DEFAULT_THEME: &str = "Tokyo Night";
+pub const DEFAULT_THEME: &str = "Mapache Neon Tokyo";
 
 /// Gentle Shell's themes, embedded so the app looks right before (or
 /// without) finding the installed `gentle-pi`; the installed files win.
@@ -535,6 +535,8 @@ fn embedded_gentle() -> Vec<Theme> {
 /// Themes with backdrops the app ships as examples (its `theme-examples`):
 /// the user's or the agent's own app themes of the same name replace them.
 const EXAMPLES: &[&str] = &[
+    // The default theme ([`DEFAULT_THEME`]): pixel-art Tokyo at night.
+    include_str!("../../themes/examples/mapache-neon-tokyo.json"),
     include_str!("../../themes/examples/aurora.json"),
     include_str!("../../themes/examples/petals.json"),
     include_str!("../../themes/examples/moonlit.json"),
@@ -622,7 +624,7 @@ fn same_name(a: &str, b: &str) -> bool {
     a.trim().eq_ignore_ascii_case(b.trim())
 }
 
-/// The app's persisted choice, then Tokyo Night; a name the catalog doesn't
+/// The app's persisted choice, then [`DEFAULT_THEME`]; a name the catalog doesn't
 /// have falls through. Pi's own `theme` styles the terminal, not this app.
 pub fn pick_default(catalog: &[Theme], persisted: Option<&str>) -> usize {
     [persisted, Some(DEFAULT_THEME)]
@@ -685,6 +687,11 @@ pub(crate) fn read_key(path: &Path, key: &str) -> Option<Value> {
 /// The settings file's keys, to change some and write it back: none when the
 /// file doesn't exist yet, an error when it exists but can't be read or isn't
 /// a JSON object, so a save never replaces settings it couldn't read.
+/// Serializes every read-modify-write of the app's settings file in this
+/// process: the rename keeps each write whole, but two overlapping writers
+/// (the UI and a background task) would otherwise each drop the other's key.
+static SETTINGS_WRITE: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 fn settings_to_update(path: &Path) -> std::io::Result<serde_json::Map<String, Value>> {
     let text = match std::fs::read_to_string(path) {
         Ok(text) => text,
@@ -734,6 +741,7 @@ fn write_keys<'a>(
     path: &Path,
     keys: impl IntoIterator<Item = (&'a str, Value)>,
 ) -> std::io::Result<()> {
+    let _guard = SETTINGS_WRITE.lock().unwrap_or_else(|e| e.into_inner());
     let mut object = settings_to_update(path)?;
     for (key, new) in keys {
         object.insert(key.to_string(), new);
@@ -851,6 +859,7 @@ pub fn read_fonts(path: &Path) -> Fonts {
 /// other key. Defaults remove their keys, and so does the interface's
 /// legacy size (it has no size of its own).
 pub fn write_fonts(path: &Path, fonts: &Fonts) -> std::io::Result<()> {
+    let _guard = SETTINGS_WRITE.lock().unwrap_or_else(|e| e.into_inner());
     let mut object = settings_to_update(path)?;
     for slot in FontSlot::ALL {
         match fonts.get(slot).and_then(|f| fonts::normalize(f)) {
@@ -911,20 +920,21 @@ impl Resolved {
 /// rarely blur behind a window (GPUI's X11 backend never does, Wayland only
 /// with a blur protocol), so the desktop would read through sharp: there the
 /// glass starts nearly solid.
-pub const DEFAULT_TRANSPARENCY: f32 = if cfg!(target_os = "linux") { 0.15 } else { 0.6 };
+pub const DEFAULT_TRANSPARENCY: f32 = if cfg!(target_os = "linux") { 0.15 } else { 0.4 };
 
 /// The Appearance sliders, each 0–1 (shown as 0–100 %).
 #[derive(Debug, Clone, Copy, PartialEq)]
 pub struct Glass {
     /// How much shows through the glass: the chrome (title bar, the gaps
     /// between panes) follows it fully; text areas only down to the
-    /// clearest they can be and still meet AA (`ui::Palette::new`).
+    /// clearest they can be and still meet AA, up to
+    /// `ui::SAFE_TRANSPARENCY`; past it they keep fading (`ui::Palette::new`).
     pub transparency: f32,
     /// How soft the theme's own background picture is (`backdrop`): 0 is
     /// sharp. Themes without a picture or scene have nothing to blur.
     pub blur: f32,
     /// How opaque the areas that always hold text are, from the clearest
-    /// that still meets AA (0) to opaque (1).
+    /// the transparency allows (0) to opaque (1).
     pub opacity: f32,
 }
 
@@ -939,16 +949,17 @@ impl Glass {
     pub const DEFAULT: Self = Self {
         transparency: DEFAULT_TRANSPARENCY,
         blur: 0.,
-        opacity: 0.2,
+        opacity: 0.25,
     };
 }
 
-/// The resolved active theme; Tokyo Night until [`init`] runs.
+/// The resolved active theme; [`DEFAULT_THEME`] until [`init`] runs.
 static ACTIVE: LazyLock<RwLock<Resolved>> = LazyLock::new(|| {
-    let default = builtin_themes()
+    let default = example_themes()
         .into_iter()
+        .chain(builtin_themes())
         .find(|t| t.name == DEFAULT_THEME)
-        .expect("Tokyo Night is built in");
+        .expect("the default theme is embedded");
     RwLock::new(Resolved::new(&default, Glass::DEFAULT))
 });
 
@@ -1603,22 +1614,25 @@ mod tests {
         let at = |name: &str| catalog.iter().position(|t| t.name == name).unwrap();
         assert_eq!(pick_default(&catalog, Some("Nord")), at("Nord"));
         assert_eq!(pick_default(&catalog, Some("dracula")), at("Dracula"));
-        assert_eq!(pick_default(&catalog, None), at("Tokyo Night"));
+        assert_eq!(pick_default(&catalog, None), at("Mapache Neon Tokyo"));
     }
 
     #[test]
     fn unknown_names_fall_back() {
         let catalog = load_catalog(Vec::new(), Vec::new());
         let at = |name: &str| catalog.iter().position(|t| t.name == name).unwrap();
-        assert_eq!(pick_default(&catalog, Some("Gone")), at("Tokyo Night"));
+        assert_eq!(
+            pick_default(&catalog, Some("Gone")),
+            at("Mapache Neon Tokyo")
+        );
     }
 
     #[test]
     fn the_theme_before_init_is_the_default() {
-        // Tokyo Night's background, untouched by contrast (the terminal keeps it).
+        // Mapache Neon Tokyo's background, untouched by contrast (the terminal keeps it).
         let bg = ACTIVE.read().unwrap_or_else(|e| e.into_inner()).term.bg;
-        assert_eq!(bg, 0x1a1b26);
-        assert_eq!(DEFAULT_THEME, "Tokyo Night");
+        assert_eq!(bg, 0x15112b);
+        assert_eq!(DEFAULT_THEME, "Mapache Neon Tokyo");
     }
 
     #[test]

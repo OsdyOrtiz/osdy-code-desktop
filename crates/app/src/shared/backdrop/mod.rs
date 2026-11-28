@@ -10,6 +10,7 @@ mod effects;
 pub mod model;
 pub mod preview;
 mod scene;
+mod welcome;
 
 use std::collections::HashMap;
 use std::sync::{Arc, LazyLock};
@@ -285,16 +286,36 @@ pub fn set_motion(motion: Motion, cx: &mut App) {
 
 /// The backdrop layer for the window, or `None` when the active theme has none.
 pub fn layer(window: &mut Window, cx: &mut App) -> Option<AnyElement> {
+    render_layer(None, window, cx)
+}
+
+/// On Welcome, the shipped raccoon scene holds its rose until the entrance.
+pub fn welcome_layer(entrance: bool, window: &mut Window, cx: &mut App) -> Option<AnyElement> {
+    render_layer(Some(entrance), window, cx)
+}
+
+fn render_layer(
+    welcome_entrance: Option<bool>,
+    window: &mut Window,
+    cx: &mut App,
+) -> Option<AnyElement> {
     let theme = cx.global::<Themes>().active_theme().clone();
     let backdrop = theme.background.clone()?;
+    let rose_scene = welcome_entrance
+        .and_then(|entrance| welcome::rose_scene(&theme).map(|code| (entrance, code)));
+    let (slot_key, entrance, scene_override) = match rose_scene {
+        Some((entrance, code)) => ("welcome-rose-backdrop", entrance, Some(code)),
+        None => ("theme-backdrop", true, None),
+    };
     let motion = motion_now(cx);
-    let moving = motion != Motion::Still
+    let moving = entrance
+        && motion != Motion::Still
         && backdrop.speed > 0.
         && window.is_window_active()
         && !cx.reduce_motion();
 
-    // Kept while the layer renders, so the scene stops with the window or the theme.
-    let slot = window.use_keyed_state("theme-backdrop", cx, |_, _| Slot::default());
+    // Keep the same worker through the Welcome entrance, separate from the workspace.
+    let slot = window.use_keyed_state(slot_key, cx, |_, _| Slot::default());
     let blur = cx.global::<Themes>().glass.blur;
     let blurred = blurred_picture(&backdrop, blur, &slot, window, cx);
     // A scene is redrawn every frame: it is faded toward the background
@@ -314,10 +335,8 @@ pub fn layer(window: &mut Window, cx: &mut App) -> Option<AnyElement> {
     // A camera or effects move the image on the scene's clock, so they run
     // a scene that draws nothing when the theme has none.
     let natural = backdrop.image.as_ref().and(backdrop.image_size);
-    let code = backdrop
-        .scene
-        .as_ref()
-        .map(|s| s.code.clone())
+    let code = scene_override
+        .or_else(|| backdrop.scene.as_ref().map(|s| s.code.clone()))
         .or_else(|| backdrop.moves().then(|| STILL.clone()));
     let scene = code.as_ref().map(|code| {
         let key = format!(

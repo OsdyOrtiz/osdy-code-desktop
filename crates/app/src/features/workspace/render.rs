@@ -555,6 +555,7 @@ impl Render for Workspace {
                     Overlay::Docs(view) => (view.clone().into_any_element(), false),
                     Overlay::Settings(view) => (view.clone().into_any_element(), false),
                     Overlay::Profiles(view) => (view.clone().into_any_element(), false),
+                    Overlay::CodexAccounts(view) => (view.clone().into_any_element(), false),
                     Overlay::Review(view) => (view.clone().into_any_element(), false),
                     // First-run screens still cover the whole window.
                     Overlay::Onboarding(view) => (view.clone().into_any_element(), true),
@@ -578,6 +579,18 @@ impl Render for Workspace {
             })
             .when_some(crate::features::hydration::playing(cx), |root, run| {
                 root.child(crate::features::hydration::overlay(run, cx))
+            })
+            .when_some(crate::features::active_break::playing(cx), |root, run| {
+                root.child(
+                    div()
+                        .absolute()
+                        .top(rems(TITLE_BAR_HEIGHT / 16. + 0.75))
+                        .left_0()
+                        .right_0()
+                        .flex()
+                        .justify_center()
+                        .child(crate::features::active_break::overlay(run, cx)),
+                )
             })
     }
 }

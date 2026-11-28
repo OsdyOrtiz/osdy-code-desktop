@@ -11,9 +11,10 @@ use gpui_kit::prelude::FluentBuilder as _;
 use gpui_kit::*;
 
 use super::{TINY, clock};
-use crate::features::session::SessionView;
+use crate::features::codex_accounts;
 use crate::features::session::agents::{JobRow, JobTail, job_row};
-use crate::shared::ui;
+use crate::features::session::{SessionEvent, SessionView};
+use crate::shared::{kisses, ui};
 use gentle_core::tools;
 use gentle_core::transcript::{Item, ToolStatus, format_tokens};
 
@@ -84,72 +85,69 @@ impl SessionView {
                 }
             });
 
-        let left =
-            h_flex()
-                .flex_1()
-                .min_w_0()
-                .gap_2()
-                .overflow_hidden()
-                .whitespace_nowrap()
-                .when_some(question, |this, question| {
-                    this.child(
-                        h_flex()
-                            .min_w_0()
-                            .gap_1()
-                            .text_color(ui::warning())
-                            .child(Icon::new(IconName::MessageSquare).xsmall())
-                            .child(
-                                div()
-                                    .min_w_0()
-                                    .overflow_hidden()
-                                    .text_ellipsis()
-                                    .child(question),
-                            ),
-                    )
-                })
-                .when(busy, |this| {
-                    // The turn's clock; the composer's orbit shows it's live.
-                    this.when_some(since, |this, since| {
-                        this.child(
-                            div()
-                                .font_family(ui::mono())
-                                .text_size(ui::code_rems(11.))
-                                .text_color(ui::muted())
-                                .child(clock(since.elapsed())),
-                        )
-                        .child(ui::each_second())
-                    })
-                    .child(div().h(rems(10. / 16.)).w(px(1.)).bg(ui::border_strong()))
-                    .map(|this| match (waiting, feed_phase, self.activity.phase) {
-                        _ if stopping => {
-                            this.child(div().text_color(ui::muted()).child(t("✿ stopping…")))
-                        }
-                        (Some(_), _, _) => this.child(div().text_color(ui::petal()).child(
-                            t("✿ waiting for {provider}…").replace("{provider}", &provider),
-                        )),
-                        (None, Some(label), _) => {
-                            this.child(div().text_color(ui::petal()).child(format!("✿ {label}")))
-                        }
-                        (None, None, Some(phase)) => this.child(
-                            div()
-                                .text_color(ui::petal())
-                                .child(format!("✿ {}…", t(phase))),
-                        ),
-                        (None, None, None) => {
-                            this.child(div().text_color(ui::petal()).child(t("✿ working…")))
-                        }
-                    })
-                    .when_some(current_tool, |this, tool| {
-                        this.child(
+        let left = h_flex()
+            .flex_1()
+            .min_w_0()
+            .gap_2()
+            .overflow_hidden()
+            .whitespace_nowrap()
+            .when_some(question, |this, question| {
+                this.child(
+                    h_flex()
+                        .min_w_0()
+                        .gap_1()
+                        .text_color(ui::warning())
+                        .child(Icon::new(IconName::MessageSquare).xsmall())
+                        .child(
                             div()
                                 .min_w_0()
                                 .overflow_hidden()
                                 .text_ellipsis()
-                                .text_color(ui::muted())
-                                .child(tool),
-                        )
-                    })
-                });
+                                .child(question),
+                        ),
+                )
+            })
+            .when(busy, |this| {
+                // The turn's clock; the composer's orbit shows it's live.
+                this.when_some(since, |this, since| {
+                    this.child(
+                        div()
+                            .font_family(ui::mono())
+                            .text_size(ui::code_rems(11.))
+                            .text_color(ui::muted())
+                            .child(clock(since.elapsed())),
+                    )
+                    .child(ui::each_second())
+                })
+                .child(div().h(rems(10. / 16.)).w(px(1.)).bg(ui::border_strong()))
+                .child({
+                    let color = if stopping { ui::muted() } else { ui::petal() };
+                    let label = match (waiting, feed_phase, self.activity.phase) {
+                        _ if stopping => t("stopping…").to_owned(),
+                        (Some(_), _, _) => {
+                            t("waiting for {provider}…").replace("{provider}", &provider)
+                        }
+                        (None, Some(label), _) => label,
+                        (None, None, Some(phase)) => format!("{}…", t(phase)),
+                        (None, None, None) => t("working…").to_owned(),
+                    };
+                    h_flex()
+                        .gap_1()
+                        .text_color(color)
+                        .child(kisses::paw(rems(11. / 16.), color))
+                        .child(label)
+                })
+                .when_some(current_tool, |this, tool| {
+                    this.child(
+                        div()
+                            .min_w_0()
+                            .overflow_hidden()
+                            .text_ellipsis()
+                            .text_color(ui::muted())
+                            .child(tool),
+                    )
+                })
+            });
 
         let width = self.pane_width.get();
         // Only what needs you shows by itself; the rest waits one hover away.
@@ -236,7 +234,7 @@ impl SessionView {
             // Tern-style: jobs and widgets live in chips here instead of a
             // side panel. The task list floats at the top of the
             // conversation instead (see `render_todo_island`).
-            .when(!collapse, |this| this.children(self.render_widget_chips()))
+            .children(self.render_widget_chips(collapse, cx))
             .when(self.helpers_visible(), |this| {
                 this.child(self.render_helpers_chip(cx))
             })
@@ -347,40 +345,55 @@ impl SessionView {
         })
     }
 
-    /// Extension widgets (`setWidget`): one chip each, its lines on click.
-    /// Gentle Shell's YOLO banner (`gentle:yolo`) is left out: the
-    /// permission chip already shows the mode.
-    fn render_widget_chips(&self) -> Vec<AnyElement> {
+    /// Visible extension widgets (`setWidget`): one chip each, its lines on click.
+    fn render_widget_chips(&self, collapse: bool, cx: &mut Context<Self>) -> Vec<AnyElement> {
         self.extension
             .widgets
             .iter()
-            .filter(|(key, _)| key.as_str() != "gentle:yolo")
-            .map(|(key, lines)| {
+            .filter(|(key, _)| super::super::state::ExtensionUi::is_widget_chip(key))
+            .filter_map(|(key, lines)| {
+                if key == gentle_core::codex_accounts::WIDGET_KEY
+                    && let [line] = lines.as_slice()
+                    && let Some(feed) = gentle_core::codex_accounts::parse(line)
+                {
+                    return Some(
+                        codex_accounts::button(&feed)
+                            .on_click(cx.listener(move |_, _, _, cx| {
+                                cx.emit(SessionEvent::OpenCodexAccounts(feed.clone()));
+                            }))
+                            .into_any_element(),
+                    );
+                }
+                if collapse {
+                    return None;
+                }
                 let lines = lines.clone();
-                chip_popover(
-                    ChipPopoverOptions::new(
-                        SharedString::from(format!("widget-{key}")),
-                        IconName::LayoutDashboard,
-                        ui::muted(),
-                        gentle_core::text::first_line(key, 18),
+                Some(
+                    chip_popover(
+                        ChipPopoverOptions::new(
+                            SharedString::from(format!("widget-{key}")),
+                            IconName::LayoutDashboard,
+                            ui::muted(),
+                            gentle_core::text::first_line(key, 18),
+                        )
+                        .title(key),
+                        move || {
+                            lines
+                                .iter()
+                                .map(|line| {
+                                    div()
+                                        .min_w_0()
+                                        .text_size(ui::code_rems(12.))
+                                        .font_family(ui::mono())
+                                        .text_color(ui::muted())
+                                        .child(line.clone())
+                                        .into_any_element()
+                                })
+                                .collect()
+                        },
                     )
-                    .title(key),
-                    move || {
-                        lines
-                            .iter()
-                            .map(|line| {
-                                div()
-                                    .min_w_0()
-                                    .text_size(ui::code_rems(12.))
-                                    .font_family(ui::mono())
-                                    .text_color(ui::muted())
-                                    .child(line.clone())
-                                    .into_any_element()
-                            })
-                            .collect()
-                    },
+                    .into_any_element(),
                 )
-                .into_any_element()
             })
             .collect()
     }
@@ -456,29 +469,24 @@ impl SessionView {
                 color,
                 format!("{active}/{total}"),
             )
-            .title(t("Helpers"))
             .count(t("{count} active").replace("{count}", &active.to_string()))
-            .footer_action(Box::new(move |_window, cx| {
-                h_flex()
-                    .pt_1()
-                    .child(
-                        Button::new("helpers-open-agents")
-                            .ghost()
-                            .xsmall()
-                            .icon(Icon::new(IconName::Users))
-                            .label(
-                                t("Open Agents ({shortcut})")
-                                    .replace("{shortcut}", ui::shortcut_shift("A").as_ref()),
-                            )
-                            .on_click(cx.listener({
-                                let open_agents = open_agents.clone();
-                                move |state: &mut PopoverState, _, window, cx| {
-                                    state.dismiss(window, cx);
-                                    let _ = open_agents
-                                        .update(cx, |this, cx| this.open_agents(None, cx));
-                                }
-                            })),
+            // The header opens the Agents screen instead of naming the card.
+            .title_action(Box::new(move |_window, cx| {
+                Button::new("helpers-open-agents")
+                    .ghost()
+                    .xsmall()
+                    .icon(Icon::new(IconName::Users))
+                    .label(
+                        t("Open Agents ({shortcut})")
+                            .replace("{shortcut}", ui::shortcut_shift("A").as_ref()),
                     )
+                    .on_click(cx.listener({
+                        let open_agents = open_agents.clone();
+                        move |state: &mut PopoverState, _, window, cx| {
+                            state.dismiss(window, cx);
+                            let _ = open_agents.update(cx, |this, cx| this.open_agents(None, cx));
+                        }
+                    }))
                     .into_any_element()
             })),
             move || {
@@ -680,11 +688,6 @@ fn render_memory_button(
 pub(super) type ChipHeaderAction =
     Box<dyn Fn(&mut Window, &mut Context<PopoverState>) -> AnyElement>;
 
-/// An extra control at the bottom of a chip card's scrollable body. Like
-/// [`ChipHeaderAction`], it is rebuilt with the card and can dismiss the
-/// popover from its click handler.
-pub(super) type ChipFooterAction = ChipHeaderAction;
-
 /// The slots of a chip card's header, shared by every chip popover: the
 /// trigger's id, icon and color, its label, the card's title, and either a
 /// count in `ui::mono()` or a header action where the count would sit.
@@ -696,7 +699,7 @@ pub(super) struct ChipPopoverOptions {
     title: SharedString,
     count: SharedString,
     action: Option<ChipHeaderAction>,
-    footer_action: Option<ChipFooterAction>,
+    title_action: Option<ChipHeaderAction>,
     mono: bool,
     ring: Option<(
         f32,
@@ -723,7 +726,7 @@ impl ChipPopoverOptions {
             title: "".into(),
             count: "".into(),
             action: None,
-            footer_action: None,
+            title_action: None,
             mono: false,
             ring: None,
         }
@@ -767,9 +770,9 @@ impl ChipPopoverOptions {
         self
     }
 
-    /// A bottom control inside the card body (see [`ChipFooterAction`]).
-    pub(super) fn footer_action(mut self, action: ChipFooterAction) -> Self {
-        self.footer_action = Some(action);
+    /// A control shown in place of the header's icon and title.
+    pub(super) fn title_action(mut self, action: ChipHeaderAction) -> Self {
+        self.title_action = Some(action);
         self
     }
 
@@ -795,7 +798,7 @@ pub(super) fn chip_popover(
         title,
         count,
         action,
-        footer_action,
+        title_action,
         mono,
         ring,
     } = options;
@@ -846,7 +849,7 @@ pub(super) fn chip_popover(
             .text_color(color)
             .when(mono, |b| b.font_family(ui::mono()))
             .icon(Icon::new(icon))
-            .label(label)
+            .when(!label.is_empty(), |b| b.label(label))
     };
     Popover::new(SharedString::from(format!("{id}-popover")))
         .anchor(Anchor::BottomRight)
@@ -872,20 +875,24 @@ pub(super) fn chip_popover(
                         .child(
                             h_flex()
                                 .gap_2()
-                                .child(Icon::new(icon).small().text_color(
-                                    if id == "context-ring" {
-                                        ui::muted()
-                                    } else {
-                                        color
-                                    },
-                                ))
-                                .child(
-                                    div()
-                                        .text_sm()
-                                        .font_weight(FontWeight::MEDIUM)
-                                        .text_color(ui::fg())
-                                        .child(title.clone()),
-                                )
+                                .map(|d| match title_action.as_ref() {
+                                    Some(build) => d.child(build(window, cx)),
+                                    None => d
+                                        .child(Icon::new(icon).small().text_color(
+                                            if id == "context-ring" {
+                                                ui::muted()
+                                            } else {
+                                                color
+                                            },
+                                        ))
+                                        .child(
+                                            div()
+                                                .text_sm()
+                                                .font_weight(FontWeight::MEDIUM)
+                                                .text_color(ui::fg())
+                                                .child(title.clone()),
+                                        ),
+                                })
                                 .child(div().flex_1())
                                 .when(!count.is_empty(), |d| {
                                     d.child(
@@ -908,10 +915,7 @@ pub(super) fn chip_popover(
                                 .max_h(rems(380. / 16.))
                                 .overflow_y_scroll()
                                 .gap_1p5()
-                                .children(body())
-                                .when_some(footer_action.as_ref(), |d, build| {
-                                    d.child(build(window, cx))
-                                }),
+                                .children(body()),
                         ),
                 ))
                 .into_any_element()

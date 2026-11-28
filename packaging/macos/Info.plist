@@ -5,9 +5,9 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
 	<key>CFBundleDisplayName</key>
-	<string>Osdy Code Desktop</string>
+	<string>Osdy Code</string>
 	<key>CFBundleName</key>
-	<string>Osdy Code Desktop</string>
+	<string>Osdy Code</string>
 	<key>CFBundleExecutable</key>
 	<string>gentle-shell-gpui</string>
 	<key>CFBundleIdentifier</key>

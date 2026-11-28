@@ -21,6 +21,7 @@ use super::state::BackendStatus;
 use super::{CONTEXT, SessionView};
 use crate::shared::banner;
 use crate::shared::i18n;
+use crate::shared::kisses;
 use crate::shared::overlay::LiveSlots;
 use crate::shared::ui;
 use gentle_core::input_style::InputStyle;
@@ -30,6 +31,7 @@ use gentle_core::transcript::{Block, Item, NoticeLevel, ToolStatus, assistant_vi
 
 mod activity;
 mod cards;
+mod codex_usage;
 mod composer;
 mod dialogs;
 mod effort;
@@ -2090,9 +2092,6 @@ impl Render for SessionView {
         let language = i18n::language();
         if self.composer_language != language {
             self.composer_language = language;
-            self.composer.update(cx, |state, cx| {
-                state.set_placeholder(t("What are we cooking?"), window, cx)
-            });
             self.list.language_changed(self.transcript.items.len());
         }
         self.sync_view(cx);
@@ -2237,7 +2236,8 @@ impl Render for SessionView {
                 ),
             })
             .map(|main| {
-                let (composer, strip) = self.render_composer(rem_size, cx);
+                let hint_elapsed = self.step_composer_hint(veil, window, cx);
+                let (composer, strip) = self.render_composer(rem_size, hint_elapsed, cx);
                 // Bar docks the composer in a strip across the pane, on a
                 // hairline; Prompt adds its status strip along the bottom.
                 let dock = super::input_style::style(cx) == InputStyle::Bar;
@@ -2303,18 +2303,23 @@ impl Render for SessionView {
 
 impl SessionView {
     /// "Press ⌃C again to close" in the conversation's corner, above the
-    /// composer, while a second Ctrl+C would close the pane.
+    /// composer, while a second Ctrl+C would close the pane; "Press Esc
+    /// again to stop" there while a second Esc would stop the turn.
     fn render_close_hint(&self, cx: &App) -> Option<AnyElement> {
-        self.live.double_interrupt.armed()?;
+        let id = self.live.close_hints;
+        let font = cx.theme().font_family.clone();
+        let hint = if self.live.escape_stop.armed().is_some() {
+            ui::stop_hint(id, font).into_any_element()
+        } else {
+            self.live.double_interrupt.armed()?;
+            ui::close_hint(id, font).into_any_element()
+        };
         Some(
             div()
                 .absolute()
                 .bottom(rems(12. / 16.))
                 .right(rems(1.))
-                .child(ui::close_hint(
-                    self.live.close_hints,
-                    cx.theme().font_family.clone(),
-                ))
+                .child(hint)
                 .into_any_element(),
         )
     }
@@ -3275,9 +3280,8 @@ fn code_block_header(block: &gpui_kit::base::text::CodeBlock, cx: &App) -> Div {
         )
 }
 
-/// The petal-and-shimmer "agent is on it" row, its clock counting up once
-/// a second. With the composer's orbit, the turn's only moving indicators:
-/// the petal and the label move on the live overlay, under `key`.
+/// The paw-and-shimmer "agent is on it" row, its clock counting up once
+/// a second. The paw and the label move on the live overlay, under `key`.
 fn working_indicator(
     slots: &LiveSlots,
     key: impl Into<ElementId>,
@@ -3291,12 +3295,7 @@ fn working_indicator(
             h_flex()
                 .gap_2()
                 .items_center()
-                .child(ui::pulse(
-                    div()
-                        .text_size(rems(15. / 16.))
-                        .text_color(ui::petal())
-                        .child("✿"),
-                ))
+                .child(ui::pulse(kisses::paw(rems(15. / 16.), ui::petal())))
                 .child(
                     ui::shimmer(label, ui::muted(), ui::fg())
                         .text_size(rems(13. / 16.))

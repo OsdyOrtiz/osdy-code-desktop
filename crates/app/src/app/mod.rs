@@ -41,6 +41,7 @@ pub fn run(
             crate::platform::icons::set_dock_icon();
             app_update::init(cx);
             crate::features::hydration::init(cx);
+            crate::features::active_break::init(cx);
             crate::shared::kisses::init(cx);
             crate::features::genui::mode::init(cx);
             crate::features::session::input_style::init(cx);
@@ -67,7 +68,7 @@ pub fn run(
                 window_min_size: Some(size(px(720.), px(480.))),
                 window_background: WindowBackgroundAppearance::Blurred,
                 titlebar: Some(TitlebarOptions {
-                    title: Some("Osdy Code Desktop".into()),
+                    title: Some("Osdy Code".into()),
                     appears_transparent: true,
                     // Centered in the 36 px title bar (workspace.rs).
                     traffic_light_position: Some(point(px(14.), px(11.))),
@@ -236,7 +237,7 @@ pub(crate) fn set_menus(cx: &mut App) {
     use crate::shared::i18n::t;
 
     cx.set_menus(vec![Menu {
-        name: "Osdy Code Desktop".into(),
+        name: "Osdy Code".into(),
         items: vec![
             MenuItem::action(t("New Tab"), NewTab),
             MenuItem::action(t("New Terminal Tab"), NewTerminalTab),
@@ -255,7 +256,7 @@ pub(crate) fn set_menus(cx: &mut App) {
             MenuItem::action(t("Zoom Out"), ZoomOut),
             MenuItem::action(t("Actual Size"), ActualSize),
             MenuItem::separator(),
-            MenuItem::action(t("Quit Osdy Code Desktop"), Quit),
+            MenuItem::action(t("Quit Osdy Code"), Quit),
         ],
         disabled: false,
     }]);

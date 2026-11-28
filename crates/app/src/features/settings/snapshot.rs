@@ -23,7 +23,8 @@ pub struct Snapshot {
     pub extensions: Vec<String>,
     pub sign_ins: Vec<(String, String)>,
     pub custom_providers: Vec<String>,
-    pub mcp_servers: Vec<String>,
+    /// Configured MCP server names and whether each is explicitly disabled.
+    pub mcp_servers: Vec<(String, bool)>,
     pub permission_mode: Option<String>,
     pub persona: Option<String>,
     pub active_profile: Option<String>,
@@ -84,6 +85,15 @@ pub(super) fn describe_banner(banner: &Value) -> String {
         .replace("{rose}", on_off(&banner["showRose"], "rose on", "rose off"))
         .replace("{text}", on_off(&banner["showTextLogo"], "on", "off"))
         .replace("{color}", banner["color"].as_str().unwrap_or("pink"))
+}
+
+fn mcp_config(value: &Value) -> Vec<(String, bool)> {
+    value["mcpServers"]
+        .as_object()
+        .into_iter()
+        .flatten()
+        .map(|(name, entry)| (name.clone(), entry["enabled"].as_bool() == Some(false)))
+        .collect()
 }
 
 /// Everything readable without running anything but `--version`.
@@ -164,7 +174,10 @@ pub fn read_snapshot(agent: &Path, config: &Path, cwd: &Path) -> Snapshot {
             .collect(),
         sign_ins,
         custom_providers: keys(read_json(&agent.join("models.json")), "providers"),
-        mcp_servers: keys(read_json(&agent.join("mcp.json")), "mcpServers"),
+        mcp_servers: read_json(&agent.join("mcp.json"))
+            .as_ref()
+            .map(mcp_config)
+            .unwrap_or_default(),
         permission_mode: read_json(&config.join("permission-mode.json"))
             .and_then(|v| str_of(&v["mode"])),
         persona,
@@ -203,7 +216,30 @@ pub(super) fn probe(spec: &pi_rpc::LaunchSpec, snapshot: &mut Snapshot) {
 #[cfg(test)]
 mod tests {
     use super::super::claude::save_bridge_plan;
-    use super::{npm_name, read_snapshot};
+    use super::{mcp_config, npm_name, read_snapshot};
+
+    #[test]
+    fn mcp_status_config_keeps_only_names_and_explicit_disables() {
+        let config = serde_json::json!({"mcpServers": {
+            "implicit": {"url": "https://example.test", "secret": "not for the UI"},
+            "explicit": {"enabled": true},
+            "disabled": {"enabled": false},
+            "string": {"enabled": "false"}
+        }});
+        let mut servers = mcp_config(&config);
+        servers.sort_unstable();
+        assert_eq!(
+            servers,
+            [
+                ("disabled".into(), true),
+                ("explicit".into(), false),
+                ("implicit".into(), false),
+                ("string".into(), false)
+            ],
+        );
+        assert!(mcp_config(&serde_json::json!({"mcpServers": []})).is_empty());
+        assert!(mcp_config(&serde_json::Value::Null).is_empty());
+    }
 
     #[test]
     fn npm_names_drop_versions() {

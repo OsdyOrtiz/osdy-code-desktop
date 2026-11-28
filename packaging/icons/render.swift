@@ -1,4 +1,4 @@
-// Rasterizes the SVG wrapper for assets/mascot/osdy-code.png with AppKit.
+// Rasterizes SVGs (the mascot artwork and the icon wrapper) with AppKit.
 // Usage: swift render.swift <in.svg> <out.png> <size> [<out.png> <size>]...
 import AppKit
 

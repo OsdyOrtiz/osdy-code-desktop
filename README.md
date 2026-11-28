@@ -8,31 +8,6 @@
 
 <p align="center">A personal fork of <a href="https://github.com/Gentleman-Programming/gentle-shell-gpui">Gentleman-Programming/gentle-shell-gpui</a>.</p>
 
-<p align="center"><strong>Gentle Shell in a native window: your agents, terminals, files and previews in one desktop app.</strong></p>
-
-<p align="center">
-  <a href="https://github.com/OsdyOrtiz/osdy-code-desktop/releases/latest"><img src="https://img.shields.io/github/v/release/OsdyOrtiz/osdy-code-desktop?style=for-the-badge&labelColor=1A1218&color=F095C8" alt="Latest release"></a>
-  <a href="https://github.com/OsdyOrtiz/osdy-code-desktop/actions/workflows/ci.yml"><img src="https://img.shields.io/github/actions/workflow/status/OsdyOrtiz/osdy-code-desktop/ci.yml?branch=main&style=for-the-badge&labelColor=1A1218&label=CI" alt="CI"></a>
-  <a href="#get-started"><img src="https://img.shields.io/badge/macOS%20·%20Windows%20·%20Linux-F095C8?style=for-the-badge&labelColor=1A1218" alt="macOS, Windows and Linux"></a>
-  <img src="https://img.shields.io/badge/license-MIT-F095C8?style=for-the-badge&labelColor=1A1218" alt="MIT license">
-  <a href="https://github.com/OsdyOrtiz/osdy-code-desktop/stargazers"><img src="https://img.shields.io/github/stars/OsdyOrtiz/osdy-code-desktop?style=for-the-badge&labelColor=1A1218&color=F095C8" alt="GitHub stars"></a>
-  <a href="https://github.com/OsdyOrtiz/osdy-code-desktop"><img src="https://img.shields.io/github/last-commit/OsdyOrtiz/osdy-code-desktop?style=for-the-badge&labelColor=1A1218&color=D7A0B8" alt="Last commit"></a>
-</p>
-
-<p align="center">
-  <strong>
-    <a href="https://github.com/OsdyOrtiz/osdy-code-desktop/releases/latest">Download</a>
-    &nbsp;·&nbsp;
-    <a href="#get-started">Quickstart</a>
-    &nbsp;·&nbsp;
-    <a href="#your-workspace">Features</a>
-    &nbsp;·&nbsp;
-    <a href="#documentation">Docs</a>
-    &nbsp;·&nbsp;
-    <a href="https://github.com/Gentleman-Programming/gentle-shell">Gentle Shell</a>
-  </strong>
-</p>
-
 <br>
 
 <p align="center">Your agents shouldn't live in a scrollback.<br><strong>Osdy Code Desktop gives <a href="https://github.com/Gentleman-Programming/gentle-shell">Gentle Shell</a> a native desktop home, built in Rust with <a href="https://gpui.rs">GPUI</a>.</strong></p>
@@ -41,24 +16,6 @@
 
 <p align="center"><strong>BUILT ON GENTLE SHELL</strong> &nbsp;·&nbsp; Native GPUI &nbsp;·&nbsp; Workspaces and panes &nbsp;·&nbsp; Generative UI &nbsp;·&nbsp; macOS, Windows, Linux</p>
 
-<p align="center">
-  <img src="docs/assets/brand/terminal-divider.svg" width="480" alt="">
-</p>
-
-## Support the project
-
-<div align="center">
-
-<a href="https://github.com/sponsors/Gentleman-Programming"><img width="100%" src="docs/assets/brand/sponsor-banner.svg" alt="Free forever, independent by choice. No investors, no paywalls: Gentle AI, Engram and Gentle Shell are funded by the people who use them. Sponsor on GitHub, monthly or one-time."></a>
-
-<p>
-No investors and no paywalls: the Gentleman Programming tools are funded by the people who use them.<br/>
-Donations through <a href="https://github.com/sponsors/Gentleman-Programming"><strong>GitHub Sponsors</strong></a> go straight into maintenance and new features.
-</p>
-
-<p>Can't donate? A ⭐, a bug report or a pull request helps too.</p>
-
-</div>
 
 <p align="center">
   <img src="docs/assets/brand/terminal-divider.svg" width="480" alt="">
@@ -281,7 +238,9 @@ A slash command's text output appears as one result card. Hover an answer, or a 
 
 ### Composer — Steer, stop and run commands
 
-Enter sends; while the agent runs, Enter steers it and Esc, ⌘. (Ctrl+. elsewhere) or the Stop button stops it, as in Gentle Shell's terminal ("stopping…" shows until the turn ends; the conversation and your draft stay). Esc closes what is open first (the `/` menu, the model picker, the Agents panel, a dialog, an expanded surface), and an Esc right after one that closed something doesn't stop. `!cmd` / `!!cmd` run shell commands; the Stop button, Esc and ⌘. stop a running one too (`abort_bash`). Type `@` in a sentence to find files under the tab's working folder. Use ↑/↓ to highlight a file and Tab or Enter to insert its relative `@path` without sending. When typing a path directly, Tab also completes directory prefixes (for example, `@sr` → `@src/`). To attach a tile instead, drag the file onto the tab.
+An empty composer shows one of 36 playful hints, picked per tab and available in English and Spanish. The dots cycle while the hint is visible in the active window, and stay still with system Reduce Motion.
+
+Enter sends; while the agent runs, Enter steers it and Esc pressed twice within 700 ms, ⌘. (Ctrl+. elsewhere) or the Stop button stops it (the first Esc only shows "Press Esc again to stop" above the composer, and any other key in between, a Ctrl+C copy included, starts over; holding Esc doesn't count, so a stray Esc never cancels a turn), as in Gentle Shell's terminal ("stopping…" shows until the turn ends; the conversation and your draft stay). Esc closes what is open first (the `/` menu, the model picker, the Agents panel, a dialog, an expanded surface), and an Esc right after one that closed something doesn't stop. `!cmd` / `!!cmd` run shell commands; the Stop button, a double Esc and ⌘. stop a running one too (`abort_bash`). Type `@` in a sentence to find files under the tab's working folder. Use ↑/↓ to highlight a file and Tab or Enter to insert its relative `@path` without sending. When typing a path directly, Tab also completes directory prefixes (for example, `@sr` → `@src/`). To attach a tile instead, drag the file onto the tab.
 
 Ctrl+C also stops a running turn or `!command`, as Esc does, and never sends anything to the agent; pressed twice within 700 ms while the agent is idle it closes the pane, as ⌘W and a terminal's double Ctrl+C do: the first press shows "Press ⌃C again to close" above the composer. A press that stops something never arms the close, any other key in between starts over, holding the key doesn't count, and closing still asks first when the agent waits for your answer. Off macOS, where Ctrl+C also copies, it copies while text is selected and only counts as a press otherwise.
 
@@ -554,7 +513,7 @@ A running backend only reads credentials when it starts, so signing in or out re
 
 ### Usage & stats — Subscription windows and local cost
 
-Subscription windows and local token/cost stats, in place of `/gentle:usage` and `/gentle:stats`. With Gentle Shell 4.8+ the windows come from Shell itself (`get/refresh_subscription_usage` and `rate_limit` events), Claude's 5h/7d included; an older Shell keeps the app's own ChatGPT/Codex and NaN requests. In the composer, right after the effort picker, a plan-limits chip shows the current model provider's windows in a popover — the plan in the header with a text "See all →" opening this screen, one row per window ordered shortest first (5-hour reads "5-hour limit", a week "Weekly · all models"), with the local reset clock ("resets at 5:30 p.m." today, "resets Sun 6:00 a.m." later), the percent and a thin bar — asked for once the session has a model and hidden while the session reports no limits (on an older Shell the legacy limit chips keep the numbers, and the popover would say "Plan limits need a Gentle Shell newer than 4.8.0" instead).
+Subscription windows and local token/cost stats, in place of `/gentle:usage` and `/gentle:stats`. With Gentle Shell 4.8+ the windows come from Shell itself (`get/refresh_subscription_usage` and `rate_limit` events), Claude's 5h/7d included; an older Shell keeps the app's own ChatGPT/Codex and NaN requests. In the composer, right after the effort picker, a plan-limits chip shows the current model provider's windows in a popover — the plan in the header with a text "See all →" opening this screen, one row per window ordered shortest first (5-hour reads "5-hour limit", a week "Weekly · all models"), with the local reset clock ("resets at 5:30 p.m." today, "resets Sun 6:00 a.m." later), the percent and a thin bar. The gauge shows the five-hour used percentage when known, otherwise the previous limit percentage (for example, weekly on a weekly-only plan). With the osdy-gentle Codex account feed and usage command, the same popover also lists all saved accounts' quotas and has a **Refresh** action. A valid account feed and registered usage command keep the gauge available even before any limits are reported. The desktop runs `/osdy-usage --all --run <id>` and waits for the feed's matching `usageRun`, with a 120-second fallback. The spinner clears after at most 30 seconds; it does not unlock the batch.
 
 <details>
 <summary><kbd>More</kbd> <strong>Where the numbers come from</strong></summary>
@@ -749,7 +708,7 @@ On first launch, or whenever something required is missing, a setup screen check
 
 Download the asset for your system from [Releases](https://github.com/OsdyOrtiz/osdy-code-desktop/releases) (names under [Packages and releases](#packages-and-releases)).
 
-- **macOS:** open `gentle-shell-gpui-<version>-macos-aarch64.dmg` (Apple silicon) or `…-macos-x86_64.dmg` (Intel) and drag **Osdy Code Desktop** onto **Applications**. The app is ad-hoc signed, not notarized, so the first launch is blocked: right-click the app → **Open** → **Open**, or allow it in System Settings → Privacy & Security → **Open Anyway**. From a terminal, `xattr -dr com.apple.quarantine /Applications/"Osdy Code Desktop.app"` does the same. Later versions install from inside the app ([Updating the app](#updating-the-app)).
+- **macOS:** open `gentle-shell-gpui-<version>-macos-aarch64.dmg` (Apple silicon) or `…-macos-x86_64.dmg` (Intel) and drag **Osdy Code** onto **Applications**. The app is ad-hoc signed, not notarized, so the first launch is blocked: right-click the app → **Open** → **Open**, or allow it in System Settings → Privacy & Security → **Open Anyway**. From a terminal, `xattr -dr com.apple.quarantine /Applications/"Osdy Code.app"` does the same. Later versions install from inside the app ([Updating the app](#updating-the-app)).
 - **Windows:** run `gentle-shell-gpui-<version>-windows-x86_64-setup.exe`. It installs for your user only (no admin rights) into `%LOCALAPPDATA%\Programs\Osdy Code Desktop`, adds Osdy Code Desktop to the Start menu (and the desktop if you tick it) and to Apps → Installed apps for uninstalling, and puts the `ocd` command on your user PATH; installing a newer setup over it upgrades in place. SmartScreen may warn about an unknown publisher: **More info** → **Run anyway**. The `…-windows-x86_64.zip` holds the bare exe (the in-app updater uses it). Windows release builds link the MSVC C runtime statically, so the installer, portable executable and in-app updates do not need a separate Visual C++ Redistributable. The in-app browser uses the Microsoft Edge WebView2 Runtime, which Windows 11 and updated Windows 10 already have.
 - **Linux:** extract the tarball and run `osdy-code-desktop-<version>/gentle-shell-gpui`. Copy `io.github.osdyortiz.osdy-code-desktop.desktop` to `~/.local/share/applications/` and `osdy-code-desktop.png` to `~/.local/share/icons/`. Set the launcher's `Exec=` to the absolute path of this copy of `gentle-shell-gpui` (keep `%f`) so it won't launch another installation. The app links WebKitGTK 4.1 for its in-app browser: on Debian or Ubuntu (22.04 or newer) `sudo apt install libwebkit2gtk-4.1-0` if it isn't installed yet.
 
@@ -769,8 +728,8 @@ Download the asset for your system from [Releases](https://github.com/OsdyOrtiz/
 
    ```bash
    packaging/macos/bundle.sh aarch64-apple-darwin 0.1.0   # x86_64-apple-darwin on Intel
-   cp -R "dist/Osdy Code Desktop.app" ~/Applications/
-   open ~/Applications/"Osdy Code Desktop.app"
+   cp -R "dist/Osdy Code.app" ~/Applications/
+   open ~/Applications/"Osdy Code.app"
    ```
 
 A build from source never updates itself; `git pull` and run `cargo run --release` again.
@@ -873,11 +832,11 @@ cargo test
 
 <br>
 
-The raccoon app icon lives in `packaging/icons/`. `generate.py` builds it from `assets/mascot/osdy-code.png`; run `packaging/icons/generate.sh` on macOS after editing and commit the outputs (`AppIcon.icns`, `icon.ico`, PNGs).
+The raccoon app icon lives in `packaging/icons/`. `generate.sh` builds it from `assets/mascot/osdy-code-mapache-ambar.svg`; run `packaging/icons/generate.sh` on macOS after editing and commit the outputs (`AppIcon.icns`, `icon.ico`, PNGs).
 
 Build packages locally:
 
-- macOS: `packaging/macos/bundle.sh aarch64-apple-darwin 0.1.0` → `dist/Osdy Code Desktop.app`, `dist/gentle-shell-gpui-0.1.0-macos-aarch64.zip` and `.dmg` (`x86_64-apple-darwin` for Intel; it cross-compiles from Apple silicon). `GENTLE_BIN=<path>` packages an existing build instead.
+- macOS: `packaging/macos/bundle.sh aarch64-apple-darwin 0.1.0` → `dist/Osdy Code.app`, `dist/gentle-shell-gpui-0.1.0-macos-aarch64.zip` and `.dmg` (`x86_64-apple-darwin` for Intel; it cross-compiles from Apple silicon). `GENTLE_BIN=<path>` packages an existing build instead.
 - Linux: `packaging/linux/package.sh x86_64-unknown-linux-gnu 0.1.0` → `dist/gentle-shell-gpui-0.1.0-linux-x86_64.tar.gz`.
 - Windows: the icon and version info are embedded in the exe by `crates/app/build.rs`; the installer is `packaging/windows/installer.iss` (Inno Setup 6: `ISCC /DAppVersion=<v> /DSourceExe=<exe> /DOutputDir=dist /DIconFile=packaging\icons\icon.ico packaging\windows\installer.iss`).
 
@@ -891,41 +850,10 @@ Cut a release:
 2. Optional dry run: Actions → Release → Run workflow. It builds all four targets and uploads the assets and `SHA256SUMS` as an artifact without publishing.
 3. `git tag v0.2.0 && git push origin main v0.2.0`. The Release workflow checks the tag against the workspace version, builds macOS (arm64 and x86_64), Windows and Linux, writes `SHA256SUMS` and publishes the GitHub release with generated notes. A version with `-` (`0.2.0-rc.1`) is a prerelease.
 
-Assets: `gentle-shell-gpui-<v>-macos-aarch64.dmg` / `.zip` and `…-macos-x86_64.dmg` / `.zip` (the same ad-hoc signed `Osdy Code Desktop.app`: the DMG to install by dragging, the zip for the in-app updater), `…-windows-x86_64-setup.exe` (the installer) and `…-windows-x86_64.zip` (the bare exe, for the in-app updater), `…-linux-x86_64.tar.gz` (binary, `.desktop`, icon) and `SHA256SUMS`. The in-app updater relies on these names.
+Assets: `gentle-shell-gpui-<v>-macos-aarch64.dmg` / `.zip` and `…-macos-x86_64.dmg` / `.zip` (the same ad-hoc signed `Osdy Code.app`: the DMG to install by dragging, the zip for the in-app updater), `…-windows-x86_64-setup.exe` (the installer) and `…-windows-x86_64.zip` (the bare exe, for the in-app updater), `…-linux-x86_64.tar.gz` (binary, `.desktop`, icon) and `SHA256SUMS`. The in-app updater relies on these names.
 
 </details>
 
-<p align="right"><a href="#top">Back to top ↑</a></p>
-
-<p align="center">
-  <img src="docs/assets/brand/terminal-divider.svg" width="480" alt="">
-</p>
-
-<a id="community"></a>
-
-## Community
-
-Built in public. Bring a real workflow, a bug report, or a small improvement that makes the next person's work clearer. Before you take an issue or open a pull request, read [CONTRIBUTING.md](CONTRIBUTING.md): how to claim an issue, when a PR is ready for review, and what each state means.
-
-<p align="center">
-  <a href="https://github.com/OsdyOrtiz/osdy-code-desktop/issues"><img src="https://img.shields.io/badge/Issues-join%20the%20conversation-F095C8?style=for-the-badge&labelColor=1A1218" alt="GitHub issues"></a>
-  <a href="https://github.com/Gentleman-Programming/gentle-shell-gpui/graphs/contributors"><img src="https://img.shields.io/badge/Contributors-thank%20you-D7A0B8?style=for-the-badge&labelColor=1A1218" alt="Contributors"></a>
-  <a href="https://discord.com/invite/gentleman-programming-769863833996754944"><img src="https://img.shields.io/badge/Discord-Gentleman%20Programming-F095C8?style=for-the-badge&labelColor=1A1218" alt="Gentleman Programming Discord"></a>
-</p>
-
-<p align="center">
-  <a href="https://github.com/Gentleman-Programming/gentle-shell-gpui/graphs/contributors"><img src="https://contrib.rocks/image?repo=Gentleman-Programming/gentle-shell-gpui" alt="gentle-shell-gpui contributors"></a>
-</p>
-
-<p align="center">
-  <a href="https://github.com/OsdyOrtiz/osdy-code-desktop/stargazers"><strong>★ Star Osdy Code Desktop on GitHub</strong></a>
-</p>
-
-Everyone who has committed to this repository is credited in [CREDITS.md](CREDITS.md), generated from the git history by `scripts/credits.sh`; the app shows it in Configuration › About.
-
-- Open an [issue](https://github.com/OsdyOrtiz/osdy-code-desktop/issues) with what's needed to reproduce or understand the idea.
-- Before a pull request, read [`docs/development.md`](docs/development.md) and [`AGENTS.md`](AGENTS.md).
-- Follow [Gentleman Programming](https://github.com/Gentleman-Programming) for the wider ecosystem: [Gentle Shell](https://github.com/Gentleman-Programming/gentle-shell), Gentle AI and Engram.
 
 <p align="right"><a href="#top">Back to top ↑</a></p>
 
@@ -935,10 +863,6 @@ Everyone who has committed to this repository is credited in [CREDITS.md](CREDIT
 
 <p align="center"><strong>A native home for the agents you lead.</strong></p>
 
-<a id="license"></a>
-
 <p align="center">
   <img src="https://img.shields.io/badge/License-MIT-F095C8?style=for-the-badge&labelColor=1A1218" alt="MIT License">
 </p>
-
-> **Trademark notice:** The gentle-shell™ and gentle-pi™ names and associated logos are trademarks of Alan Buscaglia. The MIT License applies to the code; it does not permit implying endorsement or official affiliation. See Gentle Shell's [TRADEMARKS.md](https://github.com/Gentleman-Programming/gentle-shell/blob/main/TRADEMARKS.md).

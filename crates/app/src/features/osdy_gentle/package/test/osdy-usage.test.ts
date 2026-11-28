@@ -1,0 +1,357 @@
+import assert from "node:assert/strict";
+import { mkdtemp, rm, stat, writeFile } from "node:fs/promises";
+import { join } from "node:path";
+import { test, type TestContext } from "node:test";
+import osdyGentle from "../src/index.ts";
+import { createProfile, readActiveAccount } from "../src/account-store.ts";
+import { readBindings, setBinding } from "../src/bindings.ts";
+
+async function setup(t: TestContext, { both = false, beforeResponse, onFeed }: {
+	both?: boolean;
+	beforeResponse?: (id: string | null) => Promise<void>;
+	onFeed?: (value: ReturnType<typeof feed> & { usageRun?: string }) => void;
+} = {}) {
+	const directory = await mkdtemp("/tmp/osdy-usage-");
+	const previous = process.env.PI_CODING_AGENT_DIR;
+	process.env.PI_CODING_AGENT_DIR = directory;
+	t.after(async () => {
+		if (previous === undefined) delete process.env.PI_CODING_AGENT_DIR;
+		else process.env.PI_CODING_AGENT_DIR = previous;
+		await rm(directory, { recursive: true, force: true });
+	});
+	await createProfile(directory, "Personal");
+	await createProfile(directory, "Work");
+	const store = join(directory, "osdy-gentle");
+	await writeFile(join(store, "active-account.json"), JSON.stringify({ version: 1, profile: "Personal" }));
+	await setBinding(directory, "Work", "model-work");
+	const jwt = (value: object) => Buffer.from(JSON.stringify(value)).toString("base64url");
+	for (const name of both ? ["Personal", "Work"] : ["Work"]) {
+		const access = `${jwt({ alg: "none" })}.${jwt({ "https://api.openai.com/auth": { chatgpt_account_id: `fixture-${name.toLowerCase()}` } })}.fixture`;
+		await writeFile(join(store, "profiles", name, "auth.json"), JSON.stringify({
+			"openai-codex": { type: "oauth", access, expires: Date.now() + 60_000 },
+		}), { mode: 0o600 });
+	}
+	const requests: (string | null)[] = [];
+	let failing: string | undefined;
+	let primarySeconds = 18_000;
+	let secondarySeconds = 604_800;
+	t.mock.method(globalThis, "fetch", async (_url: string, init: RequestInit) => {
+		const id = new Headers(init.headers).get("chatgpt-account-id");
+		requests.push(id);
+		await beforeResponse?.(id);
+		if (id === failing) return new Response(null, { status: 503 });
+		return Response.json({
+			plan_type: "provider-supplied metadata",
+			rate_limit_reset_credits: { available_count: 3 },
+			rate_limit: {
+				primary_window: { used_percent: 25, limit_window_seconds: primarySeconds },
+				secondary_window: { used_percent: 60, limit_window_seconds: secondarySeconds },
+			},
+		});
+	});
+	type Host = Parameters<typeof osdyGentle>[0];
+	type Subscribe = NonNullable<Host["on"]>;
+	const commands = new Map<string, Parameters<Host["registerCommand"]>[1]>();
+	const handlers = new Map<Parameters<Subscribe>[0], Parameters<Subscribe>[1][]>();
+	const publications: unknown[] = [];
+	const notices: unknown[] = [];
+	let clears = 0;
+	const unexpected = () => assert.fail("usage must not prompt, wait for idle or emit a profile event");
+	const ctx = { mode: "rpc", isIdle: unexpected, ui: {
+		select: unexpected, confirm: unexpected, input: unexpected,
+		notify: (...args: unknown[]) => notices.push(args),
+		setWidget: (key: string, lines: string[] | undefined) => {
+			// The MCP status widget is published separately; its own tests cover it.
+			if (key === "osdy-gentle:mcp-status") return;
+			assert.equal(key, "osdy-gentle:codex-accounts");
+			if (lines) {
+				assert.equal(lines.length, 1);
+				const value = JSON.parse(lines[0]!);
+				publications.push(value);
+				onFeed?.(value);
+			} else {
+				clears++;
+			}
+		},
+	} };
+	osdyGentle({
+		on(event, handler) {
+			handlers.set(event, [...(handlers.get(event) ?? []), handler]);
+			return () => {};
+		},
+		events: { emit: unexpected },
+		registerCommand(name, command) { commands.set(name, command); },
+	});
+	async function event(name: Parameters<Subscribe>[0]) {
+		for (const handler of handlers.get(name) ?? []) await handler({}, ctx);
+	}
+	t.after(() => event("session_shutdown"));
+	await event("session_start");
+	const active = await readActiveAccount(directory);
+	const bindings = await readBindings(directory);
+	return {
+		publications, notices, requests, event,
+		get clears() { return clears; },
+		async runPicker(name: string, select: (title: string, options: string[]) => Promise<string | undefined>) {
+			await commands.get(name)!.handler("", { ...ctx, ui: { ...ctx.ui, select } });
+		},
+		fail: () => { failing = "fixture-work"; },
+		largeWindows: () => { primarySeconds = 1e22; secondarySeconds = 1e24; },
+		async run(args: string) {
+			const command = commands.get("osdy-usage");
+			assert.ok(command, "registers /osdy-usage");
+			await command.handler(args, ctx);
+			assert.deepEqual(await readActiveAccount(directory), active);
+			assert.deepEqual(await readBindings(directory), bindings);
+			await assert.rejects(stat(join(directory, "auth.json")), { code: "ENOENT" });
+		},
+	};
+}
+
+const quotaEn = "5h 75% left · weekly 40% left";
+const quotaEs = "5h 75% disp. · semanal 40% disp.";
+
+function feed(quota: string | null, personalQuota: string | null = null) {
+	return { v: 1, active: "Personal", accounts: [
+		{ name: "Personal", active: true, binding: null, quota: personalQuota },
+		{ name: "Work", active: false, binding: "model-work", quota },
+	] };
+}
+
+test("/osdy-usage --all fetches every account once and publishes without waiting for slower accounts", async (t) => {
+	let releaseWork!: () => void;
+	const work = new Promise<void>((resolve) => { releaseWork = resolve; });
+	let publishedPersonal!: () => void;
+	const personal = new Promise<"published">((resolve) => { publishedPersonal = () => resolve("published"); });
+	const h = await setup(t, {
+		both: true,
+		beforeResponse: async (id) => { if (id === "fixture-work") await work; },
+		onFeed: ({ accounts }) => { if (accounts[0]?.quota) publishedPersonal(); },
+	});
+	const run = h.run("  --all  ");
+	let timeout: ReturnType<typeof setTimeout> | undefined;
+	let progress: string;
+	try {
+		progress = await Promise.race([
+			personal,
+			run.then(() => "finished"),
+			new Promise<string>((resolve) => { timeout = setTimeout(() => resolve("timed out"), 2_000); }),
+		]);
+	} finally {
+		clearTimeout(timeout);
+		releaseWork();
+		await run;
+	}
+	assert.deepEqual(h.requests.toSorted(), ["fixture-personal", "fixture-work"]);
+	assert.equal(progress, "published");
+	assert.deepEqual(h.publications, [feed(null), feed(null, quotaEn), feed(quotaEn, quotaEn)]);
+	assert.deepEqual(h.notices, []);
+});
+
+for (const { locale, quota, notice } of [
+	{ locale: "en", quota: quotaEn, notice: "Accounts with unavailable Codex quota: 1." },
+	{ locale: "es", quota: quotaEs, notice: "Cuentas con cuota de Codex no disponible: 1." },
+]) {
+	test(`/osdy-usage --all preserves failed quota and reports the failure once (${locale})`, async (t) => {
+		const h = await setup(t, { both: true });
+		await setLocale(t, locale);
+		await h.run("Work");
+		h.fail();
+		await h.run("--all");
+		assert.deepEqual(h.requests.slice(1).toSorted(), ["fixture-personal", "fixture-work"]);
+		assert.deepEqual(h.notices, [[notice, "warning"]]);
+		assert.deepEqual(h.publications, [feed(null), feed(quota), feed(quota, quota)]);
+	});
+}
+
+test("/osdy-usage --all --run signals completion only after its own last lookup", async (t) => {
+	const work = Promise.withResolvers<void>();
+	const personal = Promise.withResolvers<"published">();
+	let workCalls = 0;
+	const h = await setup(t, {
+		both: true,
+		beforeResponse: async (id) => { if (id === "fixture-work" && ++workCalls === 1) await work.promise; },
+		onFeed: ({ accounts }) => { if (accounts[0]?.quota) personal.resolve("published"); },
+	});
+	const id = "aB-0123456789".padEnd(32, "Z");
+	const batch = h.run(`  --all   --run   ${id}  `);
+	let timeout: ReturnType<typeof setTimeout> | undefined;
+	try {
+		assert.equal(await Promise.race([
+			personal.promise,
+			batch.then(() => "finished"),
+			new Promise((resolve) => { timeout = setTimeout(() => resolve("timed out"), 2_000); }),
+		]), "published");
+		assert.deepEqual(h.publications, [feed(null), feed(null, quotaEn)]);
+		await h.run("Work");
+		assert.deepEqual(h.publications, [feed(null), feed(null, quotaEn), feed(quotaEn, quotaEn)]);
+	} finally {
+		clearTimeout(timeout);
+		work.resolve();
+		await batch;
+	}
+	const complete = { ...feed(quotaEn, quotaEn), usageRun: id };
+	assert.deepEqual(h.publications, [feed(null), feed(null, quotaEn), feed(quotaEn, quotaEn), complete]);
+	assert.deepEqual(h.requests.toSorted(), ["fixture-personal", "fixture-work", "fixture-work"]);
+
+	// Named and untagged batch refreshes can change quota, but not the last run.
+	h.largeWindows();
+	const newQuota = "session 75% left · weekly 40% left";
+	await h.run("Work");
+	assert.deepEqual(h.publications.at(-1), { ...feed(newQuota, quotaEn), usageRun: id });
+	await h.run("--all");
+	assert.deepEqual(h.publications.at(-1), { ...feed(newQuota, newQuota), usageRun: id });
+	assert.deepEqual(h.notices, []);
+	await h.event("session_shutdown");
+	assert.equal(h.clears, 1);
+	await h.event("session_start");
+	assert.deepEqual(h.publications.at(-1), feed(newQuota, newQuota));
+});
+
+for (const [locale, usage, quota, failure] of [
+	["en", "Usage: /osdy-usage <name> | --all", quotaEn, "Accounts with unavailable Codex quota: 1."],
+	["es", "Uso: /osdy-usage <nombre> | --all", quotaEs, "Cuentas con cuota de Codex no disponible: 1."],
+]) {
+	test(`/osdy-usage rejects invalid --run arguments without lookups (${locale})`, async (t) => {
+		const h = await setup(t);
+		await setLocale(t, locale);
+		const invalid = ["--run x", "Work --run x", "--all --run", "--all --run a_b", "--all --run é",
+			`--all --run ${"a".repeat(33)}`, "--all --run x y"];
+		for (const args of invalid) await h.run(args);
+		assert.deepEqual(h.notices, invalid.map(() => [usage, "warning"]));
+		assert.deepEqual(h.requests, []);
+		await h.event("session_tree");
+		assert.deepEqual(h.publications, [feed(null)]);
+	});
+
+	test(`/osdy-usage publishes the run id after the partial failure notice (${locale})`, async (t) => {
+		const atCompletion: unknown[] = [];
+		const h = await setup(t, {
+			both: true,
+			onFeed: (value) => { if (value.usageRun !== undefined) atCompletion.push([...h.notices]); },
+		});
+		await setLocale(t, locale);
+		await h.run("Work");
+		h.fail();
+		await h.run("--all --run x");
+		assert.deepEqual(h.requests.slice(1).toSorted(), ["fixture-personal", "fixture-work"]);
+		assert.deepEqual(h.notices, [[failure, "warning"]]);
+		assert.deepEqual(h.publications, [feed(null), feed(quota), feed(quota, quota), { ...feed(quota, quota), usageRun: "x" }]);
+		assert.deepEqual(atCompletion, [[[failure, "warning"]]]);
+	});
+}
+
+async function setLocale(t: TestContext, locale: string) {
+	const previous = process.env.OSDY_DESKTOP_LOCALE_FILE;
+	const localeFile = join(process.env.PI_CODING_AGENT_DIR!, "locale");
+	await writeFile(localeFile, locale);
+	process.env.OSDY_DESKTOP_LOCALE_FILE = localeFile;
+	t.after(() => { if (previous === undefined) delete process.env.OSDY_DESKTOP_LOCALE_FILE; else process.env.OSDY_DESKTOP_LOCALE_FILE = previous; });
+}
+
+test("/osdy-usage fetches only the named account and immediately republishes both windows", async (t) => {
+	const h = await setup(t);
+	await h.run("  wOrK  ");
+	assert.deepEqual(h.requests, ["fixture-work"]);
+	assert.deepEqual(h.publications, [feed(null), feed("5h 75% left · weekly 40% left")]);
+	assert.deepEqual(h.notices, []);
+	await h.run("Work");
+	assert.equal(h.publications.length, 2, "identical quota does not republish");
+});
+
+test("/osdy-usage rejects unknown and missing names without fetching or publishing", async (t) => {
+	const h = await setup(t);
+	await h.run("unknown account");
+	await h.run("  ");
+	assert.deepEqual(h.notices, [["Unknown account: unknown account", "error"], ["Usage: /osdy-usage <name> | --all", "warning"]]);
+	assert.deepEqual(h.requests, []);
+	await h.event("session_tree");
+	assert.deepEqual(h.publications, [feed(null)]);
+});
+
+test("/osdy-usage lookup failure keeps the previous quota", async (t) => {
+	const h = await setup(t);
+	await h.run("Work");
+	h.fail();
+	await h.run("Work");
+	assert.deepEqual(h.requests, ["fixture-work", "fixture-work"]);
+	assert.deepEqual(h.notices, [["Codex quota unavailable.", "warning"]]);
+	await h.event("session_tree");
+	assert.deepEqual(h.publications, [feed(null), feed("5h 75% left · weekly 40% left")]);
+});
+
+test("/osdy-usage keeps both windows in the 64-character budget for oversized durations", async (t) => {
+	const h = await setup(t);
+	h.largeWindows();
+	await h.run("Work");
+	const summary = "session 75% left · weekly 40% left";
+	assert.ok(summary.length <= 64);
+	assert.deepEqual(h.publications, [feed(null), feed(summary)]);
+	assert.deepEqual(h.requests, ["fixture-work"]);
+	assert.deepEqual(h.notices, []);
+});
+
+const legacyQuota = "5h 75% left · weekly 40% left · 3 banked resets · provider-supplied metadata";
+
+test("/osdy-account still shows its quota notification and the feed refreshes on a session boundary", async (t) => {
+	const h = await setup(t);
+	await h.runPicker("osdy-account", async (title, options) => {
+		if (title === "Osdy accounts") return "Check account quota";
+		assert.equal(title, "Account quota");
+		assert.deepEqual(options, ["Personal (active)", "Work — model: model-work"]);
+		return options[1];
+	});
+	assert.deepEqual(h.notices, [[`Work: ${legacyQuota}`, "info"]]);
+	assert.deepEqual(h.publications, [feed(null)]);
+	await h.event("session_tree");
+	assert.deepEqual(h.publications, [feed(null), feed("5h 75% left · weekly 40% left")]);
+});
+
+test("/osdy-profile still displays legacy quota details before selection", async (t) => {
+	const h = await setup(t);
+	await h.runPicker("osdy-profile", async (title, options) => {
+		assert.equal(title, "Switch Osdy profile (account + model)");
+		assert.deepEqual(options, ["Personal (active) — quota: no valid stored token", `Work — model: model-work — ${legacyQuota}`]);
+		return undefined;
+	});
+	assert.deepEqual(h.notices, [["Checking Codex quota for stored accounts…", "info"]]);
+});
+
+test("/osdy-usage never lets an older lookup overwrite a newer one for the same account", async (t) => {
+	const h = await setup(t);
+	let release!: () => void;
+	const gate = new Promise<void>((resolve) => { release = resolve; });
+	let calls = 0;
+	t.mock.method(globalThis, "fetch", async () => {
+		const call = ++calls;
+		if (call === 1) await gate; // the older lookup answers last
+		return Response.json({ rate_limit: {
+			primary_window: { used_percent: call === 1 ? 90 : 20, limit_window_seconds: 18_000 },
+			secondary_window: { used_percent: 60, limit_window_seconds: 604_800 },
+		} });
+	});
+	const older = h.run("Work");
+	await new Promise((resolve) => setTimeout(resolve, 20));
+	await h.run("Work");
+	release();
+	await older;
+	await h.event("session_tree");
+	assert.equal(calls, 2);
+	assert.deepEqual(h.publications.at(-1), feed("5h 80% left · weekly 40% left"));
+	assert.ok(!JSON.stringify(h.publications).includes("10% left"), "the stale answer never reaches the feed");
+});
+
+test("a refreshed feed formats its cached quota in the new locale without a lookup", async t => {
+	const h = await setup(t);
+	const locale = join(process.env.PI_CODING_AGENT_DIR!, "locale");
+	const previous = process.env.OSDY_DESKTOP_LOCALE_FILE;
+	process.env.OSDY_DESKTOP_LOCALE_FILE = locale;
+	t.after(() => { if (previous === undefined) delete process.env.OSDY_DESKTOP_LOCALE_FILE; else process.env.OSDY_DESKTOP_LOCALE_FILE = previous; });
+	await writeFile(locale, "en");
+	await h.run("Work");
+	await writeFile(locale, "es");
+	await h.event("session_tree");
+	assert.deepEqual(h.publications, [feed(null), feed("5h 75% left · weekly 40% left"), feed("5h 75% disp. · semanal 40% disp.")]);
+	assert.deepEqual(h.requests, ["fixture-work"]);
+	assert.deepEqual(h.notices, []);
+});

@@ -92,6 +92,9 @@ fn main() {
     );
     // Toolchains onboarding installed into the app's own folders.
     setup::apply_toolchain_path();
+    // The Osdy-Pi accounts and profiles package, installed into Gentle
+    // Shell once (in the background; a no-op once recorded).
+    features::osdy_gentle::install_by_default();
     // Gentle Shell 4.7's own install moved its config folder without copying
     // the old one: bring profiles, routing and preferences along once.
     match pi_rpc::adopt_standalone_config() {
