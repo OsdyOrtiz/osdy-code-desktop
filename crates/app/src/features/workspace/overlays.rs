@@ -96,10 +96,6 @@ impl Workspace {
             PaletteAction::Sessions => self.open_sessions(window, cx),
             PaletteAction::Profiles => self.open_profiles(window, cx),
             PaletteAction::Usage => self.open_usage(window, cx),
-            PaletteAction::Memory => {
-                let cwd = self.active_cwd(cx);
-                self.open_memory(cwd, Default::default(), window, cx)
-            }
             PaletteAction::Docs => self.open_docs(window, cx),
             PaletteAction::History => {
                 let cwd = self.active_cwd(cx);
@@ -351,7 +347,7 @@ impl Workspace {
     /// The window's active agent tab (`active_session`) is the one the
     /// sessions screen asks to list and switch, when its Gentle Shell offers
     /// it; its backend is started (probe included) first.
-    pub(super) fn open_sessions(&mut self, window: &mut Window, cx: &mut Context<Self>) {
+    pub(crate) fn open_sessions(&mut self, window: &mut Window, cx: &mut Context<Self>) {
         self.start_active_session(window, cx);
         let cwd = self.active_cwd(cx);
         let session = self.active_session();

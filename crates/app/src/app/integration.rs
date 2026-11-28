@@ -193,6 +193,7 @@ pub fn attach_sidebar(
                     }
                     FileTreeEvent::ChooseFolder => workspace.choose_root(window, cx),
                     FileTreeEvent::SearchFiles => workspace.search_files(window, cx),
+                    FileTreeEvent::OpenSessions => workspace.open_sessions(window, cx),
                 });
             })
             .detach();

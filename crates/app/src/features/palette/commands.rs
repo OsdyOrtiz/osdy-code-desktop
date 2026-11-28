@@ -46,12 +46,6 @@ pub(super) fn screen_rows(tab_layout: TabLayout, language: Language) -> Vec<Row>
             PaletteAction::Sessions,
         ),
         row(
-            IconName::Brain,
-            "Memory",
-            t("Browse and search Engram, the persistent memory"),
-            PaletteAction::Memory,
-        ),
-        row(
             IconName::BookOpen,
             "Architecture docs",
             t("ADRs, C4, data, states and flows, written and kept current by the agent"),

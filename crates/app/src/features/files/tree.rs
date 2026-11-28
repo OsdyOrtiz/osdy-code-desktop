@@ -139,6 +139,8 @@ pub enum FileTreeEvent {
     ChooseFolder,
     /// The search field: the owner should open its file finder.
     SearchFiles,
+    /// The sidebar Sessions button: open the owner's session picker.
+    OpenSessions,
 }
 
 #[derive(Clone, Copy, PartialEq, Eq)]
@@ -1497,6 +1499,11 @@ impl FileTreeView {
         let active = self.tab == tab;
         h_flex()
             .id(label)
+            .debug_selector(move || match tab {
+                Tab::Files => "file-tree-files".into(),
+                Tab::Changes => "file-tree-changes".into(),
+                Tab::Branches => "file-tree-branches".into(),
+            })
             .h(rems(26. / 16.))
             .min_w(rems(32. / 16.))
             .px_2()
@@ -1620,7 +1627,25 @@ impl Render for FileTreeView {
             .gap_1()
             .child(self.tab_button(Tab::Files, IconName::Files, t("Files"), 0, cx))
             .child(self.tab_button(Tab::Changes, IconName::Diff, t("Changes"), change_count, cx))
-            .child(self.tab_button(Tab::Branches, IconName::GitBranch, t("Branches"), 0, cx));
+            .child(self.tab_button(Tab::Branches, IconName::GitBranch, t("Branches"), 0, cx))
+            .child(
+                h_flex()
+                    .id("file-tree-sessions")
+                    .debug_selector(|| "file-tree-sessions".into())
+                    .h(rems(26. / 16.))
+                    .min_w(rems(32. / 16.))
+                    .justify_center()
+                    .rounded_md()
+                    .cursor_pointer()
+                    .hover(|s| s.bg(ui::surface_hover().opacity(0.6)))
+                    .child(
+                        Icon::new(IconName::RotateCcwClock)
+                            .small()
+                            .text_color(ui::faint()),
+                    )
+                    .tooltip(|window, cx| Tooltip::new(t("Sessions")).build(window, cx))
+                    .on_click(cx.listener(|_, _, _, cx| cx.emit(FileTreeEvent::OpenSessions))),
+            );
         // Finding a file, under the tabs while the tree shows.
         let search = (self.tab == Tab::Files).then(|| {
             h_flex().flex_none().px_2().pb_1p5().child(
@@ -1954,7 +1979,7 @@ mod drag_tests {
         point, px,
     };
 
-    use super::{FileTreeEvent, FileTreeView};
+    use super::{FileTreeEvent, FileTreeView, Tab};
     use crate::features::files::FileDrag;
 
     /// A scratch folder holding `report.pdf` and a `notes` folder, its own
@@ -1973,6 +1998,7 @@ mod drag_tests {
         tree: Entity<FileTreeView>,
         dropped: Rc<RefCell<Vec<FileDrag>>>,
         opened: Rc<RefCell<Vec<PathBuf>>>,
+        sessions_opened: Rc<RefCell<usize>>,
     }
 
     impl Render for Host {
@@ -2007,17 +2033,20 @@ mod drag_tests {
             let tree = cx.new(|cx| FileTreeView::new(root, window, cx));
             let dropped = Rc::new(RefCell::new(Vec::new()));
             let opened = Rc::new(RefCell::new(Vec::new()));
+            let sessions_opened = Rc::new(RefCell::new(0));
             let seen = opened.clone();
-            cx.subscribe(&tree, move |_, _, event: &FileTreeEvent, _| {
-                if let FileTreeEvent::Open(path) = event {
-                    seen.borrow_mut().push(path.clone());
-                }
+            let sessions = sessions_opened.clone();
+            cx.subscribe(&tree, move |_, _, event: &FileTreeEvent, _| match event {
+                FileTreeEvent::Open(path) => seen.borrow_mut().push(path.clone()),
+                FileTreeEvent::OpenSessions => *sessions.borrow_mut() += 1,
+                _ => {}
             })
             .detach();
             Host {
                 tree,
                 dropped,
                 opened,
+                sessions_opened,
             }
         })
     }
@@ -2088,6 +2117,40 @@ mod drag_tests {
             "a folder row drags too, for the tab to refuse"
         );
         std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[gpui::test]
+    fn sessions_button_opens_sessions_without_switching_tabs(cx: &mut TestAppContext) {
+        struct Scratch(PathBuf);
+        impl Drop for Scratch {
+            fn drop(&mut self) {
+                std::fs::remove_dir_all(&self.0).unwrap();
+            }
+        }
+
+        let dir = Scratch(folder());
+        let (host, cx) = host(cx, dir.0.clone());
+        let changes = bounds(cx, "file-tree-changes").center();
+        cx.simulate_click(changes, Modifiers::none());
+        let changes = bounds(cx, "file-tree-changes").center();
+        let sessions = bounds(cx, "file-tree-sessions").center();
+        let branches = bounds(cx, "file-tree-branches").center();
+        assert!(changes.x < branches.x && branches.x < sessions.x);
+        assert_eq!(sessions.y, changes.y);
+
+        let tree = host.read_with(cx, |host, _| {
+            assert_eq!(*host.sessions_opened.borrow(), 0);
+            host.tree.clone()
+        });
+        assert!(tree.read_with(cx, |tree, _| tree.tab == Tab::Changes));
+
+        cx.simulate_click(sessions, Modifiers::none());
+        cx.run_until_parked();
+        assert_eq!(
+            host.read_with(cx, |host, _| *host.sessions_opened.borrow()),
+            1
+        );
+        assert!(tree.read_with(cx, |tree, _| tree.tab == Tab::Changes));
     }
 
     /// The tree's own gesture still works beside the drag: a click opens the
