@@ -268,9 +268,8 @@ One PR per change, from a `feat/…` or `refactor/…` branch. PRs are merged wi
 | `ci.yml` (CI) | `push` to `main` and `pull_request`, both with `paths-ignore: ["**.md", "packaging/icons/**"]` | Matrix `macos-latest`, `ubuntu-latest`, `windows-latest` (`fail-fast: false`): `cargo clippy --workspace --all-targets --locked -- -D warnings` and `cargo test --workspace --locked`, without debug info (`CARGO_PROFILE_DEV_DEBUG=0`). Cache `Swatinem/rust-cache@v2`, saved only on `main` (`save-if`); pull requests restore it. |
 | `cache-warm.yml` (Cache warm) | `push` to `main` touching `Cargo.lock`, `**/Cargo.toml`, `cache-warm.yml` or `release.yml`; `workflow_dispatch` | Builds `--profile dist` for the four targets and saves the cache with `shared-key: dist-<target>`. It exists because a tag can only restore caches from the default branch. |
 | `release.yml` (Release) | Tags `v*`; `workflow_dispatch` (dry run) | See [Releases](#releases). |
-| `security.yml` (Security) | `pull_request`, `push` to `main`, Mondays, `workflow_dispatch` | `cargo-deny`, dependency review, `zizmor` on the workflows and the PR risk report. See [`security.md`](security.md). |
 
-Every workflow has a read-only token unless a job needs more, actions are pinned to a commit SHA (Dependabot updates them), and checkout doesn't keep credentials.
+Every workflow has a read-only token unless a job needs more, actions are pinned to a commit SHA (updated by hand), and checkout doesn't keep credentials.
 
 Concurrency: CI uses `group: ci-${{ github.ref }}` with `cancel-in-progress: true` (a new push to the same branch cancels the previous one); Cache warm also cancels; Release uses `cancel-in-progress: false`.
 
@@ -280,9 +279,9 @@ Caches: GitHub keeps 10 GB per repository and evicts the least recently used pas
 
 ### Dependency updates
 
-Dependabot (`.github/dependabot.yml`) opens weekly PRs, a week after each release (cooldown): one for all GitHub Actions, one for the crates' minor and patch bumps, and one per major bump (in `0.x`, `0.9 → 0.10` counts as major). They go through CI and Security like any PR; a bump that doesn't compile is closed with the reason.
+Dependencies are updated by hand (the repository has no Dependabot). Crates: `cargo update` for minor and patch bumps, then CI as for any change. Actions: bump each pinned commit SHA to the new release's commit.
 
-It ignores the crates that move with GPUI: `gpui-kit` and `resvg`/`fontdb`/`gtk` majors, and `gpui-pre` entirely. Upgrade them by hand, together: bump `gpui-kit`, set `gpui-pre` (dev-dependency) to the exact GPUI version it brings (`cargo tree -i gpui-pre`), then align `resvg` and `fontdb` with the ones GPUI uses and `gtk` with `wry`'s (`cargo tree -d` shows duplicates). Check the app in a temporary `HOME` before merging.
+The crates that move with GPUI go together: bump `gpui-kit`, set `gpui-pre` (dev-dependency) to the exact GPUI version it brings (`cargo tree -i gpui-pre`), then align `resvg` and `fontdb` with the ones GPUI uses and `gtk` with `wry`'s (`cargo tree -d` shows duplicates). Check the app in a temporary `HOME` before merging.
 
 ## Releases
 
@@ -331,7 +330,7 @@ Therefore: renaming an asset, changing the `SHA256SUMS` format or the binary nam
 
 ### macOS
 
-- `packaging/macos/Info.plist` uses `io.github.osdyortiz.osdy-code-desktop` so macOS treats the fork as a separate app with its own permissions and saved state. `bundle.sh` substitutes `@VERSION@` and `@MIN_MACOS@` and builds `Osdy Code Desktop.app`. `GENTLE_BIN=<path>` packages an already built binary.
+- `packaging/macos/Info.plist` uses `io.github.osdyortiz.osdy-code-desktop` so macOS treats the fork as a separate app with its own permissions and saved state. `bundle.sh` substitutes `@VERSION@` and `@MIN_MACOS@` and builds `Osdy Code.app`. `GENTLE_BIN=<path>` packages an already built binary.
 - Outside a `.app` (`cargo run`), `platform/icons.rs` (`set_dock_icon`) sets the Dock icon at runtime from `icon-512.png`; inside the bundle it uses `AppIcon.icns`.
 - Ad hoc signing, not notarized: Gatekeeper blocks the first launch (README). `bundle.sh` clears xattrs before signing because they would break the seal.
 

@@ -174,7 +174,26 @@ gpui_kit::assets::icon_assets!(
         Atom,
         Bug,
         Puzzle,
-        Cat
+        Cat,
+        Camera,
+        Film,
+        Headphones,
+        Compass,
+        Mountain,
+        Snowflake,
+        TreePine,
+        Anchor,
+        Plane,
+        Car,
+        House,
+        Briefcase,
+        Trophy,
+        Target,
+        Key,
+        Ghost,
+        Dog,
+        Fish,
+        Bird
     ]
 );
 
@@ -381,5 +400,23 @@ mod tests {
         assert!(text_ink.width() > cursor_ink.width());
         assert!(text_ink.right() < cursor_ink.left());
         assert!(cursor_ink.right() <= cursor.size().width());
+    }
+
+    /// Every icon a workspace badge offers is embedded: the picker draws
+    /// nothing for one that isn't.
+    #[test]
+    fn every_badge_icon_is_embedded() {
+        let missing: Vec<_> = crate::features::workspaces::BadgeIcon::ALL
+            .into_iter()
+            .filter(|icon| {
+                AppAssets
+                    .load(icon.icon().path().as_ref())
+                    .ok()
+                    .flatten()
+                    .is_none()
+            })
+            .map(|icon| icon.label())
+            .collect();
+        assert!(missing.is_empty(), "not embedded: {missing:?}");
     }
 }

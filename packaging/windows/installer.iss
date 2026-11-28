@@ -11,10 +11,12 @@
 
 [Setup]
 ; Never change: Windows matches upgrades and the uninstaller by this id.
+; The install folder keeps the old "Osdy Code Desktop" name so the in-app
+; updater and existing installs keep finding the exe.
 AppId={{D035D7BB-E9D5-486A-A4D2-F6B426CC628E}
-AppName=Osdy Code Desktop
+AppName=Osdy Code
 AppVersion={#AppVersion}
-AppVerName=Osdy Code Desktop {#AppVersion}
+AppVerName=Osdy Code {#AppVersion}
 AppPublisher=OsdyOrtiz
 AppPublisherURL=https://github.com/OsdyOrtiz/osdy-code-desktop
 AppSupportURL=https://github.com/OsdyOrtiz/osdy-code-desktop/issues
@@ -27,7 +29,7 @@ OutputDir={#OutputDir}
 OutputBaseFilename=gentle-shell-gpui-{#AppVersion}-windows-x86_64-setup
 SetupIconFile={#IconFile}
 UninstallDisplayIcon={app}\gentle-shell-gpui.exe
-UninstallDisplayName=Osdy Code Desktop
+UninstallDisplayName=Osdy Code
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 WizardStyle=modern
@@ -48,11 +50,11 @@ Source: "{#SourceExe}"; DestDir: "{app}"; Flags: ignoreversion
 Source: "ocd.cmd"; DestDir: "{app}\bin"; Flags: ignoreversion
 
 [Icons]
-Name: "{autoprograms}\Osdy Code Desktop"; Filename: "{app}\gentle-shell-gpui.exe"
-Name: "{autodesktop}\Osdy Code Desktop"; Filename: "{app}\gentle-shell-gpui.exe"; Tasks: desktopicon
+Name: "{autoprograms}\Osdy Code"; Filename: "{app}\gentle-shell-gpui.exe"
+Name: "{autodesktop}\Osdy Code"; Filename: "{app}\gentle-shell-gpui.exe"; Tasks: desktopicon
 
 [Run]
-Filename: "{app}\gentle-shell-gpui.exe"; Description: "{cm:LaunchProgram,Osdy Code Desktop}"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\gentle-shell-gpui.exe"; Description: "{cm:LaunchProgram,Osdy Code}"; Flags: nowait postinstall skipifsilent
 
 [UninstallDelete]
 ; The previous exe an in-app update leaves until the next start.

@@ -176,6 +176,7 @@ impl Render for WelcomeView {
     fn render(&mut self, window: &mut Window, cx: &mut Context<Self>) -> impl IntoElement {
         let ready = self.setup.read(cx).ready();
         let entrance = self.finale.is_some();
+        let backdrop = crate::shared::backdrop::welcome_layer(entrance, window, cx);
         let macos = cfg!(target_os = "macos");
         let root = div()
             .id("welcome")
@@ -191,7 +192,7 @@ impl Render for WelcomeView {
             // The theme's animated backdrop shows from the first launch,
             // under a see-through deep purple veil: light at the sides so the
             // scene always shows, denser behind the text column so it reads.
-            .when_some(crate::shared::backdrop::layer(window, cx), |d, layer| {
+            .when_some(backdrop, |d, layer| {
                 let plum = night::plum();
                 let band = plum.opacity(VEIL_BAND);
                 d.child(layer)

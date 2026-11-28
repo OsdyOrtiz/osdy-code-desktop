@@ -66,7 +66,7 @@ pub(super) fn install_target(exe: &Path, os: &str) -> Result<Target, Problem> {
                 .any(|c| c.as_os_str() == "AppTranslocation")
             {
                 return Err(Problem::new(
-                    "macOS is running Osdy Code Desktop from a temporary read-only copy. Move Osdy Code Desktop.app to Applications, open it from there, then update.",
+                    "macOS is running Osdy Code Desktop from a temporary read-only copy. Move Osdy Code.app to Applications, open it from there, then update.",
                 ));
             }
             Ok(Target::Bundle(bundle))
