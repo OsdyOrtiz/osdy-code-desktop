@@ -274,3 +274,8 @@ fn a_workspace_saved_with_a_non_canonical_root_is_still_found() {
     assert_eq!(super::find_root(roots.iter(), &base.join("missing")), None);
     std::fs::remove_dir_all(&base).unwrap();
 }
+
+#[test]
+fn a_first_launch_puts_the_tabs_in_the_vertical_navigator() {
+    assert_eq!(SavedState::default().tab_layout, TabLayout::Vertical);
+}

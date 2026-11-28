@@ -384,7 +384,8 @@ fn default_sidebar_width() -> f32 {
     gentle_core::workspaces::SIDEBAR_DEFAULT_WIDTH
 }
 
-/// A first launch shows the sidebar, as a file from before it was saved does.
+/// A first launch shows the sidebar, as a file from before it was saved does,
+/// and the tabs in the vertical navigator (older files keep horizontal).
 impl Default for SavedState {
     fn default() -> Self {
         Self {
@@ -392,7 +393,7 @@ impl Default for SavedState {
             current: 0,
             workspaces: Vec::new(),
             sidebar: true,
-            tab_layout: TabLayout::Horizontal,
+            tab_layout: TabLayout::Vertical,
             tabs_sidebar_width: default_sidebar_width(),
             files_sidebar_width: default_sidebar_width(),
             sidebar_compact: false,

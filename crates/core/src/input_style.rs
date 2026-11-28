@@ -10,7 +10,6 @@ pub const SETTINGS_KEY: &str = "inputStyle";
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum InputStyle {
     /// A floating card, its controls inside; folder and branch below.
-    #[default]
     Card,
     /// Docked across the pane on a hairline; one row of flat chips under
     /// the text, a ↵ keycap or "Stop esc" at its end.
@@ -21,7 +20,8 @@ pub enum InputStyle {
     /// One rounded pill: attach, text and send on the same line.
     Pill,
     /// A soft rounded box: the text on top, quiet round controls and a
-    /// filled send button in a row below it.
+    /// filled send button in a row below it. The default.
+    #[default]
     Soft,
 }
 
@@ -93,7 +93,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn saved_styles_round_trip_and_unknown_ones_read_as_card() {
+    fn saved_styles_round_trip_and_unknown_ones_read_as_soft() {
         for style in InputStyle::ALL {
             assert_eq!(InputStyle::from_json(&style.to_json()), style);
         }
@@ -103,8 +103,9 @@ mod tests {
         );
         assert_eq!(
             InputStyle::from_json(&Value::from("neon")),
-            InputStyle::Card
+            InputStyle::Soft
         );
-        assert_eq!(InputStyle::from_json(&Value::Null), InputStyle::Card);
+        assert_eq!(InputStyle::from_json(&Value::Null), InputStyle::Soft);
+        assert_eq!(InputStyle::default(), InputStyle::Soft);
     }
 }
