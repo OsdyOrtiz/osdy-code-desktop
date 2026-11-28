@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Regenerates every checked-in icon from assets/mascot/osdy-code.png.
+# Regenerates every checked-in icon from assets/mascot/osdy-code-mapache-ambar.svg.
 # macOS only (AppKit renders the SVG; iconutil builds the .icns).
 # CI never runs this: the outputs are committed.
 set -euo pipefail
@@ -8,7 +8,10 @@ here="$(cd "$(dirname "$0")" && pwd)"
 work="$(mktemp -d)"
 trap 'rm -rf "$work"' EXIT
 
-python3 "$here/generate.py"
+# The mascot SVG, rasterized once, is what the squircle template wraps.
+root="$(cd "$here/../.." && pwd)"
+swift "$here/render.swift" "$root/assets/mascot/osdy-code-mapache-ambar.svg" "$work/mascot.png" 1024
+python3 "$here/generate.py" "$work/mascot.png"
 
 # One render pass for every size anything needs.
 sizes=(16 24 32 48 64 128 256 512 1024)

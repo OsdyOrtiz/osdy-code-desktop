@@ -350,7 +350,7 @@ Therefore: renaming an asset, changing the `SHA256SUMS` format or the binary nam
 
 ### Icons
 
-Source: [`assets/mascot/osdy-code.png`](../assets/mascot/osdy-code.png), the square raccoon artwork. After updating it, on macOS:
+Source: [`assets/mascot/osdy-code-mapache-ambar.svg`](../assets/mascot/osdy-code-mapache-ambar.svg), the square raccoon artwork (rasterized by `generate.sh`). After updating it, on macOS:
 
 ```bash
 packaging/icons/generate.sh

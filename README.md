@@ -873,7 +873,7 @@ cargo test
 
 <br>
 
-The raccoon app icon lives in `packaging/icons/`. `generate.py` builds it from `assets/mascot/osdy-code.png`; run `packaging/icons/generate.sh` on macOS after editing and commit the outputs (`AppIcon.icns`, `icon.ico`, PNGs).
+The raccoon app icon lives in `packaging/icons/`. `generate.sh` builds it from `assets/mascot/osdy-code-mapache-ambar.svg`; run `packaging/icons/generate.sh` on macOS after editing and commit the outputs (`AppIcon.icns`, `icon.ico`, PNGs).
 
 Build packages locally:
 
