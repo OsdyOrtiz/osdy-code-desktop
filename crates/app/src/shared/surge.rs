@@ -2,10 +2,10 @@
 //! sparks and drawing a shimmering outline; the edge flares; the window
 //! shakes harder and harder while energy spirals into a glowing core; then
 //! the core hatches: a flash, a shockwave, one last jolt, and a pixel raccoon
-//! bursts out with a rebound and a shower of sparks. Lower levels
-//! play the start of the same show and stop earlier ([`Level`]), so raising
-//! the effort step by step builds up to the full surge. Paint only (plus
-//! the root's shake offset); it never takes input.
+//! bursts out with a rebound and a shower of sparks. At max, the raccoon
+//! winks once it settles, then reopens its eye before fading. Lower levels
+//! play fewer beats of the same show ([`Level`]). Paint only (plus the
+//! root's shake offset); it never takes input.
 
 use std::f32::consts::{FRAC_PI_2, TAU};
 use std::time::Duration;
@@ -17,8 +17,8 @@ use crate::shared::ui;
 #[path = "brand/dots.rs"]
 mod dots;
 
-/// The whole show at max, start to fade.
-pub const DURATION: Duration = Duration::from_millis(4400);
+/// The base timeline, covering the full burst and fade at xhigh.
+const DURATION: Duration = Duration::from_millis(4400);
 
 // The timeline, as fractions of `DURATION`.
 /// The comet finishes its lap.
@@ -29,6 +29,13 @@ const SHAKE_START: f32 = 0.46;
 const BLOOM: f32 = 0.64;
 /// The hard jolt as the raccoon bursts out lasts this long.
 const JOLT: f32 = 0.08;
+/// The raccoon settles after this much of the timeline has passed since the hatch.
+const RACCOON_SETTLE: f32 = 0.16;
+/// Max winks after the rebound, for just over 600 ms.
+const WINK_START: f32 = 0.82;
+const WINK_END: f32 = 0.96;
+/// The raccoon takes this long to fade, after reopening its eye at max.
+const RACCOON_FADE: f32 = 0.12;
 
 /// The comet's path: this far inside the window, following its corners.
 const INSET: f32 = 6.;
@@ -60,9 +67,9 @@ const FLARE_ALONE: f32 = 0.24;
 const CORE_FADE: f32 = 0.1;
 
 /// How much of the surge an effort level plays. Each level adds a beat to
-/// the one below: a short comet run, half the edge, the full lap with the
-/// edge flaring, the core gathering while the window trembles, the hatch;
-/// max adds the raccoon.
+/// the one below: a short comet run, a full lap with a flare, a gathering
+/// core with a tremble, a stronger tremble and hatch, the raccoon bursting
+/// out, and finally its wink.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Level {
     /// Share of the edge the comet runs (1 is the whole lap).
@@ -76,6 +83,8 @@ pub struct Level {
     hatch: bool,
     /// The raccoon bursts out of the hatch.
     raccoon: bool,
+    /// The raccoon winks after settling.
+    wink: bool,
 }
 
 /// The full show.
@@ -85,6 +94,7 @@ pub const MAX: Level = Level {
     tremble: 1.,
     hatch: true,
     raccoon: true,
+    wink: true,
 };
 
 impl Level {
@@ -96,25 +106,26 @@ impl Level {
             tremble: 0.,
             hatch: false,
             raccoon: false,
+            wink: false,
         };
         Some(match name {
             "minimal" => Level { lap: 0.25, ..quiet },
-            "low" => Level { lap: 0.5, ..quiet },
-            "medium" => Level {
+            "low" => Level {
                 flare: true,
                 ..quiet
             },
-            "high" => Level {
+            "medium" => Level {
                 flare: true,
                 tremble: 0.45,
                 ..quiet
             },
-            "xhigh" => Level {
+            "high" => Level {
                 flare: true,
                 tremble: 0.75,
                 hatch: true,
                 ..quiet
             },
+            "xhigh" => Level { wink: false, ..MAX },
             "max" => MAX,
             _ => return None,
         })
@@ -125,9 +136,11 @@ impl Level {
         LAP_END * (0.45 + 0.55 * self.lap)
     }
 
-    /// Where this level's show ends on max's timeline (0..=1).
+    /// Where this level's show ends on the base timeline; max extends the hold.
     fn end(self) -> f32 {
-        if self.hatch {
+        if self.wink {
+            1. + RACCOON_FADE
+        } else if self.hatch {
             1.
         } else if self.tremble > 0. {
             BLOOM + CORE_FADE
@@ -169,7 +182,7 @@ pub fn shake_at(elapsed: Duration, level: Level) -> (f32, f32) {
     shake(elapsed.as_secs_f32() / DURATION.as_secs_f32(), level)
 }
 
-/// The window's offset at `t` (max's timeline): a tremble that builds up
+/// The window's offset at `t` (base timeline): a tremble that builds up
 /// before the hatch, one hard jolt as the core hatches, then stillness.
 /// Levels without the tremble stay still.
 fn shake(t: f32, level: Level) -> (f32, f32) {
@@ -398,19 +411,11 @@ fn paint(bounds: Bounds<Pixels>, t: f32, level: Level, window: &mut Window) {
     }
 
     // 5. The raccoon bursts out, overshooting and settling, in a soft halo,
-    //    then holds and fades. It is white-hot for an instant.
-    let shown = if !level.raccoon || t < BLOOM {
-        0.
-    } else if t < BLOOM + 0.03 {
-        (t - BLOOM) / 0.03
-    } else if t < 0.88 {
-        1.
-    } else {
-        1. - ease_in_out((t - 0.88) / 0.12)
-    };
+    //    then holds (and at max winks) before fading. It is white-hot for an instant.
+    let shown = raccoon_opacity(t, level);
     if shown > 0. {
-        let (dots, (grid_w, grid_h)) = dots::raccoon();
-        let grow = ui::spring(((t - BLOOM) / 0.16).clamp(0., 1.));
+        let (dots, (grid_w, grid_h)) = dots::raccoon(winking(t, level));
+        let grow = ui::spring(((t - BLOOM) / RACCOON_SETTLE).clamp(0., 1.));
         let height = w.min(h) * 0.46 * (0.35 + 0.65 * grow);
         let dot = height / grid_h as f32;
         let left = cx - grid_w as f32 * dot / 2.;
@@ -531,6 +536,21 @@ fn ease_in_out(t: f32) -> f32 {
     }
 }
 
+fn raccoon_opacity(t: f32, level: Level) -> f32 {
+    if !level.raccoon || t < BLOOM {
+        0.
+    } else if t < BLOOM + 0.03 {
+        (t - BLOOM) / 0.03
+    } else {
+        let fade_start = level.end() - RACCOON_FADE;
+        1. - ease_in_out(((t - fade_start) / RACCOON_FADE).clamp(0., 1.))
+    }
+}
+
+fn winking(t: f32, level: Level) -> bool {
+    level.wink && (WINK_START..WINK_END).contains(&t)
+}
+
 #[cfg(test)]
 mod tests {
     use super::{
@@ -597,11 +617,35 @@ mod tests {
 
     #[test]
     fn each_effort_level_builds_on_the_one_below() {
-        let levels: Vec<Level> = ["minimal", "low", "medium", "high", "xhigh", "max"]
-            .into_iter()
-            .map(|name| Level::of(name).unwrap())
-            .collect();
+        let expected = [
+            ("minimal", (0.25, false, 0., false, false), 1613.7),
+            ("low", (1., true, 0., false, false), 3080.),
+            ("medium", (1., true, 0.45, false, false), 3256.),
+            ("high", (1., true, 0.75, true, false), 4400.),
+            ("xhigh", (1., true, 1., true, true), 4400.),
+            ("max", (1., true, 1., true, true), 4928.),
+        ];
+        let levels = expected.map(|(name, beats, millis)| {
+            let level = Level::of(name).unwrap();
+            assert_eq!(
+                (
+                    level.lap,
+                    level.flare,
+                    level.tremble,
+                    level.hatch,
+                    level.raccoon
+                ),
+                beats,
+                "{name}"
+            );
+            assert!(
+                (level.duration().as_secs_f32() * 1000. - millis).abs() < 0.1,
+                "{name}"
+            );
+            level
+        });
         assert_eq!(Level::of("off"), None);
+        assert_eq!(Level::of("unknown"), None);
         assert_eq!(levels[5], MAX);
         let tremble = |level: Level| {
             (0..400)
@@ -619,14 +663,29 @@ mod tests {
             assert!(lower.lap <= higher.lap);
             assert!(!lower.flare || higher.flare);
             assert!(!lower.hatch || higher.hatch);
-            assert!(!lower.raccoon, "only max shows the raccoon");
+            assert!(!lower.raccoon || higher.raccoon);
         }
         // The window only moves once the core starts gathering.
-        assert_eq!(tremble(Level::of("medium").unwrap()), 0.);
-        assert!(tremble(Level::of("high").unwrap()) > 0.);
-        // Max shows the mascot and keeps its full length.
-        assert!(levels[5].raccoon);
-        assert_eq!(MAX.duration(), super::DURATION);
+        assert_eq!(tremble(Level::of("low").unwrap()), 0.);
+        assert!(tremble(Level::of("medium").unwrap()) > 0.);
+    }
+
+    #[test]
+    fn only_max_winks_after_landing_and_reopens_before_fading() {
+        assert!(!super::winking(0.80, MAX));
+        assert!(super::winking(0.82, MAX));
+        assert!(super::winking(0.95, MAX));
+        assert!(!super::winking(0.96, MAX));
+        for t in [0.82, 0.95, 0.96] {
+            assert_eq!(super::raccoon_opacity(t, MAX), 1., "{t}");
+        }
+        assert!(super::raccoon_opacity(1.06, MAX) < 1.);
+        let xhigh = Level::of("xhigh").unwrap();
+        assert_eq!(super::raccoon_opacity(0.88, xhigh), 1.);
+        assert!(super::raccoon_opacity(0.94, xhigh) < 1.);
+        for name in ["minimal", "low", "medium", "high", "xhigh"] {
+            assert!(!super::winking(0.90, Level::of(name).unwrap()), "{name}");
+        }
     }
 
     #[test]
