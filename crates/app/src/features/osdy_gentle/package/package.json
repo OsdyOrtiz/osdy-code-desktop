@@ -1,0 +1,16 @@
+{
+  "name": "osdy-gentle",
+  "version": "0.1.0",
+  "description": "Osdy-Pi Codex accounts and profiles for Gentle Shell desktop",
+  "type": "module",
+  "license": "MIT",
+  "keywords": ["pi-package"],
+  "engines": { "node": ">=22.19.0" },
+  "files": ["src", "assets", "README.md"],
+  "pi": {
+    "extensions": ["./src/index.ts"]
+  },
+  "scripts": {
+    "test": "node --test test/*.test.ts"
+  }
+}

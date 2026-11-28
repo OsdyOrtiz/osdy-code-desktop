@@ -14,6 +14,7 @@ pub mod commands;
 pub mod composer_placeholder;
 pub mod contrast;
 pub mod credits;
+pub mod default_package;
 pub mod devices;
 pub mod diagnostics;
 pub mod docs;

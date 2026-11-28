@@ -19,6 +19,7 @@ pub mod memory;
 pub mod music;
 pub mod notices;
 pub mod onboarding;
+pub mod osdy_gentle;
 pub mod palette;
 pub mod profiles;
 pub mod providers;
