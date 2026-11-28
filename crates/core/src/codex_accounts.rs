@@ -1,12 +1,13 @@
 //! The display-only account list published by the osdy-gentle extension.
 
 use serde_json::Value;
-use std::time::{Duration, Instant};
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 
 pub const USAGE_COMMAND: &str = "osdy-usage";
-pub const ALL_USAGE_COMMAND: &str = "/osdy-usage --all";
 pub const USAGE_TIMEOUT: Duration = Duration::from_secs(20);
-pub const ALL_USAGE_TIMEOUT: Duration = Duration::from_secs(30);
+pub const ALL_USAGE_DISPLAY_TIMEOUT: Duration = Duration::from_secs(30);
+pub const ALL_USAGE_BATCH_TIMEOUT: Duration = Duration::from_secs(120);
 const ALL_USAGE_FRESHNESS: Duration = Duration::from_secs(60);
 
 /// A missing command (or a prompt with the same name) must never receive the
@@ -28,6 +29,7 @@ const STRING_LIMIT: usize = 64;
 pub struct Feed {
     pub active: Option<String>,
     pub accounts: Vec<Account>,
+    pub usage_run: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -83,9 +85,15 @@ impl UsageRequest {
 /// Per-tab batch lifetime and the shorter visible loading state.
 #[derive(Default)]
 pub struct AllUsage {
-    live: Option<(Instant, Vec<QuotaSnapshot>)>,
+    live: Option<LiveUsage>,
     loading: bool,
     last_finished: Option<Instant>,
+}
+
+struct LiveUsage {
+    id: String,
+    started: Instant,
+    quotas: Vec<QuotaSnapshot>,
 }
 
 type QuotaSnapshot = (String, Option<String>);
@@ -100,84 +108,78 @@ fn quotas(feed: &Feed) -> Vec<QuotaSnapshot> {
     quotas
 }
 
+fn fresh_usage_run() -> String {
+    static NEXT: AtomicU64 = AtomicU64::new(0);
+    // The timestamp distinguishes app launches; the counter distinguishes
+    // dispatches across tabs even when the system clock has not advanced.
+    let stamp = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_nanos() as u64;
+    let serial = NEXT.fetch_add(1, Ordering::Relaxed);
+    format!("{stamp:016x}{serial:016x}")
+}
+
+fn valid_usage_run(id: &str) -> bool {
+    (1..=32).contains(&id.len()) && id.bytes().all(|b| b.is_ascii_alphanumeric() || b == b'-')
+}
+
 impl AllUsage {
     pub fn pending(&self) -> bool {
         self.loading
     }
 
     pub fn live(&self) -> bool {
-        self.started_at().is_some()
+        self.live.is_some()
     }
 
-    pub fn started_at(&self) -> Option<Instant> {
-        self.live.as_ref().map(|(started, _)| *started)
+    pub fn run_id(&self) -> Option<&str> {
+        self.live.as_ref().map(|run| run.id.as_str())
     }
 
     pub fn hide_loading(&mut self) -> bool {
         std::mem::take(&mut self.loading)
     }
 
-    pub fn start(&mut self, feed: &Feed, force: bool, now: Instant) -> bool {
+    pub fn start(&mut self, feed: &Feed, force: bool, now: Instant) -> Option<String> {
         if self.live()
             || (!force
                 && self
                     .last_finished
                     .is_some_and(|at| now - at < ALL_USAGE_FRESHNESS))
         {
-            return false;
+            return None;
         }
-        self.live = Some((now, quotas(feed)));
+        let id = fresh_usage_run();
+        self.live = Some(LiveUsage {
+            id: id.clone(),
+            started: now,
+            quotas: quotas(feed),
+        });
         self.loading = true;
-        true
+        Some(id)
     }
 
-    /// A successful prompt disposition acknowledges dispatch, not completion.
-    /// With no completion marker, use all changed quotas, a batch failure,
-    /// or the deadline to end the run.
-    pub fn finish(&mut self, feed: Option<&Feed>, failed: bool, now: Instant) -> bool {
-        let Some((started, before)) = &self.live else {
+    /// Only a matching marker or the fallback can release the batch lock.
+    /// Quota changes still clear the spinner without starting the debounce.
+    pub fn observe(&mut self, feed: Option<&Feed>, now: Instant) -> bool {
+        let Some(run) = &self.live else {
             return false;
         };
-        let after = feed.map(quotas);
-        let changed = after.as_ref().is_some_and(|after| after != before);
-        let all_changed = after.as_ref().is_some_and(|after| {
-            !before.is_empty()
-                && before.len() == after.len()
-                && before
-                    .iter()
-                    .zip(after)
-                    .all(|((name, quota), (new_name, new_quota))| {
-                        name == new_name && quota != new_quota
-                    })
-        });
-        if failed || now - *started >= ALL_USAGE_TIMEOUT || all_changed {
+        let elapsed = now - run.started;
+        if elapsed >= ALL_USAGE_BATCH_TIMEOUT
+            || feed.and_then(|feed| feed.usage_run.as_deref()) == Some(run.id.as_str())
+        {
             self.live = None;
             self.last_finished = Some(now);
             self.loading = false;
-            true
-        } else {
-            changed && self.hide_loading()
+            return true;
         }
+        self.loading
+            && (elapsed >= ALL_USAGE_DISPLAY_TIMEOUT
+                || feed.is_some_and(|feed| quotas(feed) != run.quotas))
+            && self.hide_loading()
     }
-}
-
-/// The notify RPC has no command id. Only the extension's known batch
-/// failure messages settle a live lookup; other notices just hide loading.
-pub fn is_all_usage_failure_notice(message: &str) -> bool {
-    matches!(
-        message,
-        "Could not list saved accounts." | "No se pudieron listar las cuentas guardadas."
-    ) || [
-        "Accounts with unavailable Codex quota: ",
-        "Cuentas con cuota de Codex no disponible: ",
-    ]
-    .iter()
-    .any(|prefix| {
-        message
-            .strip_prefix(prefix)
-            .and_then(|count| count.strip_suffix('.'))
-            .is_some_and(|count| count.parse::<usize>().is_ok_and(|count| count > 0))
-    })
 }
 
 fn capped(text: &str) -> (String, bool) {
@@ -226,7 +228,16 @@ pub fn parse(line: &str) -> Option<Feed> {
             });
         }
     }
-    Some(Feed { active, accounts })
+    let usage_run = object
+        .get("usageRun")
+        .and_then(Value::as_str)
+        .filter(|id| valid_usage_run(id))
+        .map(str::to_owned);
+    Some(Feed {
+        active,
+        accounts,
+        usage_run,
+    })
 }
 
 #[cfg(test)]
@@ -362,103 +373,97 @@ mod tests {
         assert_eq!(feed.accounts[49].command_name(), Some("49"));
     }
 
-    #[test]
-    fn all_usage_auto_refresh_uses_completion_time_and_manual_refresh_bypasses_it() {
-        let feed = parse(r#"{"v":1,"active":null,"accounts":[]}"#).unwrap();
-        let now = std::time::Instant::now();
-        let mut usage = super::AllUsage::default();
-        assert!(usage.start(&feed, false, now));
-        assert!(!usage.start(&feed, false, now));
-        assert!(!usage.start(&feed, true, now));
-        let finished = now + Duration::from_secs(30);
-        assert!(usage.finish(Some(&feed), false, finished));
-        assert!(!usage.start(&feed, false, finished + Duration::from_millis(59_999)));
-        assert!(usage.start(&feed, false, finished + Duration::from_secs(60)));
-        assert!(usage.finish(Some(&feed), true, finished + Duration::from_secs(60)));
-        assert!(usage.start(&feed, true, finished + Duration::from_secs(60)));
+    fn batch_feed(quota: Option<&str>, run: Option<&str>) -> super::Feed {
+        parse(
+            &json!({"v":1,"active":null,"usageRun":run,"accounts":[
+                {"name":"Work","active":false,"binding":null,"quota":quota}
+            ]})
+            .to_string(),
+        )
+        .unwrap()
     }
 
     #[test]
-    fn all_usage_loading_ends_only_on_quota_change_notice_or_timeout() {
-        let feed = |quota, active| {
-            parse(
-                &json!({"v":1,"active":null,"accounts":[
-                    {"name":"Work","active":active,"binding":null,"quota":quota}
-                ]})
-                .to_string(),
-            )
-            .unwrap()
-        };
-        let before = feed(None, false);
-        let now = std::time::Instant::now();
-        let mut usage = super::AllUsage::default();
-        assert!(usage.start(&before, false, now));
-        let almost = now + Duration::from_millis(29_999);
-        assert!(!usage.finish(Some(&before), false, almost));
-        assert!(!usage.finish(Some(&feed(None, true)), false, almost));
-        assert!(!usage.finish(None, false, almost));
-        assert!(usage.pending());
-        assert!(usage.finish(
-            Some(&feed(Some("5h 75% left · weekly 40% left"), true)),
-            false,
-            almost
-        ));
-        assert!(!usage.pending());
-        assert!(!usage.finish(Some(&before), true, almost));
-        assert!(usage.start(&before, true, almost));
-        assert!(usage.finish(Some(&before), true, almost));
-        assert!(usage.start(&before, true, now + Duration::from_secs(30)));
-        assert!(usage.finish(Some(&before), false, now + Duration::from_secs(60)));
-        assert!(!usage.pending());
-    }
-
-    #[test]
-    fn progressive_rows_do_not_finish_a_live_run_or_start_its_cooldown() {
-        let feed = |one, two| {
-            parse(
-                &json!({"v":1,"active":null,"accounts":[
-                    {"name":"One","active":false,"binding":null,"quota":one},
-                    {"name":"Two","active":false,"binding":null,"quota":two}
-                ]})
-                .to_string(),
-            )
-            .unwrap()
-        };
-        let before = feed(None, None);
-        let first = feed(Some("5h 70% left"), None);
-        let all = feed(Some("5h 70% left"), Some("5h 60% left"));
-        let now = std::time::Instant::now();
-        let at = |s| now + Duration::from_secs(s);
-        let mut usage = super::AllUsage::default();
-        assert!(usage.start(&before, false, at(0)));
-        assert!(usage.finish(Some(&first), false, at(1)));
-        assert!(!usage.pending(), "first row stops the spinner");
-        assert!(
-            !usage.start(&first, true, at(2)),
-            "refresh must not overlap the batch"
-        );
-        assert!(!usage.start(&first, false, at(2)));
-        assert!(!usage.hide_loading());
-        assert!(usage.live());
-        assert!(usage.finish(Some(&all), false, at(25)));
-        assert!(!usage.start(&all, false, at(61)));
-        assert!(!usage.start(&all, false, at(84)));
-        assert!(usage.start(&all, false, at(85)));
-    }
-
-    #[test]
-    fn only_known_batch_failure_notices_end_a_live_lookup() {
-        for (text, expected) in [
-            ("Accounts with unavailable Codex quota: 2.", true),
-            ("Cuentas con cuota de Codex no disponible: 1.", true),
-            ("Could not list saved accounts.", true),
-            ("No se pudieron listar las cuentas guardadas.", true),
-            ("Codex quota unavailable.", false),
-            ("Accounts with unavailable Codex quota: 0.", false),
-            ("Accounts with unavailable Codex quota: many.", false),
-        ] {
-            assert_eq!(super::is_all_usage_failure_notice(text), expected, "{text}");
+    fn parses_optional_valid_usage_run() {
+        for id in ["-", "A-9", &"a".repeat(32)] {
+            assert_eq!(batch_feed(None, Some(id)).usage_run.as_deref(), Some(id));
         }
+        for value in [
+            json!(""),
+            json!("a".repeat(33)),
+            json!("a_b"),
+            json!("a b"),
+            json!("é"),
+            json!(1),
+            json!(null),
+        ] {
+            let feed =
+                parse(&json!({"v":1,"active":null,"accounts":[],"usageRun":value}).to_string())
+                    .unwrap();
+            assert_eq!(feed.usage_run, None, "{value}");
+        }
+    }
+
+    #[test]
+    fn unrelated_named_usage_must_not_complete_a_bulk_run() {
+        let mut usage = super::AllUsage::default();
+        let now = std::time::Instant::now();
+        let at = |seconds| now + Duration::from_secs(seconds);
+        let before = batch_feed(None, Some("older-run"));
+        let run = usage.start(&before, false, now).unwrap();
+        assert!(usage.pending());
+        let named = batch_feed(Some("5h 64% left"), Some("older-run"));
+        assert!(usage.observe(Some(&named), at(1)));
+        assert!(!usage.pending());
+        assert!(usage.live());
+        assert!(usage.start(&named, true, at(2)).is_none());
+
+        let completed = batch_feed(Some("5h 64% left"), Some(&run));
+        assert!(usage.observe(Some(&completed), at(3)));
+        assert!(!usage.live());
+        assert!(usage.start(&completed, false, at(62)).is_none());
+        let next = usage.start(&completed, false, at(63)).unwrap();
+        assert_ne!(next, run);
+        assert!(super::valid_usage_run(&next));
+        assert!(!usage.observe(Some(&completed), at(64)));
+        assert!(usage.live());
+    }
+
+    #[test]
+    fn display_deadline_must_not_unlock_a_slow_live_batch() {
+        let mut usage = super::AllUsage::default();
+        let now = std::time::Instant::now();
+        let at = |seconds| now + Duration::from_secs(seconds);
+        let feed = batch_feed(None, None);
+        let run = usage.start(&feed, false, now).unwrap();
+        assert!(!usage.observe(Some(&feed), now + Duration::from_millis(29_999)));
+        assert!(usage.pending());
+        assert!(usage.observe(Some(&feed), at(30)));
+        assert!(!usage.pending());
+        assert!(usage.live());
+        assert!(usage.start(&feed, true, at(31)).is_none());
+        assert!(!usage.observe(Some(&feed), now + Duration::from_millis(119_999)));
+        assert!(usage.live());
+        assert!(usage.observe(Some(&feed), at(120)));
+        assert!(!usage.live());
+        assert!(usage.start(&feed, false, at(179)).is_none());
+        let next = usage.start(&feed, false, at(180)).unwrap();
+        assert_ne!(next, run);
+    }
+
+    #[test]
+    fn notices_hide_loading_and_manual_refresh_bypasses_only_the_debounce() {
+        let mut usage = super::AllUsage::default();
+        let now = std::time::Instant::now();
+        let feed = batch_feed(None, None);
+        let run = usage.start(&feed, false, now).unwrap();
+        assert!(usage.hide_loading());
+        assert!(!usage.pending());
+        assert!(usage.start(&feed, true, now).is_none());
+        assert!(!usage.observe(None, now));
+        assert!(usage.observe(Some(&batch_feed(None, Some(&run))), now));
+        assert!(usage.start(&feed, false, now).is_none());
+        assert!(usage.start(&feed, true, now).is_some());
     }
 
     #[test]

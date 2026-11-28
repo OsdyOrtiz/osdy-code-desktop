@@ -2,7 +2,7 @@
 
 use std::time::Instant;
 
-use gentle_core::codex_accounts::{ALL_USAGE_COMMAND, ALL_USAGE_TIMEOUT, Feed};
+use gentle_core::codex_accounts::{ALL_USAGE_BATCH_TIMEOUT, ALL_USAGE_DISPLAY_TIMEOUT, Feed};
 use gpui_kit::component::button::{Button, ButtonVariants as _};
 use gpui_kit::component::{Disableable as _, Sizable as _, h_flex, v_flex};
 use gpui_kit::prelude::FluentBuilder as _;
@@ -90,20 +90,33 @@ impl SessionView {
         let Some(feed) = self.codex_account_feed() else {
             return;
         };
-        let started = Instant::now();
-        if !self.extension.codex_all_usage.start(&feed, force, started) {
+        let Some(run) = self
+            .extension
+            .codex_all_usage
+            .start(&feed, force, Instant::now())
+        else {
             return;
+        };
+        for (timeout, display_only) in [
+            (ALL_USAGE_DISPLAY_TIMEOUT, true),
+            (ALL_USAGE_BATCH_TIMEOUT, false),
+        ] {
+            let run = run.clone();
+            cx.spawn(async move |this, cx| {
+                cx.background_executor().timer(timeout).await;
+                let _ = this.update(cx, |this, cx| {
+                    if this.extension.codex_all_usage.run_id() == Some(run.as_str()) {
+                        if display_only {
+                            this.hide_codex_usage_loading(cx);
+                        } else {
+                            this.observe_codex_all_usage(cx);
+                        }
+                    }
+                });
+            })
+            .detach();
         }
-        cx.spawn(async move |this, cx| {
-            cx.background_executor().timer(ALL_USAGE_TIMEOUT).await;
-            let _ = this.update(cx, |this, cx| {
-                if this.extension.codex_all_usage.started_at() == Some(started) {
-                    this.finish_codex_all_usage(false, cx);
-                }
-            });
-        })
-        .detach();
-        self.run_codex_account_command(ALL_USAGE_COMMAND.into(), cx);
+        self.run_codex_all_usage_command(run, cx);
         cx.notify();
     }
 
@@ -116,19 +129,15 @@ impl SessionView {
         }
     }
 
-    pub(in crate::features::session) fn finish_codex_all_usage(
-        &mut self,
-        failed: bool,
-        cx: &mut Context<Self>,
-    ) {
+    pub(in crate::features::session) fn observe_codex_all_usage(&mut self, cx: &mut Context<Self>) {
         if !self.extension.codex_all_usage.live() {
             return;
         }
-        let feed = (!failed).then(|| self.codex_account_feed()).flatten();
+        let feed = self.codex_account_feed();
         if self
             .extension
             .codex_all_usage
-            .finish(feed.as_ref(), failed, Instant::now())
+            .observe(feed.as_ref(), Instant::now())
         {
             cx.notify();
         }

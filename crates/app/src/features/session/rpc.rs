@@ -1320,15 +1320,28 @@ impl SessionView {
     }
 
     pub(crate) fn run_codex_account_command(&mut self, text: String, cx: &mut Context<Self>) {
-        let batch = (text == codex_accounts::ALL_USAGE_COMMAND)
-            .then(|| self.extension.codex_all_usage.started_at())
-            .flatten();
+        self.run_gated_codex_command(text, None, cx);
+    }
+
+    pub(super) fn run_codex_all_usage_command(&mut self, run: String, cx: &mut Context<Self>) {
+        let text = format!("/{USAGE_COMMAND} --all --run {run}");
+        self.run_gated_codex_command(text, Some(run), cx);
+    }
+
+    fn run_gated_codex_command(
+        &mut self,
+        text: String,
+        run: Option<String>,
+        cx: &mut Context<Self>,
+    ) {
+        let is_current = move |this: &Self| {
+            run.as_deref()
+                .is_none_or(|id| this.extension.codex_all_usage.run_id() == Some(id))
+        };
+        let error_is_current = is_current.clone();
         let error = move |this: &mut Self, cx: &mut Context<Self>| {
-            if let Some(started) = batch {
-                if this.extension.codex_all_usage.started_at() != Some(started) {
-                    return;
-                }
-                this.finish_codex_all_usage(true, cx);
+            if !error_is_current(this) {
+                return;
             }
             this.codex_account_error(
                 t("Could not run the Codex account command in this tab.").into(),
@@ -1353,7 +1366,7 @@ impl SessionView {
             json!({"type": "get_commands"}),
             cx,
             move |this, result, cx| {
-                if batch.is_some() && this.extension.codex_all_usage.started_at() != batch {
+                if !is_current(this) {
                     return;
                 }
                 if !result.is_ok_and(|data| lists_extension_command(&data, &name)) {

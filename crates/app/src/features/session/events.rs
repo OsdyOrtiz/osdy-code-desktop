@@ -235,13 +235,7 @@ impl SessionView {
                 notify_type,
             } => {
                 let level = notice_level(notify_type.as_deref());
-                if level != NoticeLevel::Info
-                    && gentle_core::codex_accounts::is_all_usage_failure_notice(&message)
-                {
-                    self.finish_codex_all_usage(true, cx);
-                } else {
-                    self.hide_codex_usage_loading(cx);
-                }
+                self.hide_codex_usage_loading(cx);
                 match notify_target(&message, self.desktop.design_events_ready()) {
                     Some(NotifyTarget::Canvas(canvas)) => {
                         cx.emit(SessionEvent::DesignCanvas(canvas))
@@ -320,7 +314,7 @@ impl SessionView {
                         self.extension.widgets.remove(&key);
                     }
                     if codex {
-                        self.finish_codex_all_usage(false, cx);
+                        self.observe_codex_all_usage(cx);
                     }
                 }
             }

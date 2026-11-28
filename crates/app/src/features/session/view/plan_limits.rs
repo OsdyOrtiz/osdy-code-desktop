@@ -14,7 +14,7 @@ use gpui_kit::*;
 use gentle_core::codex_accounts::Feed;
 use gentle_core::usage::subscription::{
     LimitTone, limit_tone, provider_alias, reset_clock_label_in, window_display_label_in,
-    windows_by_length,
+    windows_by_length, windows_most_used,
 };
 use pi_rpc::desktop_rpc::{ProviderUsage as RpcProviderUsage, UsageStatus};
 
@@ -48,7 +48,7 @@ pub(super) struct PlanRow {
 /// testable without a session.
 #[derive(Debug, Clone, PartialEq)]
 pub(super) struct PlanChip {
-    /// The five-hour used percent, or the legacy notice value when applicable.
+    /// The five-hour used percent, or the previous most-used or legacy value.
     pub(super) percent: Option<i64>,
     /// The provider's plan, when it reports one ("Plan usage limits · plus").
     pub(super) plan: Option<String>,
@@ -63,7 +63,7 @@ pub(super) struct PlanChip {
 
 /// What the composer's plan-limits chip shows for this session: the
 /// subscription provider matching the current model's provider (by alias),
-/// the trigger percent from the five-hour window and the card rows ordered
+/// the trigger percent from the five-hour (or most-used) window and the card rows ordered
 /// shortest first — or, when there are none, the legacy notices' highest
 /// percent over an honest fallback line. `None` hides the chip: nothing
 /// reports plan usage at all, or the legacy limit chips (visible on the
@@ -89,7 +89,11 @@ pub(super) fn plan_chip(
     {
         let percent = |value: f64| value.round().clamp(0.0, 100.0) as i64;
         return Some(PlanChip {
-            percent: gentle_core::usage::five_hour_used_percent(&core.limits),
+            percent: gentle_core::usage::five_hour_used_percent(&core.limits).or_else(|| {
+                windows_most_used(&core.limits)
+                    .first()
+                    .map(|window| percent(window.used_percent))
+            }),
             plan: core.plan.clone(),
             status_line: Some(match provider.status {
                 UsageStatus::Ok => updated_ago(core.fetched_at, now),
@@ -584,7 +588,11 @@ mod tests {
             NOW,
         )
         .expect("the weekly-only subscription keeps the chip visible");
-        assert_eq!(chip.percent, None, "no 5-hour window: gauge only");
+        assert_eq!(
+            chip.percent,
+            Some(5),
+            "no 5-hour window: use the weekly percent"
+        );
         assert_eq!(chip.rows[0].percent, 5, "the weekly row is preserved");
         // A provider the model doesn't belong to never drives the chip.
         assert!(
@@ -613,6 +621,32 @@ mod tests {
             )
             .is_none()
         );
+    }
+
+    #[test]
+    fn provider_without_codex_keeps_existing_weekly_label() {
+        let claude = provider(
+            "claude",
+            UsageStatus::Ok,
+            None,
+            None,
+            vec![limit(
+                "prompts",
+                vec![window_with("week", 90.0, 604_800.0, UsageResetAt::Null)],
+            )],
+        );
+        let chip = plan_chip(
+            &[claude],
+            false,
+            false,
+            &BTreeMap::new(),
+            Some("anthropic"),
+            0,
+            NOW,
+        );
+        let (chip, accounts) = super::select_plan(chip, false, None, false);
+        assert!(accounts.is_none());
+        assert_eq!(chip.unwrap().percent, Some(90));
     }
 
     #[test]
