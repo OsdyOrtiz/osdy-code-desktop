@@ -3,7 +3,7 @@
 ; replace the exe there. Built by the Release workflow:
 ;   ISCC /DAppVersion=<version> /DSourceExe=<path to gentle-shell-gpui.exe>
 ;        /DOutputDir=<dir> /DIconFile=<path to icon.ico> installer.iss
-; Output: gentle-shell-gpui-<version>-windows-x86_64-setup.exe
+; Output: Osdy-Code-<version>-windows-x86_64-setup.exe
 
 #ifndef AppVersion
   #error AppVersion is required (/DAppVersion=...)
@@ -26,7 +26,7 @@ DefaultDirName={localappdata}\Programs\Osdy Code Desktop
 DisableProgramGroupPage=yes
 DisableDirPage=auto
 OutputDir={#OutputDir}
-OutputBaseFilename=gentle-shell-gpui-{#AppVersion}-windows-x86_64-setup
+OutputBaseFilename=Osdy-Code-{#AppVersion}-windows-x86_64-setup
 SetupIconFile={#IconFile}
 UninstallDisplayIcon={app}\gentle-shell-gpui.exe
 UninstallDisplayName=Osdy Code

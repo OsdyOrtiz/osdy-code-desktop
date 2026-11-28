@@ -148,9 +148,9 @@ jobs:
           name: asset-${{ matrix.target }}
           path: |
             dist/gentle-shell-gpui-${{ env.VERSION }}-*.zip
-            dist/gentle-shell-gpui-${{ env.VERSION }}-*.dmg
+            dist/Osdy-Code-${{ env.VERSION }}-*.dmg
             dist/gentle-shell-gpui-${{ env.VERSION }}-*.tar.gz
-            dist/gentle-shell-gpui-${{ env.VERSION }}-*-setup.exe
+            dist/Osdy-Code-${{ env.VERSION }}-*-setup.exe
           if-no-files-found: error
 
   release:
@@ -171,11 +171,11 @@ jobs:
         run: |
           expected=(
             "gentle-shell-gpui-$VERSION-macos-aarch64.zip"
-            "gentle-shell-gpui-$VERSION-macos-aarch64.dmg"
+            "Osdy-Code-$VERSION-macos-aarch64.dmg"
             "gentle-shell-gpui-$VERSION-macos-x86_64.zip"
-            "gentle-shell-gpui-$VERSION-macos-x86_64.dmg"
+            "Osdy-Code-$VERSION-macos-x86_64.dmg"
             "gentle-shell-gpui-$VERSION-windows-x86_64.zip"
-            "gentle-shell-gpui-$VERSION-windows-x86_64-setup.exe"
+            "Osdy-Code-$VERSION-windows-x86_64-setup.exe"
             "gentle-shell-gpui-$VERSION-linux-x86_64.tar.gz"
           )
           for asset in "${expected[@]}"; do

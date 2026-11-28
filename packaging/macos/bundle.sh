@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Builds dist/Osdy Code.app, dist/gentle-shell-gpui-<version>-macos-<arch>.zip
-# (what the in-app updater downloads) and a .dmg of the same signed app with an
+# (what the in-app updater downloads) and dist/Osdy-Code-<version>-macos-<arch>.dmg,
+# the same signed app with an
 # Applications shortcut (what people download to install by dragging).
 #
 #   packaging/macos/bundle.sh <target-triple> <version>
@@ -55,7 +56,7 @@ rm -f "$zip"
 # updater) would write them into the bundle and invalidate the seal.
 ditto -c -k --norsrc --noextattr --noacl --keepParent "$app" "$zip"
 
-dmg="dist/gentle-shell-gpui-$version-macos-$arch.dmg"
+dmg="dist/Osdy-Code-$version-macos-$arch.dmg"
 stage="$(mktemp -d)"
 trap 'rm -rf "$stage"' EXIT
 ditto --norsrc --noextattr --noacl "$app" "$stage/Osdy Code.app"

@@ -285,13 +285,13 @@ The crates that move with GPUI go together: bump `gpui-kit`, set `gpui-pre` (dev
 
 ## Releases
 
-Assets produced by `release.yml` (the updater consumes these names):
+Assets produced by `release.yml`. The updater consumes the `gentle-shell-gpui-…` `.zip` and `.tar.gz` names, so they never change; the files people download by hand (`.dmg`, `-setup.exe`) are named `Osdy-Code-…`:
 
 | Platform | Runner / target | Assets |
 | --- | --- | --- |
-| macOS Apple silicon | `macos-latest`, `aarch64-apple-darwin` | `gentle-shell-gpui-<v>-macos-aarch64.dmg`, `.zip` |
-| macOS Intel | `macos-latest` (cross-compiled), `x86_64-apple-darwin` | `gentle-shell-gpui-<v>-macos-x86_64.dmg`, `.zip` |
-| Windows | `windows-latest`, `x86_64-pc-windows-msvc` | `gentle-shell-gpui-<v>-windows-x86_64.zip` (exe), `…-windows-x86_64-setup.exe` |
+| macOS Apple silicon | `macos-latest`, `aarch64-apple-darwin` | `Osdy-Code-<v>-macos-aarch64.dmg`, `gentle-shell-gpui-<v>-macos-aarch64.zip` |
+| macOS Intel | `macos-latest` (cross-compiled), `x86_64-apple-darwin` | `Osdy-Code-<v>-macos-x86_64.dmg`, `gentle-shell-gpui-<v>-macos-x86_64.zip` |
+| Windows | `windows-latest`, `x86_64-pc-windows-msvc` | `gentle-shell-gpui-<v>-windows-x86_64.zip` (exe), `Osdy-Code-<v>-windows-x86_64-setup.exe` |
 | Linux | `ubuntu-22.04`, `x86_64-unknown-linux-gnu` | `gentle-shell-gpui-<v>-linux-x86_64.tar.gz` |
 | All | `ubuntu-latest` | `SHA256SUMS` (`sha256sum` of the seven assets) |
 
