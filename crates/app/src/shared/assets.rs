@@ -307,6 +307,10 @@ const BRAND: &[(&str, &[u8])] = &[
         include_bytes!("../../assets/brand/eyes-closed.svg"),
     ),
     (
+        "brand/eyes-wink.svg",
+        include_bytes!("../../assets/brand/eyes-wink.svg"),
+    ),
+    (
         "brand/wordmark-text.svg",
         include_bytes!("../../assets/brand/wordmark-text.svg"),
     ),

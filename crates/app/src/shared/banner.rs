@@ -77,6 +77,63 @@ pub fn read_config(config_home: &Path) -> BannerConfig {
     }
 }
 
+/// The brand's Tokyo Night palette, the same in every app theme: the
+/// welcome screen is drawn in it so the logo always sits on its own colors.
+/// Blue and violet carry the brand, green marks finished steps and amber is
+/// the small warm accent (the logo's cursor, the step counter).
+pub mod night {
+    use gpui_kit::{Hsla, rgb};
+
+    /// Night blue background.
+    pub fn bg() -> Hsla {
+        rgb(0x1a1b26).into()
+    }
+    /// "Osdy" and the primary button.
+    pub fn blue() -> Hsla {
+        rgb(0x7aa2f7).into()
+    }
+    /// "Code" and the raccoon's details.
+    pub fn violet() -> Hsla {
+        rgb(0xbb9af7).into()
+    }
+    /// Checks and "Ready" chips.
+    pub fn green() -> Hsla {
+        rgb(0x9ece6a).into()
+    }
+    /// The logo's cursor and the step counter.
+    pub fn amber() -> Hsla {
+        rgb(0xe0af68).into()
+    }
+    /// Main text, a very light lavender.
+    pub fn text() -> Hsla {
+        rgb(0xc0caf5).into()
+    }
+    /// Secondary text.
+    pub fn muted() -> Hsla {
+        rgb(0xa9b1d6).into()
+    }
+    /// Tertiary text: versions, hints.
+    pub fn faint() -> Hsla {
+        rgb(0x737aa2).into()
+    }
+    /// Deep Tokyo Night purple: the see-through veil over animated scenes.
+    pub fn plum() -> Hsla {
+        rgb(0x1e1538).into()
+    }
+    /// Raised rows on the background.
+    pub fn panel() -> Hsla {
+        rgb(0x1f2335).into()
+    }
+    /// Tracks and wells.
+    pub fn well() -> Hsla {
+        rgb(0x292e42).into()
+    }
+    /// Quiet lines: rails still waiting, outlines.
+    pub fn line() -> Hsla {
+        rgb(0x3b4261).into()
+    }
+}
+
 /// Drive `reveal` linearly from 0 to 1 over this interval.
 pub const WRITE: Duration = Duration::from_millis(2600);
 
@@ -88,7 +145,8 @@ const WORDMARK_ASPECT: f32 = 1130. / 229.;
 // glyph origin at x=1017.29. Move the entire layer left to meet the clip edge.
 const CURSOR_AT: f32 = (1017.29 - 4.) / 1130.;
 const CURSOR_PERIOD: Duration = Duration::from_secs(1);
-const EYE_PERIOD: Duration = Duration::from_secs(5);
+/// One idle cycle: a quick blink halfway through, then a slower wink (`_ >`).
+const EYE_PERIOD: Duration = Duration::from_secs(10);
 
 fn cursor_edge(reveal: f32) -> f32 {
     let t = reveal.clamp(0., 1.);
@@ -100,7 +158,11 @@ fn cursor_on(seconds: f32) -> bool {
 }
 
 fn eyes_closed(seconds: f32) -> bool {
-    seconds % EYE_PERIOD.as_secs_f32() >= 4.85
+    (4.85..5.).contains(&(seconds % EYE_PERIOD.as_secs_f32()))
+}
+
+fn winking(seconds: f32) -> bool {
+    seconds % EYE_PERIOD.as_secs_f32() >= 9.3
 }
 
 /// Full-color square badge, static when the caller has reduced motion enabled.
@@ -126,16 +188,18 @@ pub fn badge(side: f32, still: bool) -> AnyElement {
             |el, t| {
                 // Use the same canvas as the badge. The mask covers the eye positions
                 // across all WebP frames, so the loops don't need to share a clock.
-                let visible = eyes_closed(t * EYE_PERIOD.as_secs_f32());
-                el.child(
+                let seconds = t * EYE_PERIOD.as_secs_f32();
+                let mask = |path: &'static str, visible: bool| {
                     div()
                         .absolute()
                         .inset_0()
                         .opacity(if visible { 1. } else { 0. })
-                        .child(img("brand/eyes-closed.svg").size_full()),
-                )
-                // Two orbits per eye cycle; both repeat without a second frame driver.
-                .child(orbit_comet(2. * t + 0.18))
+                        .child(img(path).size_full())
+                };
+                el.child(mask("brand/eyes-closed.svg", eyes_closed(seconds)))
+                    .child(mask("brand/eyes-wink.svg", winking(seconds)))
+                    // Four orbits per eye cycle; both repeat without a second frame driver.
+                    .child(orbit_comet(4. * t + 0.18))
             },
         )
         .into_any_element()
@@ -288,7 +352,7 @@ mod tests {
 
     #[test]
     fn idle_blinks_are_steps_and_repeat() {
-        use super::{cursor_on, eyes_closed};
+        use super::{cursor_on, eyes_closed, winking};
         assert!(cursor_on(0.));
         assert!(cursor_on(0.49));
         assert!(!cursor_on(0.5));
@@ -299,7 +363,13 @@ mod tests {
         assert!(eyes_closed(4.85));
         assert!(eyes_closed(4.99));
         assert!(!eyes_closed(5.));
-        assert!(eyes_closed(9.9));
+        assert!(eyes_closed(14.9));
+        assert!(!winking(4.9));
+        assert!(!winking(9.29));
+        assert!(winking(9.3));
+        assert!(winking(9.99));
+        assert!(!winking(10.));
+        assert!(!eyes_closed(9.5));
     }
 
     #[test]

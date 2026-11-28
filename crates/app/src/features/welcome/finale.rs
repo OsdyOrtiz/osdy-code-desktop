@@ -12,9 +12,10 @@ use crate::shared::kisses::{HEART, noise, paint_particle, paint_sprite};
 use crate::shared::ui;
 
 /// From Continue to the app.
-pub(super) const FINALE: Duration = Duration::from_millis(5600);
-/// The dissolve starts this far in (0..1).
-pub(super) const DISSOLVE: f32 = 0.86;
+pub(super) const FINALE: Duration = Duration::from_millis(7600);
+/// The dissolve starts this far in (0..1): the last ~0.78 s, after the
+/// farewell has stayed on screen a couple of seconds.
+pub(super) const DISSOLVE: f32 = 0.897;
 
 /// The box the banner and the flying sprites share.
 const STAGE_W: f32 = 760.;
