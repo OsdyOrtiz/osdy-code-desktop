@@ -5,9 +5,8 @@ pub(super) struct OrbitPoint {
 }
 
 /// Position in the 384 px badge canvas. `phase` is in turns and may wrap.
-/// Fitted to the ring's centerline in the composited first WebP frame.
-/// The ring and disc stay put as the head sways, so no WebP phase is needed.
-pub(super) fn position(phase: f32) -> OrbitPoint {
+/// The path stays fixed while the disc bobs vertically in canvas units.
+pub(super) fn position(phase: f32, bob: f32) -> OrbitPoint {
     let (depth, along) = (phase.rem_euclid(1.) * std::f32::consts::TAU).sin_cos();
     let (sin, cos) = (-12_f32).to_radians().sin_cos();
     let (major, minor) = (175.5 * along, 44.5 * depth);
@@ -17,7 +16,8 @@ pub(super) fn position(phase: f32) -> OrbitPoint {
     // Fade the back arc just outside the disc so even its halo disappears
     // behind the rim. The near arc stays bright, including across the face.
     let visibility = if depth < 0. {
-        let rim = (x - 191.5).hypot(y - 192.) - 137.;
+        // Match the crop in badge.svg (center 192,192; radius 137).
+        let rim = (x - 192.).hypot(y - (192. + bob)) - 137.;
         let edge = (rim / 16.).clamp(0., 1.);
         edge * edge * (3. - 2. * edge)
     } else {
@@ -28,7 +28,9 @@ pub(super) fn position(phase: f32) -> OrbitPoint {
 
 #[cfg(test)]
 mod tests {
-    use super::position;
+    fn position(phase: f32) -> super::OrbitPoint {
+        super::position(phase, 0.)
+    }
 
     #[test]
     fn follows_the_measured_ring_and_wraps() {
@@ -48,6 +50,14 @@ mod tests {
                 p.y
             );
         }
+    }
+
+    #[test]
+    fn back_arc_occlusion_follows_the_disc_without_moving_the_path() {
+        let up = super::position(0.61, -8.);
+        let down = super::position(0.61, 8.);
+        assert_eq!((up.x, up.y), (down.x, down.y));
+        assert!(up.visibility > down.visibility);
     }
 
     #[test]

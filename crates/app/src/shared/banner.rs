@@ -51,8 +51,8 @@ impl BannerConfig {
     pub fn particle_anchor(self) -> Option<(f32, f32)> {
         self.show_rose.then(|| {
             let x = BADGE / 2. - self.width() / 2.;
-            // Mouth center is at (192, 266) in the 384 px source canvas.
-            let y = (266. / 384. - 0.5) * BADGE;
+            // Mouth anchor sits below the nose at (192, 260) on the badge canvas.
+            let y = (260. - BADGE_CANVAS / 2.) * (BADGE / BADGE_CANVAS);
             (x, y)
         })
     }
@@ -138,6 +138,7 @@ pub mod night {
 pub const WRITE: Duration = Duration::from_millis(2600);
 
 const BADGE: f32 = 48.;
+const BADGE_CANVAS: f32 = 384.;
 const GAP: f32 = 5.;
 const WORDMARK: f32 = 122.;
 const WORDMARK_ASPECT: f32 = 1130. / 229.;
@@ -165,30 +166,31 @@ fn winking(seconds: f32) -> bool {
     seconds % EYE_PERIOD.as_secs_f32() >= 9.3
 }
 
-/// Full-color square badge, static when the caller has reduced motion enabled.
+/// Vertical offset in badge-canvas units: two bobs per eye cycle.
+fn badge_bob(progress: f32) -> f32 {
+    8. * (2. * std::f32::consts::TAU * progress).sin()
+}
+
+/// Full-color circular badge, static when the caller has reduced motion enabled.
 pub fn badge(side: f32, still: bool) -> AnyElement {
     let side = px(side);
-    let path = if still {
-        "brand/badge-still.png"
-    } else {
-        "brand/badge.webp"
+    let art = move || {
+        div()
+            .relative()
+            .size(side)
+            .child(img("brand/badge.png").id("badge-image").size_full())
     };
-    let badge = div()
-        .relative()
-        .flex_none()
-        .size(side)
-        .child(img(path).id("badge-image").size_full());
+    let badge = div().relative().flex_none().size(side);
     if still {
-        return badge.into_any_element();
+        return badge.child(art()).into_any_element();
     }
     badge
         .with_animation(
             "brand-badge-motion",
             Animation::new(EYE_PERIOD).repeat(),
-            |el, t| {
-                // Use the same canvas as the badge. The mask covers the eye positions
-                // across all WebP frames, so the loops don't need to share a clock.
+            move |el, t| {
                 let seconds = t * EYE_PERIOD.as_secs_f32();
+                let bob = badge_bob(t);
                 let mask = |path: &'static str, visible: bool| {
                     div()
                         .absolute()
@@ -196,24 +198,29 @@ pub fn badge(side: f32, still: bool) -> AnyElement {
                         .opacity(if visible { 1. } else { 0. })
                         .child(img(path).size_full())
                 };
-                el.child(mask("brand/eyes-closed.svg", eyes_closed(seconds)))
-                    .child(mask("brand/eyes-wink.svg", winking(seconds)))
-                    // Four orbits per eye cycle; both repeat without a second frame driver.
-                    .child(orbit_comet(4. * t + 0.18))
+                // Moving their parent keeps the image and eye masks in lockstep.
+                el.child(
+                    art()
+                        .top(side * (bob / BADGE_CANVAS))
+                        .child(mask("brand/eyes-closed.svg", eyes_closed(seconds)))
+                        .child(mask("brand/eyes-wink.svg", winking(seconds))),
+                )
+                // The comet has a fixed path; only its occlusion follows the disc.
+                .child(orbit_comet(4. * t + 0.18, bob))
             },
         )
         .into_any_element()
 }
 
-fn orbit_comet(phase: f32) -> impl IntoElement {
+fn orbit_comet(phase: f32, bob: f32) -> impl IntoElement {
     canvas(
         |_, _, _| {},
         move |bounds, _, window, _| {
-            let scale = bounds.size.width / 384.;
+            let scale = bounds.size.width / BADGE_CANVAS;
             let purple: Hsla = rgb(0xbb9af7).into();
             let cyan: Hsla = rgb(0x7dcfff).into();
             for i in (0..=10).rev() {
-                let p = orbit::position(phase - i as f32 * 0.006);
+                let p = orbit::position(phase - i as f32 * 0.006, bob);
                 if p.visibility == 0. {
                     continue;
                 }
@@ -373,6 +380,20 @@ mod tests {
     }
 
     #[test]
+    fn badge_bob_is_gentle_and_repeats_at_the_eye_cycle_seam() {
+        let bob = super::badge_bob;
+        let near = |a: f32, b: f32| (a - b).abs() < 0.0001;
+        assert!(near(bob(0.), 0.));
+        assert!(near(bob(0.125), 8.));
+        assert!(near(bob(0.375), -8.));
+        for i in 0..=100 {
+            let progress = i as f32 / 100.;
+            assert!(bob(progress).abs() <= 8.);
+            assert!(near(bob(progress), bob(progress + 0.5)));
+        }
+    }
+
+    #[test]
     fn particles_track_the_badge_when_the_wordmark_is_hidden() {
         let both = BannerConfig::default();
         let badge_only = BannerConfig {
@@ -388,7 +409,7 @@ mod tests {
         assert_eq!(badge_x, 0.);
         assert_eq!(both_x + (both.width() - badge_only.width()) / 2., badge_x);
         assert_eq!(both_y, badge_y);
-        assert!(badge_y > 0. && badge_y < badge_only.width() / 2.);
+        assert_eq!(badge_y, 8.5);
         assert_eq!(text_only.particle_anchor(), None);
     }
 

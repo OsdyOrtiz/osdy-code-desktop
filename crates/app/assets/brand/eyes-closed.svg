@@ -1,7 +1,7 @@
 <svg xmlns="http://www.w3.org/2000/svg" width="384" height="384" viewBox="0 0 384 384">
-  <!-- The mask follows the sampled chevrons, with enough bleed for the WebP's sway. -->
-  <path d="M154 205 L133 218 L154 231 M230 205 L251 218 L230 231"
-        fill="none" stroke="#181829" stroke-width="26" stroke-linecap="round" stroke-linejoin="round"/>
-  <path d="M133 218 H153 M231 218 H251"
-        fill="none" stroke="#7dcfff" stroke-width="7" stroke-linecap="round"/>
+  <!-- Cover the chevrons on the 384 px canvas from badge.svg. -->
+  <path d="M156 200 L134 213 L156 226 M227 200 L249 213 L227 226"
+        fill="none" stroke="#15162A" stroke-width="13" stroke-linecap="round" stroke-linejoin="round"/>
+  <path d="M135 213 H155 M228 213 H248"
+        fill="none" stroke="#74CBFD" stroke-width="7" stroke-linecap="round"/>
 </svg>
