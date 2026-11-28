@@ -3,6 +3,7 @@
  * for the current session through Gentle's versioned profiles-service event,
  * the same owner action as Configuration → Models → "Use in this session".
  */
+import { t } from "./i18n.ts";
 import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
@@ -107,7 +108,7 @@ export async function applyGentleProfile(
 	if (result.status === "confirmation_required") {
 		if (!(await confirm(result.title, result.message))) return { status: "cancelled" };
 		result = await service.apply({ profile, mode: "session", confirmation: result.confirmation });
-		if (result.status === "confirmation_required") return { status: "not_applied", notes: [{ level: "warning", text: "Gentle asked for another confirmation; nothing was applied." }] };
+		if (result.status === "confirmation_required") return { status: "not_applied", notes: [{ level: "warning", text: t("Gentle asked for another confirmation; nothing was applied.") }] };
 	}
 	return result;
 }

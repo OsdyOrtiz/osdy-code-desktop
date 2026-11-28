@@ -1,3 +1,4 @@
+import { resolveLocale, translator, type Locale, type Translate } from "./i18n.ts";
 import { randomUUID } from "node:crypto";
 import { assertTokenUsable, extractCodexAccountId, type CodexUsageAuth } from "./codex-usage.ts";
 import { createCodexResetStore, type CodexResetAttempt, type CodexResetLease, type CodexResetStore } from "./codex-reset-store.ts";
@@ -43,16 +44,14 @@ const MESSAGE = {
 	[STATUS.BLOCKED]: "Banked reset action blocked. The local attempt store or account switch fence is unavailable; do not retry automatically.",
 	[STATUS.UNAVAILABLE]: "No currently available banked reset could be selected. Refresh usage to check availability.",
 	[STATUS.PENDING]: "Outcome unknown; do not start another reset. Check pending reset only reads the local journal and cannot verify this attempt with Codex.",
-};
-const accept = "Use reset";
-const expiryLabel = (expiresAt: number) => `expires ${new Date(expiresAt).toLocaleString()} (local time)`;
+} as const;
 
-function outcomeMessage({ code, windowsReset }: CodexResetOutcome) {
+function outcomeMessage({ code, windowsReset }: CodexResetOutcome, t: Translate) {
 	switch (code) {
-		case "reset": return `Banked reset consumed; ${windowsReset} rate-limit windows reset.`;
-		case "nothing_to_reset": return "No rate limits needed resetting; a banked reset was not consumed.";
-		case "no_credit": return "No banked reset was available; a reset was not consumed.";
-		case "already_redeemed": return "Codex reported that this banked reset was already redeemed.";
+		case "reset": return t("Banked reset consumed; {windowsReset} rate-limit windows reset.", { windowsReset });
+		case "nothing_to_reset": return t("No rate limits needed resetting; a banked reset was not consumed.");
+		case "no_credit": return t("No banked reset was available; a reset was not consumed.");
+		case "already_redeemed": return t("Codex reported that this banked reset was already redeemed.");
 	}
 }
 
@@ -82,9 +81,9 @@ export function createCodexResetActions(deps: CodexResetOptions): CodexResetActi
 		} catch { return undefined; }
 	}
 
-	function present(result: ActionResult): CodexResetActionStatus {
-		let message = result.status === STATUS.CONFIRMED ? outcomeMessage(result.outcome) : MESSAGE[result.status];
-		if (result.journalFailed) message += " Local attempt bookkeeping failed; do not start another reset before manual verification.";
+	function present(result: ActionResult, t: Translate): CodexResetActionStatus {
+		let message = result.status === STATUS.CONFIRMED ? outcomeMessage(result.outcome, t) : t(MESSAGE[result.status]);
+		if (result.journalFailed) message += t(" Local attempt bookkeeping failed; do not start another reset before manual verification.");
 		const info = result.status === STATUS.CONFIRMED || result.status === STATUS.NONE || result.status === STATUS.CANCELLED;
 		deps.ui.notify(message, info && !result.journalFailed ? "info" : "warning");
 		return result.status;
@@ -101,7 +100,8 @@ export function createCodexResetActions(deps: CodexResetOptions): CodexResetActi
 		} catch { return { status: STATUS.BLOCKED }; }
 	}
 
-	async function redeem(): Promise<ActionResult> {
+	async function redeem(locale: Locale, t: Translate): Promise<ActionResult> {
+		const expiryLabel = (expiresAt: number) => t("expires {date} (local time)", { date: new Date(expiresAt).toLocaleString(locale) });
 		const active = await credential(false);
 		if (!active || deps.signal?.aborted) return { status: active ? STATUS.CANCELLED : STATUS.UNAVAILABLE };
 		const accountId = active.accountId;
@@ -121,13 +121,14 @@ export function createCodexResetActions(deps: CodexResetOptions): CodexResetActi
 				const credits = (await listCodexResetCredits(initial, deps)).filter(credit => credit.expiresAt > now());
 				if (deps.signal?.aborted || (await credential(false))?.accountId !== initial.accountId) return { status: STATUS.CANCELLED };
 				if (!credits.length) return { status: STATUS.UNAVAILABLE };
-				const labels = credits.map((credit, index) => `Reset ${index + 1} — ${expiryLabel(credit.expiresAt)}`);
-				const label = await deps.ui.select("Choose a banked reset for the active Codex account", [...labels]);
+				const labels = credits.map((credit, index) => t("Reset {number} — {expiry}", { number: index + 1, expiry: expiryLabel(credit.expiresAt) }));
+				const label = await deps.ui.select(t("Choose a banked reset for the active Codex account"), [...labels]);
 				const selected = label === undefined ? undefined : credits[labels.indexOf(label)];
 				if (!selected || deps.signal?.aborted || (await credential(false))?.accountId !== initial.accountId) return { status: STATUS.CANCELLED };
+				const accept = t("Use reset");
 				const confirmation = await deps.ui.select(
-					`For the active Codex account: Use one banked reset; one banked reset will be consumed if rate limits are reset.\nReset ${expiryLabel(selected.expiresAt)}.`,
-					["Cancel", accept],
+					t("For the active Codex account: Use one banked reset; one banked reset will be consumed if rate limits are reset.\nReset {expiry}.", { expiry: expiryLabel(selected.expiresAt) }),
+					[t("Cancel"), accept],
 				);
 				if (confirmation !== accept || deps.signal?.aborted) return { status: STATUS.CANCELLED };
 				const latest = await credential(true);
@@ -187,7 +188,14 @@ export function createCodexResetActions(deps: CodexResetOptions): CodexResetActi
 	}
 
 	return {
-		async redeem() { return present(await redeem()); },
-		async check() { return present(await check()); },
+		async redeem() {
+			const locale = resolveLocale();
+			const t = translator(locale);
+			return present(await redeem(locale, t), t);
+		},
+		async check() {
+			const t = translator();
+			return present(await check(), t);
+		},
 	};
 }

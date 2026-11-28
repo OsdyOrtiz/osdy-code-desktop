@@ -1,9 +1,10 @@
 //! The interface language (Settings › Appearance › Language): the user's
 //! [`Choice`], saved in the app's `settings.json` (`language`), and the
 //! language it resolves to, kept process-wide so any render helper can
-//! translate with [`t`] without a context. It only changes the app's own
-//! text: nothing of it reaches the agent.
+//! translate with [`t`] without a context. The resolved ID is also shared
+//! with the osdy-gentle extension through the agent locale file.
 
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicU8, Ordering};
 
 use gentle_core::i18n::{self, Choice, Language};
@@ -11,6 +12,19 @@ use gpui_kit::component::input::InputState;
 use gpui_kit::{App, Entity, Global, Window};
 
 use super::themes;
+
+pub const AGENT_LOCALE_ENV: &str = "OSDY_DESKTOP_LOCALE_FILE";
+
+pub fn agent_locale_path() -> Option<PathBuf> {
+    std::path::absolute(super::data_dir::app()?.join("agent-locale")).ok()
+}
+
+fn write_agent_locale(path: &Path, language: Language) -> std::io::Result<()> {
+    if let Some(parent) = path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    std::fs::write(path, i18n::agent_locale_contents(language))
+}
 
 /// The resolved language, as an index into [`Language::ALL`].
 static CURRENT: AtomicU8 = AtomicU8::new(0);
@@ -36,6 +50,11 @@ fn resolve(choice: Choice) {
         .position(|l| *l == language)
         .unwrap_or(0);
     CURRENT.store(index as u8, Ordering::Relaxed);
+    if let Some(path) = agent_locale_path()
+        && let Err(err) = write_agent_locale(&path, language)
+    {
+        eprintln!("gentle-shell-gpui: could not share the agent locale: {err}");
+    }
 }
 
 #[cfg(test)]
@@ -54,6 +73,25 @@ pub(crate) fn with_test_language<R>(language: Language, test: impl FnOnce() -> R
     }
     let _reset = Reset(TEST_LANGUAGE.replace(Some(language)));
     test()
+}
+
+#[cfg(test)]
+#[test]
+fn agent_locale_is_written_at_the_shared_path_and_updated() {
+    let dir = std::env::temp_dir().join(format!("osdy-agent-locale-{}", std::process::id()));
+    std::fs::create_dir(&dir).unwrap();
+    struct Scratch(std::path::PathBuf);
+    impl Drop for Scratch {
+        fn drop(&mut self) {
+            let _ = std::fs::remove_dir_all(&self.0);
+        }
+    }
+    let root = Scratch(dir);
+    let path = root.0.join("app").join("agent-locale");
+    write_agent_locale(&path, Language::Spanish).unwrap();
+    assert_eq!(std::fs::read_to_string(&path).unwrap(), "es");
+    write_agent_locale(&path, Language::English).unwrap();
+    assert_eq!(std::fs::read_to_string(&path).unwrap(), "en");
 }
 
 /// The language the interface is shown in.

@@ -2,6 +2,8 @@
  * osdy-gentle: Osdy-Pi Codex accounts and profiles for Gentle Shell desktop.
  * Registers `/osdy-profile`, `/osdy-account`, `/osdy-auth-status`, and `/osdy-usage`.
  */
+import type { CodexUsageSnapshot } from "./codex-usage.ts";
+import { translator } from "./i18n.ts";
 import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import { listProfiles, withAccountSwitchFence } from "./account-store.ts";
@@ -36,9 +38,10 @@ interface PiLike extends WidgetHost {
 }
 
 export default function osdyGentle(pi: PiLike): void {
+	const t = translator();
 	let session = new AbortController();
-	// Only summaries from quota lookups requested by commands live here.
-	const quotas = new Map<string, Map<string, string>>();
+	// Only snapshots from quota lookups requested by commands live here.
+	const quotas = new Map<string, Map<string, CodexUsageSnapshot>>();
 	pi.on?.("session_start", () => {
 		session.abort();
 		session = new AbortController();
@@ -58,12 +61,12 @@ export default function osdyGentle(pi: PiLike): void {
 		let ticket = tickets.get(id);
 		if (!ticket) tickets.set(id, ticket = { started: 0, recorded: 0 });
 		const mine = ++ticket.started;
-		return (summary: string): boolean => {
+		return (snapshot: CodexUsageSnapshot): boolean => {
 			if (signal.aborted || mine <= ticket.recorded) return false;
 			ticket.recorded = mine;
 			let known = quotas.get(directory);
 			if (!known) quotas.set(directory, known = new Map());
-			known.set(account, summary);
+			known.set(account, snapshot);
 			return true;
 		};
 	};
@@ -76,7 +79,7 @@ export default function osdyGentle(pi: PiLike): void {
 			events: pi.events,
 			startQuota(account: string) {
 				const record = startQuota(directory, signal, account);
-				return (summary: string) => { record(summary); };
+				return (snapshot: CodexUsageSnapshot) => { record(snapshot); };
 			},
 		};
 		const binding = resolvePiRuntimeAuth(runtime?.VERSION, ctx, join(directory, "auth.json"));
@@ -98,7 +101,7 @@ export default function osdyGentle(pi: PiLike): void {
 	const refreshWidget = registerProfileWidget(pi, () => resolve(agentDir()), undefined, (directory, account) => quotas.get(directory)?.get(account));
 
 	pi.registerCommand("osdy-profile", {
-		description: "Switch Osdy profile: Codex account (all tabs) + linked Gentle model profile",
+		description: t("Switch Osdy profile: Codex account (all tabs) + linked Gentle model profile"),
 		getArgumentCompletions: async (prefix) => {
 			const names = await listProfiles(await currentAgentDir()).catch(() => [] as string[]);
 			const items = names.filter((n) => n.toLowerCase().startsWith(prefix.toLowerCase())).map((n) => ({ value: n, label: n }));
@@ -108,12 +111,12 @@ export default function osdyGentle(pi: PiLike): void {
 	});
 
 	pi.registerCommand("osdy-account", {
-		description: "Manage Osdy Codex accounts: switch, link model profile, quota, banked resets, save, add, rename, remove, import",
+		description: t("Manage Osdy Codex accounts: switch, link model profile, quota, banked resets, save, add, rename, remove, import"),
 		handler: async (args, ctx) => osdyAccountCommand(args, ctx, await deps(ctx)),
 	});
 
 	pi.registerCommand("osdy-auth-status", {
-		description: "Report Pi auth owner compatibility without reading credentials or testing the lock",
+		description: t("Report Pi auth owner compatibility without reading credentials or testing the lock"),
 		handler: async (_args, ctx) => {
 			const runtime = await getHost();
 			// Pi's loader may expose SDK exports as getters. Read VERSION from this
@@ -125,7 +128,7 @@ export default function osdyGentle(pi: PiLike): void {
 	});
 
 	pi.registerCommand("osdy-usage", {
-		description: "View Codex quota without switching accounts: /osdy-usage <name>",
+		description: t("View Codex quota without switching accounts: /osdy-usage <name>"),
 		handler: async (args, ctx) => {
 			const signal = session.signal;
 			const directory = await currentAgentDir();
@@ -135,7 +138,7 @@ export default function osdyGentle(pi: PiLike): void {
 				events: pi.events,
 				startQuota(account) {
 					const record = startQuota(directory, signal, account);
-					return (summary) => { if (record(summary)) refresh = refreshWidget(); };
+					return (snapshot) => { if (record(snapshot)) refresh = refreshWidget(); };
 				},
 			});
 			await refresh;

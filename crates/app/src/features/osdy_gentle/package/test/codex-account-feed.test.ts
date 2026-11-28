@@ -31,7 +31,10 @@ test('RPC account feed exposes only display fields and only publishes changes', 
     assert.equal(writes.length, 2);
     // A hand-edited binding that isn't a Gentle profile name never reaches the app.
     assert.ok(!writes[1][1][0].includes('fixture@example.invalid'));
-    quotas.set('Work', '5h 75% left');
+    quotas.set('Work', {
+      primary: { windowMinutes: 300, usedPercent: 25, resetsAt: undefined },
+      secondary: undefined, planType: 'not-display-data', bankedResetCount: 3, fetchedAt: 0,
+    });
     await events.get('session_compact')();
     assert.deepEqual(writes[2], [key, [writes[1][1][0].replace(/\"quota\":null}]}$/, '"quota":"5h 75% left"}]}')]]);
     events.get('session_shutdown')();

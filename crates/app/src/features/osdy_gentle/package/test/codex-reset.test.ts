@@ -1,6 +1,6 @@
 import { test, type TestContext } from "node:test";
 import assert from "node:assert/strict";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createCodexResetActions, type CodexResetActiveAuth } from "../src/codex-reset.ts";
@@ -213,4 +213,21 @@ test("a switch before the fenced final read cannot create an attempt or send a P
 		["Banked reset action cancelled; no new reset was sent.", "info"],
 		["No banked reset attempt is saved for the active Codex account.", "info"],
 	]);
+});
+
+test("Spanish reset chooser and confirmation keep their selection and notice", async t => {
+	const { deps, calls, dialogs, notices, actions } = await setup(t);
+	const locale = join(deps.agentDir, "locale");
+	await writeFile(locale, "es");
+	const previous = process.env.OSDY_DESKTOP_LOCALE_FILE;
+	process.env.OSDY_DESKTOP_LOCALE_FILE = locale;
+	t.after(() => { if (previous === undefined) delete process.env.OSDY_DESKTOP_LOCALE_FILE; else process.env.OSDY_DESKTOP_LOCALE_FILE = previous; });
+	assert.equal(await actions.redeem(), "confirmed");
+	const date = new Date(expiry).toLocaleString("es");
+	assert.deepEqual(dialogs, [
+		{ title: "Elige un reinicio acumulado para la cuenta activa de Codex", choices: [1, 2].map(n => `Reinicio ${n} — vence el ${date} (hora local)`) },
+		{ title: `Para la cuenta activa de Codex: usa un reinicio acumulado. Se consumirá uno si se restablecen los límites de uso.\nEl reinicio vence el ${date} (hora local).`, choices: ["Cancelar", "Usar reinicio"] },
+	]);
+	assert.deepEqual(calls.map(c => c.init.method), ["GET", "GET", "POST"]);
+	assert.deepEqual(notices, [["Se consumió un reinicio acumulado y se restablecieron 2 ventanas de uso.", "info"]]);
 });

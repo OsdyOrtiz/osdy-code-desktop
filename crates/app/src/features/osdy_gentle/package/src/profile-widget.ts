@@ -1,5 +1,7 @@
 import { listProfiles, readActiveAccount } from "./account-store.ts";
 import { bindingFor, readBindings } from "./bindings.ts";
+import { formatFeedQuota, type CodexUsageSnapshot } from "./codex-usage.ts";
+import { resolveLocale } from "./i18n.ts";
 
 const POLL_MS = 2_000;
 const WIDGET_KEY = "osdy-gentle:codex-accounts";
@@ -50,7 +52,7 @@ export function registerProfileWidget(
 	host: WidgetHost,
 	getAgentDir: () => string,
 	readAccount = readActiveAccount,
-	knownQuota: (agentDir: string, account: string) => string | undefined = () => undefined,
+	knownQuota: (agentDir: string, account: string) => CodexUsageSnapshot | undefined = () => undefined,
 ): () => Promise<void> | undefined {
 	let session: WidgetSession | undefined;
 	let timer: ReturnType<typeof setInterval> | undefined;
@@ -70,15 +72,19 @@ export function registerProfileWidget(
 				// A boundary or replacement requested a newer read while this one was in flight.
 				if (current !== session || requested !== revision) continue;
 				const active = account?.status === "valid" && names.includes(account.profile) ? account.profile : null;
+				const locale = resolveLocale();
 				publish(current, JSON.stringify({
 					v: 1,
 					active,
-					accounts: names.map((name) => ({
-						name,
-						active: name === active,
-						binding: displayBinding(bindingFor(bindings, name)),
-						quota: knownQuota(current.agentDir, name) ?? null,
-					})),
+					accounts: names.map((name) => {
+						const quota = knownQuota(current.agentDir, name);
+						return {
+							name,
+							active: name === active,
+							binding: displayBinding(bindingFor(bindings, name)),
+							quota: quota ? formatFeedQuota(quota, locale) : null,
+						};
+					}),
 				}));
 				return;
 			}

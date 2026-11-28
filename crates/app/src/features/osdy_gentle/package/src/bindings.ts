@@ -3,6 +3,7 @@
  * Stored in `<agentDir>/osdy-gentle/bindings.json`:
  *   { "version": 1, "bindings": { "<account>": { "gentleProfile": "<name>" } } }
  */
+import { t } from "./i18n.ts";
 import { readFile, rename, writeFile, unlink } from "node:fs/promises";
 import { randomUUID } from "node:crypto";
 import { join, resolve } from "node:path";
@@ -42,7 +43,7 @@ export function bindingFor(bindings: Bindings, account: string): string | undefi
 
 /** Bind (or with `undefined`, unbind) a Gentle profile to an account. */
 export async function setBinding(agentDir: string, account: string, gentleProfile: string | undefined): Promise<void> {
-	if (!isProfileName(account)) throw new Error(`Invalid account name: ${account}`);
+	if (!isProfileName(account)) throw new Error(t("Invalid account name: {account}", { account }));
 	const bindings = await readBindings(agentDir);
 	if (gentleProfile === undefined) delete bindings[key(account)];
 	else bindings[key(account)] = { gentleProfile };

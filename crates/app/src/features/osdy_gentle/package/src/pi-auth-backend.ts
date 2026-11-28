@@ -1,3 +1,4 @@
+import { t } from "./i18n.ts";
 import { isProxy } from "node:util/types";
 
 /** Narrow structural interface to Pi's FileAuthStorageBackend for this agent's auth.json. */
@@ -12,8 +13,6 @@ interface PiAuthLockOptions {
 interface PiAuthLockResult<T> {
 	result: T;
 }
-
-export const PI_AUTH_BACKEND_REQUIRED = "Pi's auth lock is unavailable; no account changes were made.";
 
 function isLockBusy(error: unknown): boolean {
 	// Do not call accessors or proxy traps on a host error.
@@ -45,14 +44,14 @@ export async function withPiAuthLock<T>(backend: PiAuthBackend, run: () => Promi
 		if (error === operationFailure) throw failure;
 		// The host's error may contain auth file data. Do not expose it or claim rollback.
 		if (operationStarted) {
-			throw new Error("Pi's auth lock failed after the account operation. Verify the active account before retrying.");
+			throw new Error(t("Pi's auth lock failed after the account operation. Verify the active account before retrying."));
 		}
 		throw new Error(isLockBusy(error)
-			? "Pi's auth lock is busy (ELOCKED); no account changes were made."
-			: "Pi's auth lock failed before the account operation; no account changes were made.");
+			? t("Pi's auth lock is busy (ELOCKED); no account changes were made.")
+			: t("Pi's auth lock failed before the account operation; no account changes were made."));
 	}
 	if (!operationStarted) {
-		throw new Error("Pi's auth lock returned without running the account operation; no account changes were made.");
+		throw new Error(t("Pi's auth lock returned without running the account operation; no account changes were made."));
 	}
 	return result;
 }

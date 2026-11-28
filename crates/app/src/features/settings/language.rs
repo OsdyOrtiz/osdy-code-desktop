@@ -54,7 +54,7 @@ impl SettingsView {
                     system_hint.map(|hint| div().text_xs().text_color(ui::faint()).child(hint)),
                 )
                 .child(div().text_xs().text_color(ui::faint()).child(t(
-                    "Only the app's interface changes; the agent keeps answering in the language you write to it. Saved in the app's settings.json (language).",
+                    "Changes the app and Osdy account menus. The agent keeps answering in the language you write to it. Saved in the app's settings.json (language).",
                 ))),
         )
     }

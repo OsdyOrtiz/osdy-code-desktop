@@ -264,3 +264,21 @@ test("extension registers commands and retires each session controller on start 
 	assert.equal(new Set(retired).size, 3);
 	assert.ok(retired.every(signal => signal.aborted));
 });
+
+test("Spanish account menu uses its displayed choice and leaves a declined import untouched", async t => {
+	const dir = await mkdtemp(join(tmpdir(), "osdy-locale-command-"));
+	t.after(() => rm(dir, { recursive: true, force: true }));
+	const locale = join(dir, "locale");
+	await writeFile(locale, "es");
+	const previous = process.env.OSDY_DESKTOP_LOCALE_FILE;
+	process.env.OSDY_DESKTOP_LOCALE_FILE = locale;
+	t.after(() => { if (previous === undefined) delete process.env.OSDY_DESKTOP_LOCALE_FILE; else process.env.OSDY_DESKTOP_LOCALE_FILE = previous; });
+	const deps = { agentDir: dir, osdySharedDir: dir, events: { emit() {} } };
+	const { ctx, notes, confirms, selects } = fakeCtx({ selects: [options => options.at(-1)] });
+	await osdyAccountCommand("", ctx, deps);
+	assert.equal(selects[0]?.at(-1), "Importar cuentas de Osdy-Pi");
+	assert.deepEqual(confirms, [`Importar cuentas de Osdy-Pi: ¿Copiar las cuentas guardadas de ${dir}/osdy-pi/profiles a Gentle Shell? Se conservan los nombres existentes y no se modifica Osdy-Pi.`]);
+	await osdyProfileCommand("Work", ctx, deps);
+	assert.deepEqual(notes, [{ message: "Cuenta desconocida: Work", type: "error" }]);
+	assert.deepEqual(await readdir(dir), ["locale"]);
+});

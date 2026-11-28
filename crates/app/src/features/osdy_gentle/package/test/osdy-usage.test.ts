@@ -191,3 +191,18 @@ test("/osdy-usage never lets an older lookup overwrite a newer one for the same 
 	assert.deepEqual(h.publications.at(-1), feed("5h 80% left · weekly 40% left"));
 	assert.ok(!JSON.stringify(h.publications).includes("10% left"), "the stale answer never reaches the feed");
 });
+
+test("a refreshed feed formats its cached quota in the new locale without a lookup", async t => {
+	const h = await setup(t);
+	const locale = join(process.env.PI_CODING_AGENT_DIR!, "locale");
+	const previous = process.env.OSDY_DESKTOP_LOCALE_FILE;
+	process.env.OSDY_DESKTOP_LOCALE_FILE = locale;
+	t.after(() => { if (previous === undefined) delete process.env.OSDY_DESKTOP_LOCALE_FILE; else process.env.OSDY_DESKTOP_LOCALE_FILE = previous; });
+	await writeFile(locale, "en");
+	await h.run("Work");
+	await writeFile(locale, "es");
+	await h.event("session_tree");
+	assert.deepEqual(h.publications, [feed(null), feed("5h 75% left · weekly 40% left"), feed("5h 75% disp. · semanal 40% disp.")]);
+	assert.deepEqual(h.requests, ["fixture-work"]);
+	assert.deepEqual(h.notices, []);
+});

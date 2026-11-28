@@ -63,6 +63,7 @@ const FILES: &[(&str, &[u8])] = &[
         "src/gentle-profiles.ts",
         include_bytes!("package/src/gentle-profiles.ts"),
     ),
+    ("src/i18n.ts", include_bytes!("package/src/i18n.ts")),
     ("src/index.ts", include_bytes!("package/src/index.ts")),
     (
         "src/pi-auth-backend.ts",

@@ -11,6 +11,7 @@
  * Switches share an account fence with other store mutations and use Pi's auth
  * lock for the keyed OAuth update and any rollback.
  */
+import { t, type Translate } from "./i18n.ts";
 import { constants as fsConstants, lstatSync, unlinkSync, type Stats } from "node:fs";
 import {
 	chmod,
@@ -27,7 +28,7 @@ import { randomUUID } from "node:crypto";
 import { homedir } from "node:os";
 import { basename, dirname, join, resolve } from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
-import { PI_AUTH_BACKEND_REQUIRED, withPiAuthLock, type PiAuthBackend } from "./pi-auth-backend.ts";
+import { withPiAuthLock, type PiAuthBackend } from "./pi-auth-backend.ts";
 
 const PROFILE_NAME = /^[A-Za-z0-9](?:[A-Za-z0-9-]{0,62})$/;
 const RESERVED = new Set(["default", "profiles", "auth.json", "backups"]);
@@ -37,7 +38,11 @@ const LOCK_TIMEOUT_MS = 2000;
 const LOCK_RETRY_MS = 25;
 const CODEX = "openai-codex";
 export const STORE_DIR = "osdy-gentle";
-export const ACCOUNT_SWITCH_BUSY_MESSAGE = "The agent is busy; nothing was switched. Try again when it is idle.";
+export class AccountSwitchBusyError extends Error {
+	constructor(translate: Translate = t) {
+		super(translate("The agent is busy; nothing was switched. Try again when it is idle."));
+	}
+}
 const ACTIVE_FILE = "active-account.json";
 const SWITCH_LOCK = "account-switch.lock";
 const IMPORT_MARKER = "imported-from-osdy.json";
@@ -74,7 +79,7 @@ export function isProfileName(value: unknown): value is string {
 export function validateProfileName(value: unknown): string {
 	if (!isProfileName(value))
 		throw new Error(
-			"Profile names must use ASCII letters, numbers, and hyphens (not reserved names).",
+			t("Profile names must use ASCII letters, numbers, and hyphens (not reserved names)."),
 		);
 	return value;
 }
@@ -101,7 +106,7 @@ function isErrorCode(error: unknown, code: string): boolean {
 }
 
 function boundedError(error: unknown): string {
-	return error instanceof Error ? error.message.slice(0, 180) : "unknown error";
+	return error instanceof Error ? error.message.slice(0, 180) : t("unknown error");
 }
 
 class ManagedDirectoryError extends Error {}
@@ -118,7 +123,7 @@ async function statIfPresent(path: string): Promise<Stats | undefined> {
 /** Check each managed directory from its verified parent, never following its final component. */
 export async function checkManagedDirectory(path: string): Promise<Stats | undefined> {
 	const stat = await statIfPresent(path);
-	if (stat && !stat.isDirectory()) throw new ManagedDirectoryError(`Managed path is not a directory: ${path}`);
+	if (stat && !stat.isDirectory()) throw new ManagedDirectoryError(t("Managed path is not a directory: {path}", { path }));
 	return stat;
 }
 
@@ -131,7 +136,7 @@ async function ensureManagedDirectory(path: string): Promise<Stats> {
 			if (!isErrorCode(error, "EEXIST")) throw error;
 		}
 		stat = await checkManagedDirectory(path);
-		if (!stat) throw new Error(`Managed directory disappeared: ${path}`);
+		if (!stat) throw new Error(t("Managed directory disappeared: {path}", { path }));
 	}
 	return stat;
 }
@@ -158,22 +163,22 @@ async function readBoundedFile(path: string, maxBytes: number, before?: Stats): 
 	before ??= await statIfPresent(path);
 	if (!before) return undefined;
 	if (!before.isFile() || before.size > maxBytes)
-		throw new Error("Account file is not a bounded regular file.");
+		throw new Error(t("Account file is not a bounded regular file."));
 	let handle;
 	try {
 		handle = await open(path, fsConstants.O_RDONLY | (fsConstants.O_NOFOLLOW ?? 0));
 	} catch (error) {
-		if (isErrorCode(error, "ELOOP")) throw new Error("Account file is not a bounded regular file.");
+		if (isErrorCode(error, "ELOOP")) throw new Error(t("Account file is not a bounded regular file."));
 		if (isErrorCode(error, "ENOENT")) return undefined;
 		throw error;
 	}
 	try {
 		const opened = await handle.stat();
 		if (opened.dev !== before.dev || opened.ino !== before.ino || !opened.isFile() || opened.size > maxBytes)
-			throw new Error("Account file changed while reading it.");
+			throw new Error(t("Account file changed while reading it."));
 		const contents = Buffer.alloc(opened.size);
 		const { bytesRead } = await handle.read(contents, 0, contents.length, 0);
-		if (bytesRead !== opened.size) throw new Error("Account file changed while reading it.");
+		if (bytesRead !== opened.size) throw new Error(t("Account file changed while reading it."));
 		return contents;
 	} finally {
 		await handle.close();
@@ -203,7 +208,7 @@ async function withLock<T>(agentDir: string, operation: () => Promise<T>, deferS
 			break;
 		} catch (error) {
 			if (!isErrorCode(error, "EEXIST")) throw error;
-			if (Date.now() >= deadline) throw new Error("Timed out waiting for account switch lock.");
+			if (Date.now() >= deadline) throw new Error(t("Timed out waiting for account switch lock."));
 			// Reclaiming by path can displace a fresh owner. Fail closed after a crash.
 			await delay(LOCK_RETRY_MS);
 		}
@@ -233,13 +238,13 @@ export function withAccountSwitchFence<T>(agentDir: string, run: () => Promise<T
 
 async function findProfile(agentDir: string, name: string): Promise<string | undefined> {
 	const matches = (await listProfiles(agentDir)).filter((p) => p.toLowerCase() === name.toLowerCase());
-	if (matches.length > 1) throw new Error("Profile lookup is ambiguous due to a case-insensitive collision.");
+	if (matches.length > 1) throw new Error(t("Profile lookup is ambiguous due to a case-insensitive collision."));
 	return matches[0];
 }
 
 async function requireProfile(agentDir: string, name: string): Promise<string> {
 	const found = await findProfile(agentDir, validateProfileName(name));
-	if (found === undefined) throw new Error(`Unknown account: ${name}`);
+	if (found === undefined) throw new Error(t("Unknown account: {name}", { name }));
 	return found;
 }
 
@@ -290,7 +295,7 @@ async function writeActive(agentDir: string, name: string): Promise<void> {
 async function createProfileDir(agentDir: string, name: string): Promise<string> {
 	const safe = validateProfileName(name);
 	if ((await findProfile(agentDir, safe)) !== undefined)
-		throw new Error(`An account named ${safe} already exists.`);
+		throw new Error(t("An account named {safe} already exists.", { safe }));
 	await ensurePrivateDirectory(profilesDir(agentDir));
 	await mkdir(join(profilesDir(agentDir), safe), { mode: 0o700 });
 	return safe;
@@ -316,7 +321,7 @@ function parseAuthDocument(raw: Buffer | undefined, label: string): AuthDocument
 	} catch {
 		// Parser errors can include credential bytes; never surface them.
 	}
-	throw new Error(`${label} is not a valid auth document.`);
+	throw new Error(t("{label} is not a valid auth document.", { label }));
 }
 
 function codexSignIn(auth: AuthDocument, label: string): AuthDocument | undefined {
@@ -327,14 +332,14 @@ function codexSignIn(auth: AuthDocument, label: string): AuthDocument | undefine
 		typeof codex.refresh !== "string" || !codex.refresh ||
 		typeof codex.expires !== "number" || !Number.isFinite(codex.expires) ||
 		("accountId" in codex && (typeof codex.accountId !== "string" || !codex.accountId))) {
-		throw new Error(`${label} contains invalid Codex credentials.`);
+		throw new Error(t("{label} contains invalid Codex credentials.", { label }));
 	}
 	return codex;
 }
 
 function encodeAuth(auth: AuthDocument): string {
 	const contents = `${JSON.stringify(auth)}\n`;
-	if (Buffer.byteLength(contents) > MAX_AUTH_BYTES) throw new Error("Updated auth document exceeds the size limit.");
+	if (Buffer.byteLength(contents) > MAX_AUTH_BYTES) throw new Error(t("Updated auth document exceeds the size limit."));
 	return contents;
 }
 
@@ -349,19 +354,19 @@ async function withCanonicalAuth<T>(path: string, backend: PiAuthBackend, run: (
 	// and sizes first, then do the authoritative bounded read inside the lock.
 	const current = await statIfPresent(path);
 	if (current && (!current.isFile() || current.size > MAX_AUTH_BYTES))
-		throw new Error("Account file is not a bounded regular file.");
+		throw new Error(t("Account file is not a bounded regular file."));
 	return withPiAuthLock(backend, run);
 }
 
 /** Save only the current Codex OAuth sign-in and mark the new account active. */
 export async function saveCurrentAs(agentDir: string, name: string, { authBackend }: AccountAuthOptions = {}): Promise<string> {
-	if (!authBackend) throw new Error(PI_AUTH_BACKEND_REQUIRED);
+	if (!authBackend) throw new Error(t("Pi's auth lock is unavailable; no account changes were made."));
 	const canonical = canonicalAuthPath(agentDir);
 	return serialized(agentDir, () => withCanonicalAuth(canonical, authBackend, async () => {
-		const label = "Current auth.json";
+		const label = t("Current auth.json");
 		const current = parseAuthDocument(await readBoundedFile(canonical, MAX_AUTH_BYTES), label);
 		const codex = codexSignIn(current, label);
-		if (!codex) throw new Error("There is no signed-in Codex account to save.");
+		if (!codex) throw new Error(t("There is no signed-in Codex account to save."));
 		const contents = encodeAuth({ [CODEX]: codex });
 		const safe = await createProfileDir(agentDir, name);
 		const snapshot = profileAuthPath(agentDir, safe);
@@ -375,7 +380,7 @@ export async function saveCurrentAs(agentDir: string, name: string, { authBacken
 				if (written) await unlink(snapshot);
 				await rmdir(dirname(snapshot));
 			} catch {
-				throw new Error("Account save failed and rollback could not be completed. Verify the account before retrying.");
+				throw new Error(t("Account save failed and rollback could not be completed. Verify the account before retrying."));
 			}
 			throw error;
 		}
@@ -395,29 +400,29 @@ export async function switchAccount(
 	name: string,
 	{ guard, authBackend }: AccountAuthOptions & { guard?: () => boolean } = {},
 ): Promise<SwitchResult> {
-	if (!authBackend) throw new Error(PI_AUTH_BACKEND_REQUIRED);
+	if (!authBackend) throw new Error(t("Pi's auth lock is unavailable; no account changes were made."));
 	return serialized(agentDir, async () => {
 		const target = await requireProfile(agentDir, name);
 		const canonical = canonicalAuthPath(agentDir);
 		return withCanonicalAuth(canonical, authBackend, async () => {
 			const active = await readActiveAccount(agentDir);
 			const canonicalBefore = await readBoundedFile(canonical, MAX_AUTH_BYTES);
-			const current = parseAuthDocument(canonicalBefore, "Current auth.json");
-			const currentCodex = codexSignIn(current, "Current auth.json");
-			const incoming = parseAuthDocument(await readBoundedFile(profileAuthPath(agentDir, target), MAX_AUTH_BYTES), "Incoming account auth.json");
-			const incomingCodex = codexSignIn(incoming, "Incoming account auth.json");
+			const current = parseAuthDocument(canonicalBefore, t("Current auth.json"));
+			const currentCodex = codexSignIn(current, t("Current auth.json"));
+			const incoming = parseAuthDocument(await readBoundedFile(profileAuthPath(agentDir, target), MAX_AUTH_BYTES), t("Incoming account auth.json"));
+			const incomingCodex = codexSignIn(incoming, t("Incoming account auth.json"));
 			const unchanged = active.status === "valid" && active.profile === target;
 			const canonicalNext = !unchanged && (currentCodex || incomingCodex) ? updateCodex(current, incomingCodex) : undefined;
 			let outgoing: { path: string; previous: Buffer | undefined; next: string } | undefined;
 			if (!unchanged && active.status === "valid") {
 				const path = profileAuthPath(agentDir, active.profile);
 				const previous = await readBoundedFile(path, MAX_AUTH_BYTES);
-				const snapshot = parseAuthDocument(previous, "Outgoing account auth.json");
+				const snapshot = parseAuthDocument(previous, t("Outgoing account auth.json"));
 				if (currentCodex || Object.hasOwn(snapshot, CODEX))
 					outgoing = { path, previous, next: updateCodex(snapshot, currentCodex) };
 			}
 			if (guard) {
-				if (!guard()) throw new Error(ACCOUNT_SWITCH_BUSY_MESSAGE);
+				if (!guard()) throw new AccountSwitchBusyError();
 				await ensurePrivateDirectory(storeDir(agentDir));
 			}
 			if (unchanged) {
@@ -448,10 +453,10 @@ export async function switchAccount(
 				if (canonicalWritten) restores.push(restoreAuth(canonical, canonicalBefore));
 				if (outgoingWritten && outgoing) restores.push(restoreAuth(outgoing.path, outgoing.previous));
 				if ((await Promise.allSettled(restores)).some((result) => result.status === "rejected")) {
-					throw new Error("Account switch failed and rollback could not be completed. Verify the active account before retrying.");
+					throw new Error(t("Account switch failed and rollback could not be completed. Verify the active account before retrying."));
 				}
 				if (!canonicalWritten && !outgoingWritten) throw error;
-				throw new Error(`Account switch failed and was rolled back: ${boundedError(error)}`);
+				throw new Error(t("Account switch failed and was rolled back: {detail}", { detail: boundedError(error) }));
 			}
 			return backup === undefined ? { profile: target, unchanged: false } : { profile: target, backup, unchanged: false };
 		});
@@ -464,7 +469,7 @@ export async function renameProfile(agentDir: string, oldName: string, newName: 
 		const to = validateProfileName(newName);
 		const existing = await findProfile(agentDir, to);
 		if (existing !== undefined && existing.toLowerCase() !== from.toLowerCase())
-			throw new Error(`An account named ${to} already exists.`);
+			throw new Error(t("An account named {to} already exists.", { to }));
 		const active = await readActiveAccount(agentDir);
 		const tmp = join(profilesDir(agentDir), `.rename.${process.pid}.${randomUUID()}.tmp`);
 		await rename(join(profilesDir(agentDir), from), tmp);
@@ -479,12 +484,12 @@ export async function removeProfile(agentDir: string, name: string): Promise<voi
 		const profile = await requireProfile(agentDir, name);
 		const active = await readActiveAccount(agentDir);
 		if (active.status === "valid" && active.profile === profile)
-			throw new Error("Cannot remove the active account. Switch to another account first.");
+			throw new Error(t("Cannot remove the active account. Switch to another account first."));
 		const dir = join(profilesDir(agentDir), profile);
 		const entries = await readdir(dir, { withFileTypes: true });
 		for (const entry of entries) {
 			const stat = await lstat(join(dir, entry.name));
-			if (stat.isDirectory()) throw new Error(`Refusing to remove unexpected directory in account: ${entry.name}`);
+			if (stat.isDirectory()) throw new Error(t("Refusing to remove unexpected directory in account: {entry.name}", { "entry.name": entry.name }));
 		}
 		for (const entry of entries) await unlink(join(dir, entry.name));
 		await rmdir(dir);
@@ -512,7 +517,7 @@ export async function importOsdyProfiles(
 		try {
 			entries = await readdir(sourceRoot, { withFileTypes: true });
 		} catch (error) {
-			if (isErrorCode(error, "ENOENT")) throw new Error(`No Osdy-Pi accounts found in ${sourceRoot}`);
+			if (isErrorCode(error, "ENOENT")) throw new Error(t("No Osdy-Pi accounts found in {sourceRoot}", { sourceRoot }));
 			throw error;
 		}
 		for (const entry of entries.filter((e) => e.isDirectory() && isProfileName(e.name)).sort((a, b) => (a.name < b.name ? -1 : 1))) {
@@ -558,6 +563,6 @@ export async function readStoredCodexCredential(agentDir: string, name: string):
 		return { profile, access: c.access, expires: c.expires, ...(c.accountId ? { accountId: c.accountId } : {}) };
 	} catch (error) {
 		if (error instanceof ManagedDirectoryError) throw error;
-		throw new Error("Stored account credentials are unavailable.");
+		throw new Error(t("Stored account credentials are unavailable."));
 	}
 }

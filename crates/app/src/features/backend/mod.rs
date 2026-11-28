@@ -16,7 +16,7 @@ use gentle_core::i18n::fill;
 use gpui_kit::App;
 use serde_json::Value;
 
-use crate::shared::i18n::{language, t};
+use crate::shared::i18n::{AGENT_LOCALE_ENV, agent_locale_path, language, t};
 
 /// How long the backend may take to answer a probe: a stopped WSL distro
 /// or VM boots first.
@@ -87,6 +87,7 @@ pub fn launch_spec(
     files: &[(String, &Path)],
 ) -> Result<pi_rpc::LaunchSpec> {
     let folder = reach(choice, cwd)?;
+    let locale = agent_locale_path();
     let Some(launch) = choice.launch(&folder) else {
         let mut spec = pi_rpc::resolve_backend(cwd)?;
         spec.env
@@ -96,6 +97,10 @@ pub fn launch_spec(
                 .iter()
                 .map(|(k, p)| (k.clone(), p.as_os_str().to_owned())),
         );
+        if let Some(locale) = locale {
+            spec.env
+                .push((AGENT_LOCALE_ENV.into(), locale.into_os_string()));
+        }
         return Ok(spec);
     };
     // Files the agent shares with the app while it runs (its canvas) are read
@@ -103,6 +108,14 @@ pub fn launch_spec(
     let mut all = env.to_vec();
     for (key, file) in files {
         all.push((key.clone(), reach(choice, file)?));
+    }
+    // WSL can translate shared host paths; an arbitrary command prefix
+    // provides no guarantee that the local app directory is mounted there.
+    if !matches!(choice, Backend::Command { .. })
+        && let Some(locale) = locale
+        && let Ok(path) = reach(choice, &locale)
+    {
+        all.push((AGENT_LOCALE_ENV.into(), path));
     }
     let path = login_path(choice);
     // WSL appends Windows' PATH: an agent there must not start Windows'

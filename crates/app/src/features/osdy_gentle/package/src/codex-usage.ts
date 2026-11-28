@@ -3,6 +3,7 @@
  * `profile-codex-usage.ts`. Read-only: never refreshes tokens, never falls back
  * to another account, never surfaces raw errors or bodies.
  */
+import { resolveLocale, t, translator, type Translate } from "./i18n.ts";
 import { arch, platform, release } from "node:os";
 
 export type CodexUsageWindow = {
@@ -35,7 +36,7 @@ const DEFAULT_TIMEOUT_MS = 10_000;
 type Rec = Record<string, unknown>;
 
 function asRecord(value: unknown, label: string): Rec {
-	if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error(`Codex usage ${label} is invalid`);
+	if (!value || typeof value !== "object" || Array.isArray(value)) throw new Error(t("Codex usage {label} is invalid", { label }));
 	return value as Rec;
 }
 
@@ -44,7 +45,7 @@ function parseWindow(value: unknown, label: string): CodexUsageWindow | undefine
 	const w = asRecord(value, label);
 	const used = w.used_percent;
 	if (typeof used !== "number" || !Number.isFinite(used) || used < 0 || used > 100)
-		throw new Error("Codex usage used_percent is invalid");
+		throw new Error(t("Codex usage used_percent is invalid"));
 	const seconds = w.limit_window_seconds;
 	const resetAt = w.reset_at;
 	return {
@@ -59,7 +60,7 @@ export function parseCodexUsagePayload(input: unknown, fetchedAt = Date.now()): 
 	const rate = asRecord(payload.rate_limit, "rate_limit");
 	const primary = parseWindow(rate.primary_window, "primary_window");
 	const secondary = parseWindow(rate.secondary_window, "secondary_window");
-	if (!primary && !secondary) throw new Error("Codex usage does not contain any quota windows");
+	if (!primary && !secondary) throw new Error(t("Codex usage does not contain any quota windows"));
 	let bankedResetCount: number | undefined;
 	const banked = payload.rate_limit_reset_credits;
 	if (banked && typeof banked === "object" && !Array.isArray(banked)) {
@@ -76,7 +77,7 @@ export function parseCodexUsagePayload(input: unknown, fetchedAt = Date.now()): 
 }
 
 function decodeJwtPart(part: string | undefined): Rec {
-	if (!part || !/^[A-Za-z0-9_-]+$/.test(part)) throw new Error("Invalid token.");
+	if (!part || !/^[A-Za-z0-9_-]+$/.test(part)) throw new Error(t("Invalid token."));
 	return asRecord(JSON.parse(Buffer.from(part, "base64url").toString("utf8")), "token");
 }
 
@@ -87,29 +88,29 @@ export function extractCodexAccountId(accessToken: string): string {
 		if (typeof id !== "string" || !/^[A-Za-z0-9_-]+$/.test(id)) throw new Error("x");
 		return id;
 	} catch {
-		throw new Error("Codex account ID is unavailable");
+		throw new Error(t("Codex account ID is unavailable"));
 	}
 }
 
 /** Unverified expiry claims: reject tokens that are clearly expired before sending them. */
 export function assertTokenUsable(accessToken: string, now: number): void {
 	const parts = accessToken.split(".");
-	if (parts.length !== 3) throw new Error("Invalid token.");
+	if (parts.length !== 3) throw new Error(t("Invalid token."));
 	decodeJwtPart(parts[0]);
 	const claims = decodeJwtPart(parts[1]);
-	if ("exp" in claims && (typeof claims.exp !== "number" || claims.exp * 1000 <= now)) throw new Error("Expired token.");
+	if ("exp" in claims && (typeof claims.exp !== "number" || claims.exp * 1000 <= now)) throw new Error(t("Expired token."));
 }
 
 async function readBoundedJson(response: Response): Promise<unknown> {
 	const length = response.headers.get("content-length");
 	if (length !== null && (!/^\d+$/.test(length) || Number(length) > MAX_RESPONSE_BYTES))
-		throw new Error("Codex usage response is too large");
+		throw new Error(t("Codex usage response is too large"));
 	const text = await response.text();
-	if (text.length > MAX_RESPONSE_BYTES) throw new Error("Codex usage response is too large");
+	if (text.length > MAX_RESPONSE_BYTES) throw new Error(t("Codex usage response is too large"));
 	try {
 		return JSON.parse(text);
 	} catch {
-		throw new Error("Codex usage response is invalid");
+		throw new Error(t("Codex usage response is invalid"));
 	}
 }
 
@@ -132,11 +133,11 @@ export async function fetchCodexUsage(auth: CodexUsageAuth, options: FetchOption
 			signal,
 		});
 	} catch {
-		throw new Error("Codex usage is temporarily unavailable");
+		throw new Error(t("Codex usage is temporarily unavailable"));
 	}
-	if (response.status === 401) throw new Error("Codex session expired; sign in again");
-	if (response.status === 403) throw new Error("Codex usage access is unavailable or forbidden");
-	if (!response.ok) throw new Error("Codex usage is temporarily unavailable");
+	if (response.status === 401) throw new Error(t("Codex session expired; sign in again"));
+	if (response.status === 403) throw new Error(t("Codex usage access is unavailable or forbidden"));
+	if (!response.ok) throw new Error(t("Codex usage is temporarily unavailable"));
 	return parseCodexUsagePayload(await readBoundedJson(response), (options.now ?? Date.now)());
 }
 
@@ -171,44 +172,46 @@ export async function requestProfileCodexUsage(
 	}
 }
 
-function windowName(window: CodexUsageWindow, fallback: string): string {
+function windowName(window: CodexUsageWindow, fallback: "session" | "weekly", t: Translate): string {
 	const m = window.windowMinutes;
-	if (m === undefined) return fallback;
-	if (m >= 1440 && m % 1440 === 0) return m === 10080 ? "weekly" : `${m / 1440}d`;
-	if (m >= 60 && m % 60 === 0) return `${m / 60}h`;
-	return `${m}m`;
+	if (m === undefined) return t(fallback);
+	if (m >= 1440 && m % 1440 === 0) return m === 10080 ? t("weekly") : t("{days}d", { days: m / 1440 });
+	if (m >= 60 && m % 60 === 0) return t("{hours}h", { hours: m / 60 });
+	return t("{minutes}m", { minutes: m });
 }
 
-function left(window: CodexUsageWindow): string {
-	return `${Math.max(0, Math.min(100, Math.round(100 - window.usedPercent)))}% left`;
+function left(window: CodexUsageWindow, t: Translate): string {
+	return t("{percent}% left", { percent: Math.max(0, Math.min(100, Math.round(100 - window.usedPercent))) });
 }
 
 /** A display-only quota summary; never include arbitrary strings from the service. */
-export function formatQuotaWindows({ primary, secondary }: CodexUsageSnapshot): string {
+export function formatQuotaWindows({ primary, secondary }: CodexUsageSnapshot, locale = resolveLocale()): string {
+	const t = translator(locale);
 	const parts: string[] = [];
-	if (primary) parts.push(`${windowName(primary, "session")} ${left(primary)}`);
-	if (secondary) parts.push(`${windowName(secondary, "weekly")} ${left(secondary)}`);
+	if (primary) parts.push(`${windowName(primary, "session", t)} ${left(primary, t)}`);
+	if (secondary) parts.push(`${windowName(secondary, "weekly", t)} ${left(secondary, t)}`);
 	return parts.join(" · ");
 }
 
 /** Feed labels fit 64 chars even with two windows: safe-integer durations
  * have at most 16 digits, and an oversized duration keeps its percentage. */
-export function formatFeedQuota(snapshot: CodexUsageSnapshot): string {
+export function formatFeedQuota(snapshot: CodexUsageSnapshot, locale = resolveLocale()): string {
 	const bounded = (window: CodexUsageWindow | undefined) =>
 		window?.windowMinutes !== undefined && !Number.isSafeInteger(window.windowMinutes)
 			? { ...window, windowMinutes: undefined }
 			: window;
-	return formatQuotaWindows({ ...snapshot, primary: bounded(snapshot.primary), secondary: bounded(snapshot.secondary) });
+	return formatQuotaWindows({ ...snapshot, primary: bounded(snapshot.primary), secondary: bounded(snapshot.secondary) }, locale);
 }
 
 /** One plain-text line for select labels and notifications. */
-export function formatUsageLine(result: ProfileUsageResult): string {
+export function formatUsageLine(result: ProfileUsageResult, locale = resolveLocale()): string {
+	const t = translator(locale);
 	if (result.status !== "ready")
-		return result.reason === "stored-credentials-unavailable" ? "quota: no valid stored token" : "quota: unavailable";
+		return result.reason === "stored-credentials-unavailable" ? t("quota: no valid stored token") : t("quota: unavailable");
 	const { planType, bankedResetCount } = result.snapshot;
-	const windows = formatQuotaWindows(result.snapshot);
+	const windows = formatQuotaWindows(result.snapshot, locale);
 	const parts = windows ? [windows] : [];
-	if (bankedResetCount) parts.push(`${bankedResetCount} banked reset${bankedResetCount === 1 ? "" : "s"}`);
+	if (bankedResetCount) parts.push(t(bankedResetCount === 1 ? "{count} banked reset" : "{count} banked resets", { count: bankedResetCount }));
 	if (planType) parts.push(planType);
 	return parts.join(" · ");
 }

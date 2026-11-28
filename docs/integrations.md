@@ -634,6 +634,7 @@ App paths: `dirs::data_dir()/osdy-code-desktop/` (on macOS, `~/Library/Applicati
 | `<data>/osdy-code-desktop/instance.json` (port and token, 0600) | App | R/W | `platform/instance.rs` |
 | `<data>/osdy-code-desktop/toolchain/` | App | W | `features/setup/` |
 | `<data>/osdy-code-desktop/extensions/gentle-ui.ts` (the generative UI Pi extension, loaded with `--extension`) | App | W | `features/genui/extension.rs` |
+| `<data>/osdy-code-desktop/agent-locale` (resolved `es` or `en`) | App | App W / extension R | `shared/i18n.rs`; passed to agent launches as `OSDY_DESKTOP_LOCALE_FILE` |
 | `<data>/osdy-code-desktop/packages/osdy-gentle/` (the Osdy-Pi accounts and profiles Pi package, vendored in `features/osdy_gentle/package/`; rewritten when it changes and loaded by Pi from there once installed) | App | W | `features/osdy_gentle/` |
 | `<data>/osdy-code-desktop/genui-templates/*.json` (saved generative UI templates) | App | R/W | `features/genui/store.rs` |
 | `<data>/osdy-code-desktop/genui-pins.json` (surfaces pinned per conversation) | App | R/W | `features/genui/store.rs` |
@@ -715,6 +716,8 @@ Engram (`engram.rs`): the installed version from `engram version`, the latest fr
 | Provider | Providers screen |
 
 **`osdy-gentle` by default** (`features/osdy_gentle/`). On every start a background thread writes the vendored package to `<data>/osdy-code-desktop/packages/osdy-gentle/`. Unless the app's `settings.json` records `osdyGentle.installed`, only for the local backend and never from an isolated copy (`GENTLE_SHELL_GPUI_DATA_DIR` set: it still runs the real Gentle Shell, whose `packages` must not list a disposable folder), it asks `gentle-shell --version` for the agent folder; if `<agent>/settings.json`'s `packages` don't already hold it (`npm:osdy-gentle`, a local folder whose `package.json` is named `osdy-gentle`, or a git URL whose repository is named `osdy-gentle`, refs included; a git source is matched by its repository name only, since its package name would need a clone: `gentle_core::default_package`), it runs `gentle-shell install <that folder>`. Then it records `osdyGentle`, so it never installs again and a removal from Settings › Extensions sticks. Without a launcher yet (first run) or on failure, it logs and tries on the next start. The install lands in Gentle Shell's own list, so a terminal session on the same home loads it too, and only tabs started after it load it. The extension switches the Codex sign-in in `<agent>/auth.json` only when the user runs its commands.
+
+**Osdy account language.** The app writes `agent-locale` at startup and when the language setting changes. Local agents get its path in `OSDY_DESKTOP_LOCALE_FILE`; WSL gets the translated path when available. Command backends do not receive the path because the app directory may not be mounted there. The extension reads the file at each command and feed refresh (no tab restart); if unavailable or invalid, it uses the first nonempty value of `LC_ALL`, `LC_MESSAGES` and `LANG` (Spanish for values starting with `es`, English otherwise). Command descriptions are translated at registration.
 
 Anything that needs `sudo` or an interactive login is delivered as `Fix::Terminal`, and `features/onboarding/` opens it in a terminal tab. After installing, `refresh_paths` (= `forget_cached` + `apply_toolchain_path`).
 

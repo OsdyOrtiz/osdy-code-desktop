@@ -99,6 +99,11 @@ impl Choice {
     }
 }
 
+/// Contents of the locale file shared with agents; only resolved IDs are valid.
+pub fn agent_locale_contents(language: Language) -> &'static str {
+    language.id()
+}
+
 /// `en` in `language`: its translation, or `en` itself when there is none.
 pub fn tr(language: Language, en: &str) -> &str {
     match language {
@@ -189,6 +194,19 @@ mod tests {
         assert_eq!(english.resolve(Some("es-AR")), Language::English);
         let spanish = Choice::Fixed(Language::Spanish);
         assert_eq!(spanish.resolve(Some("en-US")), Language::Spanish);
+    }
+
+    #[test]
+    fn agent_locale_contents_publish_the_resolved_id_not_the_setting() {
+        assert_eq!(
+            agent_locale_contents(Choice::System.resolve(Some("es-AR"))),
+            "es"
+        );
+        assert_eq!(agent_locale_contents(Choice::System.resolve(None)), "en");
+        assert_eq!(
+            agent_locale_contents(Choice::Fixed(Language::English).resolve(Some("es"))),
+            "en"
+        );
     }
 
     #[test]
