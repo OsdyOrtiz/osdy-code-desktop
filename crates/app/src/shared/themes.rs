@@ -920,13 +920,14 @@ pub const DEFAULT_TRANSPARENCY: f32 = if cfg!(target_os = "linux") { 0.15 } else
 pub struct Glass {
     /// How much shows through the glass: the chrome (title bar, the gaps
     /// between panes) follows it fully; text areas only down to the
-    /// clearest they can be and still meet AA (`ui::Palette::new`).
+    /// clearest they can be and still meet AA, up to
+    /// `ui::SAFE_TRANSPARENCY`; past it they keep fading (`ui::Palette::new`).
     pub transparency: f32,
     /// How soft the theme's own background picture is (`backdrop`): 0 is
     /// sharp. Themes without a picture or scene have nothing to blur.
     pub blur: f32,
     /// How opaque the areas that always hold text are, from the clearest
-    /// that still meets AA (0) to opaque (1).
+    /// the transparency allows (0) to opaque (1).
     pub opacity: f32,
 }
 

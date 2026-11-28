@@ -203,13 +203,13 @@ pub(super) fn lookup(en: &str) -> Option<&'static str> {
         "Theme" => "Tema",
         "Window & interface" => "Ventana e interfaz",
         "Transparency" => "Transparencia",
-        "How much the desktop or the theme's background shows through the window." => {
-            "Cuánto se ve el escritorio o el fondo del tema a través de la ventana."
+        "How much the desktop or the theme's background shows through the window. Past 80%, text trades readability for glass." => {
+            "Cuánto se ve el escritorio o el fondo del tema a través de la ventana. Pasado el 80 %, el texto cede legibilidad a cambio de transparencia."
         }
         "Blur" => "Desenfoque",
         "Opacity" => "Opacidad",
-        "How solid the areas with text are. Text always stays readable (WCAG AA)." => {
-            "Qué tan opacas son las zonas con texto. El texto siempre se puede leer (WCAG AA)."
+        "How solid the areas with text are. Up to 80% transparency, text always stays readable (WCAG AA)." => {
+            "Qué tan opacas son las zonas con texto. Hasta el 80 % de transparencia, el texto siempre se puede leer (WCAG AA)."
         }
         "Fonts" => "Fuentes",
         "Scene motion" => "Movimiento de las escenas",

@@ -220,7 +220,7 @@ impl SettingsView {
                 t("Transparency"),
                 &self.glass.transparency,
                 glass.transparency,
-                t("How much the desktop or the theme's background shows through the window."),
+                t("How much the desktop or the theme's background shows through the window. Past 80%, text trades readability for glass."),
                 true,
             ))
             .child(glass_row(
@@ -234,7 +234,7 @@ impl SettingsView {
                 t("Opacity"),
                 &self.glass.opacity,
                 glass.opacity,
-                t("How solid the areas with text are. Text always stays readable (WCAG AA)."),
+                t("How solid the areas with text are. Up to 80% transparency, text always stays readable (WCAG AA)."),
                 true,
             ))
             .child(interface_size_row(size))
