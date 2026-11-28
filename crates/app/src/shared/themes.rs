@@ -687,6 +687,11 @@ pub(crate) fn read_key(path: &Path, key: &str) -> Option<Value> {
 /// The settings file's keys, to change some and write it back: none when the
 /// file doesn't exist yet, an error when it exists but can't be read or isn't
 /// a JSON object, so a save never replaces settings it couldn't read.
+/// Serializes every read-modify-write of the app's settings file in this
+/// process: the rename keeps each write whole, but two overlapping writers
+/// (the UI and a background task) would otherwise each drop the other's key.
+static SETTINGS_WRITE: std::sync::Mutex<()> = std::sync::Mutex::new(());
+
 fn settings_to_update(path: &Path) -> std::io::Result<serde_json::Map<String, Value>> {
     let text = match std::fs::read_to_string(path) {
         Ok(text) => text,
@@ -736,6 +741,7 @@ fn write_keys<'a>(
     path: &Path,
     keys: impl IntoIterator<Item = (&'a str, Value)>,
 ) -> std::io::Result<()> {
+    let _guard = SETTINGS_WRITE.lock().unwrap_or_else(|e| e.into_inner());
     let mut object = settings_to_update(path)?;
     for (key, new) in keys {
         object.insert(key.to_string(), new);
@@ -853,6 +859,7 @@ pub fn read_fonts(path: &Path) -> Fonts {
 /// other key. Defaults remove their keys, and so does the interface's
 /// legacy size (it has no size of its own).
 pub fn write_fonts(path: &Path, fonts: &Fonts) -> std::io::Result<()> {
+    let _guard = SETTINGS_WRITE.lock().unwrap_or_else(|e| e.into_inner());
     let mut object = settings_to_update(path)?;
     for slot in FontSlot::ALL {
         match fonts.get(slot).and_then(|f| fonts::normalize(f)) {
